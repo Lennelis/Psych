@@ -28,7 +28,7 @@ class CreditsState extends MusicBeatState
 		bg = new FlxSprite().loadGraphic(Paths.image('menuDesat'));
 		bg.antialiasing = ClientPrefs.data.antialiasing;
 		add(bg);
-		bg.screenCenter();
+		CoolUtil.fillScreen(bg);
 		
 		grpOptions = new FlxTypedGroup<Alphabet>();
 		add(grpOptions);

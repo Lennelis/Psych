@@ -239,22 +239,25 @@ reporting a press forever.
 | `mobile/backend/WidescreenScaleMode.hx` | Fills a screen wider than 16:9 instead of leaving bars. |
 | `mobile/options/MobileOptionsSubState.hx` | Options → Mobile. |
 
-**Widescreen**, on by default, keeps the game's own 1280x720 coordinate space and
-widens the *cameras* instead. Each one is made `cutout` game-pixels wider and moved
-half of that to the left, so it draws into the bars either side; a camera crops to
-its own size and `FlxGame` doesn't crop at all, which is what makes that work.
+**Widescreen**, on by default, raises `FlxG.width` so the game renders a genuinely
+wider slice of the world, the way V-Slice's `FullScreenScaleMode` does. Nothing is
+stretched and the scale stays square.
 
-Doing it the other way round — raising `FlxG.width`, as V-Slice's
-`FullScreenScaleMode` does — is what the first version tried, and it doesn't suit
-this engine. V-Slice's states are written against a variable width; Psych's are laid
-out at fixed coordinates, so everything ended up hugging the left edge with the new
-space piled up on the right. Widening the view rather than the world leaves every
-menu centred where it was designed to be, and a camera flash covers the whole screen
-because the camera now *is* the whole screen.
+Flixel resizes no camera when `FlxG.width` changes, so `resizeCameras()` grows the
+ones already running. Without it the first state keeps the camera it was built with
+and everything past 1280 is a black band — which is also what stopped a camera flash
+from reaching the edges of the screen.
 
-Anything that needs the true edge rather than the game's own band — the hitbox lanes,
-the pads, the pause button — lays itself out from `-cutout / 2` to
-`FlxG.width + cutout / 2`.
+The extra width lands to the *right* of anything positioned at a fixed coordinate,
+which would leave the title screen hugging the left edge, so those sprites add
+`CoolUtil.widescreenOffset()` — half the extra width — to their x. Backgrounds drawn
+for 1280 grow to cover with `CoolUtil.fillScreen`, which scales rather than
+stretches. Both are no-ops at 1280, so desktop is unaffected.
+
+Widening the *cameras* instead, and leaving the world at 1280, was tried and does not
+work here: Psych's menus set `scrollFactor.set()` on nearly everything, and a
+screen-fixed sprite doesn't move with its camera — it just ends up sitting half a
+cutout to the left of where the camera now begins.
 
 **Almost no new art.** `TouchButtonGraphic` draws the pads and lanes with the
 OpenFL drawing API and caches the results as `FlxGraphic`s, so they add nothing to

@@ -58,7 +58,7 @@ class OptionsState extends MusicBeatState
 		bg.color = 0xFFea71fd;
 		bg.updateHitbox();
 
-		bg.screenCenter();
+		CoolUtil.fillScreen(bg);
 		add(bg);
 
 		grpOptions = new FlxTypedGroup<Alphabet>();

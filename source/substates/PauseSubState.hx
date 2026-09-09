@@ -56,7 +56,7 @@ class PauseSubState extends MusicBeatSubstate
 		button.scrollFactor.set();
 		button.scale.set(0.8, 0.8);
 		button.updateHitbox();
-		button.setPosition(FlxG.width + mobile.backend.WidescreenScaleMode.cutout * 0.5 - button.width - 35, 35);
+		button.setPosition(FlxG.width - button.width - 35, 35);
 		button.animation.play('confirm');
 
 		if(Paths.fileExists('images/pauseCircle.png', IMAGE))

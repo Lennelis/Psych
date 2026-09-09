@@ -1,6 +1,5 @@
 package mobile.backend;
 
-import flixel.FlxCamera;
 import flixel.FlxG;
 import flixel.system.scaleModes.RatioScaleMode;
 
@@ -8,20 +7,20 @@ import flixel.system.scaleModes.RatioScaleMode;
  * Lets the game fill a screen that's wider than 16:9 instead of sitting in
  * pillarbox bars.
  *
- * The game keeps its own 1280x720 coordinate space: `FlxG.width` is left alone, so
- * every menu, every stage and every piece of HUD is laid out exactly where it was
- * designed to be, and stays centred. What changes is the cameras - each one is made
- * `cutout` pixels wider and moved half of that to the left, so it renders into the
- * bars either side instead of leaving them black. A camera crops to its own size
- * and `FlxGame` doesn't crop at all, which is what makes that legal.
+ * Ported down from V-Slice's `funkin.ui.FullScreenScaleMode`: nothing is stretched or
+ * cropped, `FlxG.width` is raised so the game genuinely renders a wider slice of the
+ * world, and the scale stays square.
  *
- * The earlier version of this raised `FlxG.width` instead, the way V-Slice's
- * `FullScreenScaleMode` does. That works there because their states are written
- * against a variable width; Psych's are not, so everything laid out at a fixed
- * coordinate ended up hugging the left edge with the new space piled up on the
- * right. Widening the view rather than the world avoids the whole problem.
+ * That leaves the extra width to the right of anything laid out at a fixed
+ * coordinate, so whatever should stay centred adds `CoolUtil.widescreenOffset()` to
+ * its x, and backgrounds drawn for 1280 grow to cover with `CoolUtil.fillScreen`.
+ * Widening the cameras instead of the world was tried and does not work here: Psych's
+ * menus set `scrollFactor.set()` on nearly everything, and a screen-fixed sprite
+ * doesn't move with its camera - it just ends up sitting half a cutout to the left of
+ * where the camera now begins.
  *
- * Turned off, `cutout` is zero and this is just `RatioScaleMode`.
+ * Turned off it defers entirely to `RatioScaleMode`, which is what Flixel uses by
+ * default, so the letterboxed behaviour is untouched.
  */
 class WidescreenScaleMode extends RatioScaleMode
 {
@@ -31,20 +30,9 @@ class WidescreenScaleMode extends RatioScaleMode
 	 */
 	public static var maxAspectRatio:Float = 20 / 9;
 
-	/**
-	 * How much wider than `FlxG.width` the screen has room for, in game pixels, with
-	 * half of it either side of the game's own band.
-	 *
-	 * Anything that wants to reach the true edge of the screen - the touch controls -
-	 * lays itself out from `-cutout / 2` to `FlxG.width + cutout / 2`.
-	 */
-	public static var cutout(default, null):Float = 0;
-
 	public static var instance(default, null):WidescreenScaleMode;
 
 	public static var enabled(default, set):Bool = false;
-
-	static var hooked:Bool = false;
 
 	public function new()
 	{
@@ -67,14 +55,6 @@ class WidescreenScaleMode extends RatioScaleMode
 
 		if (instance == null || FlxG.scaleMode != instance) FlxG.scaleMode = new WidescreenScaleMode();
 
-		// Cameras are made per state, and reset on every switch, so each new one has to
-		// be caught as it arrives rather than only the ones standing right now.
-		if (!hooked)
-		{
-			FlxG.cameras.cameraAdded.add(widen);
-			hooked = true;
-		}
-
 		enabled = enable;
 	}
 
@@ -88,52 +68,57 @@ class WidescreenScaleMode extends RatioScaleMode
 
 	override function updateGameSize(Width:Int, Height:Int):Void
 	{
-		// Letterboxed as usual first: that gives the scale the game is drawn at, which
-		// is what turns device pixels into the game pixels `cutout` is measured in.
-		super.updateGameSize(Width, Height);
+		// FlxG.width gets widened below, so every measurement has to start again from
+		// the size the game was actually built at - otherwise each resize widens the
+		// result a bit further than the last.
+		untyped FlxG.width = FlxG.initialWidth;
+		untyped FlxG.height = FlxG.initialHeight;
 
-		cutout = 0;
-
-		if (enabled && Height > 0 && FlxG.height > 0 && gameSize.y > 0)
+		if (FlxG.initialWidth <= 0 || FlxG.initialHeight <= 0 || Height <= 0)
 		{
-			final scale:Float = gameSize.y / FlxG.height;
-			if (scale > 0)
-			{
-				final widest:Float = Math.min(Width / scale, FlxG.height * maxAspectRatio);
-				cutout = Math.max(0, widest - FlxG.width);
-			}
+			super.updateGameSize(Width, Height);
+			resizeCameras();
+			return;
 		}
 
-		widenAll();
+		final gameRatio:Float = FlxG.initialWidth / FlxG.initialHeight;
+		final screenRatio:Float = Width / Height;
+
+		// Nothing to gain on a screen that isn't wider than the game; a 4:3 tablet
+		// keeps its bars either way.
+		if (!enabled || screenRatio <= gameRatio)
+		{
+			super.updateGameSize(Width, Height);
+			resizeCameras();
+			return;
+		}
+
+		final pixelScale:Float = Height / FlxG.initialHeight;
+		final gameWidth:Float = Math.min(Width / pixelScale, FlxG.initialHeight * maxAspectRatio);
+
+		untyped FlxG.width = Math.ceil(gameWidth);
+
+		gameSize.y = Height;
+		gameSize.x = Math.floor(gameWidth * pixelScale);
+
+		resizeCameras();
 	}
 
 	/**
-	 * Gives one camera the extra width and slides it half of that to the left, so the
-	 * view grows evenly either side of where it was.
+	 * Grows the cameras already running to the width the game now renders at.
 	 *
-	 * The scroll goes with it: shifting the left edge out by half the cutout would
-	 * otherwise drag everything the camera draws along with it, and menus would come
-	 * out further left than they started.
+	 * Flixel resizes nothing when `FlxG.width` changes: a camera keeps whatever width
+	 * it was built at. The first state is created before this gets switched on, so
+	 * without this its camera stays 1280 wide and everything past that is a black
+	 * band - which is also what kept a camera flash from reaching the screen edges.
 	 */
-	static function widen(camera:FlxCamera):Void
-	{
-		if (camera == null || camera.height != FlxG.height) return; // leave odd little cameras alone
-
-		final extra:Int = Math.round(cutout);
-		final target:Int = FlxG.width + extra;
-		if (camera.width == target) return;
-
-		camera.scroll.x += (camera.width - target) * 0.5;
-		camera.width = target;
-		camera.x = -extra * 0.5;
-	}
-
-	static function widenAll():Void
+	static function resizeCameras():Void
 	{
 		if (FlxG.cameras == null || FlxG.cameras.list == null) return;
 
 		for (camera in FlxG.cameras.list)
-			widen(camera);
+			if (camera != null && camera.height == FlxG.height && camera.width != FlxG.width)
+				camera.width = FlxG.width;
 	}
 
 	static function set_enabled(value:Bool):Bool

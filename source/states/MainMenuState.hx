@@ -60,7 +60,7 @@ class MainMenuState extends MusicBeatState
 		bg.scrollFactor.set(0, yScroll);
 		bg.setGraphicSize(Std.int(bg.width * 1.175));
 		bg.updateHitbox();
-		bg.screenCenter();
+		CoolUtil.fillScreen(bg);
 		add(bg);
 
 		camFollow = new FlxObject(0, 0, 1, 1);
@@ -71,7 +71,7 @@ class MainMenuState extends MusicBeatState
 		magenta.scrollFactor.set(0, yScroll);
 		magenta.setGraphicSize(Std.int(magenta.width * 1.175));
 		magenta.updateHitbox();
-		magenta.screenCenter();
+		CoolUtil.fillScreen(magenta);
 		magenta.visible = false;
 		magenta.color = 0xFFfd719b;
 		add(magenta);

@@ -127,7 +127,11 @@ class TitleState extends MusicBeatState
 		#if TITLE_SCREEN_EASTER_EGG easterEggData(); #end
 		Conductor.bpm = musicBPM;
 
-		logoBl = new FlxSprite(logoPosition.x, logoPosition.y);
+		// Widescreen adds its room to the right of a fixed coordinate, so the whole
+		// composition shifts with the screen instead of hugging the left edge.
+		final wide:Float = CoolUtil.widescreenOffset();
+
+		logoBl = new FlxSprite(logoPosition.x + wide, logoPosition.y);
 		logoBl.frames = Paths.getSparrowAtlas('logoBumpin');
 		logoBl.antialiasing = ClientPrefs.data.antialiasing;
 
@@ -135,7 +139,7 @@ class TitleState extends MusicBeatState
 		logoBl.animation.play('bump');
 		logoBl.updateHitbox();
 
-		gfDance = new FlxSprite(gfPosition.x, gfPosition.y);
+		gfDance = new FlxSprite(gfPosition.x + wide, gfPosition.y);
 		gfDance.antialiasing = ClientPrefs.data.antialiasing;
 		
 		if(ClientPrefs.data.shaders)
@@ -160,7 +164,7 @@ class TitleState extends MusicBeatState
 
 
 		var animFrames:Array<FlxFrame> = [];
-		titleText = new FlxSprite(enterPosition.x, enterPosition.y);
+		titleText = new FlxSprite(enterPosition.x + wide, enterPosition.y);
 		titleText.frames = Paths.getSparrowAtlas('titleEnter');
 		@:privateAccess
 		{

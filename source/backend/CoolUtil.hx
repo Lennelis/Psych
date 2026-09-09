@@ -74,6 +74,40 @@ class CoolUtil
 		return daList;
 	}
 
+	/**
+	 * Half the width the screen has beyond the 1280 the game is drawn for.
+	 *
+	 * Widescreen raises `FlxG.width`, and everything laid out at a fixed coordinate
+	 * would otherwise sit against the left edge with all of the new room piled up on
+	 * the right. Adding this to a sprite's x centres the composition again. Zero
+	 * whenever the game is running at the size it was built for, so a call to it costs
+	 * desktop nothing.
+	 */
+	public static function widescreenOffset():Float
+		return Math.max(0, FlxG.width - FlxG.initialWidth) * 0.5;
+
+	/**
+	 * Grows a background until it covers the screen, and centres it.
+	 *
+	 * Menu backgrounds are drawn for 1280x720 and a wider screen leaves bars either
+	 * side of them. Scaling keeps the art's proportions - a strip off the top and
+	 * bottom is lost instead of the whole thing being stretched - and a background
+	 * already big enough is left at the size it was given.
+	 */
+	public static function fillScreen(sprite:FlxSprite):FlxSprite
+	{
+		if(sprite == null || sprite.frameWidth <= 0 || sprite.frameHeight <= 0) return sprite;
+
+		var needed:Float = Math.max(FlxG.width / sprite.frameWidth, FlxG.height / sprite.frameHeight);
+		if(needed > Math.max(sprite.scale.x, sprite.scale.y))
+		{
+			sprite.scale.set(needed, needed);
+			sprite.updateHitbox();
+		}
+		sprite.screenCenter();
+		return sprite;
+	}
+
 	public static function floorDecimal(value:Float, decimals:Int):Float
 	{
 		if(decimals < 1)

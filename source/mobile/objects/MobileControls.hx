@@ -52,10 +52,7 @@ class MobileControls extends FlxSpriteGroup
 		final size:Int = VirtualPad.buttonSize;
 		final step:Int = size + 12;
 		final margin:Int = 26;
-		// Measured from the real edges of the screen, which widescreen puts half a cutout
-		// outside the game's own band.
-		final edge:Float = mobile.backend.WidescreenScaleMode.cutout * 0.5;
-		final originX:Float = rightSide ? FlxG.width + edge - margin - size - step * 2 : margin - edge;
+		final originX:Float = rightSide ? FlxG.width - margin - size - step * 2 : margin;
 		final bottom:Float = FlxG.height - margin - size;
 
 		// left, down, up, right laid out as a cross, in note-data order
@@ -106,7 +103,7 @@ class MobileControls extends FlxSpriteGroup
 		// squash it freezes on while the menu is up, and the bounce back on resume.
 		if (pauseButton.setSparrowGraphic('pauseButton', 'pause', 0, 0.8, [for (i in 6...33) i]))
 		{
-			pauseButton.setPosition(FlxG.width + mobile.backend.WidescreenScaleMode.cutout * 0.5 - pauseButton.width - 35, 35);
+			pauseButton.setPosition(FlxG.width - pauseButton.width - 35, 35);
 			addPauseCircle();
 		}
 		else
@@ -114,7 +111,7 @@ class MobileControls extends FlxSpriteGroup
 			final size:Int = Std.int(VirtualPad.buttonSize * 0.6);
 			pauseButton.setGraphic('II', size, size);
 			pauseButton.idleAlpha = ClientPrefs.data.controlsAlpha;
-			pauseButton.setPosition(FlxG.width + mobile.backend.WidescreenScaleMode.cutout * 0.5 - size - 20, 20);
+			pauseButton.setPosition(FlxG.width - size - 20, 20);
 		}
 
 		pauseButton.alpha = pauseButton.idleAlpha;

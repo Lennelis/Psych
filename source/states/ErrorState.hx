@@ -23,7 +23,7 @@ class ErrorState extends MusicBeatState
 		bg.color = FlxColor.GRAY;
 		bg.antialiasing = ClientPrefs.data.antialiasing;
 		add(bg);
-		bg.screenCenter();
+		CoolUtil.fillScreen(bg);
 
 		errorText = new FlxText(0, 0, FlxG.width - 300, errorMsg, 32);
 		errorText.setFormat(Paths.font("vcr.ttf"), 32, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);

@@ -26,21 +26,16 @@ class Hitbox extends FlxTypedSpriteGroup<TouchButton>
 
 		scrollFactor.set();
 
-		// Widescreen shows a slice either side of the game's own band, and the lanes have
-		// to reach the real edges of the screen rather than stopping at 0 and FlxG.width.
-		final left:Float = -mobile.backend.WidescreenScaleMode.cutout * 0.5;
-		final fullWidth:Float = FlxG.width + mobile.backend.WidescreenScaleMode.cutout;
-
 		final laneCount:Int = ACTIONS.length;
 		final top:Int = Std.int(FlxG.height * TOP_RESERVED);
-		final laneWidth:Int = Std.int(fullWidth / laneCount);
+		final laneWidth:Int = Std.int(FlxG.width / laneCount);
 		final laneHeight:Int = FlxG.height - top;
 		final hidden:Bool = ClientPrefs.data.hitboxType == 'Hidden';
 		final gradient:Bool = ClientPrefs.data.hitboxType != 'Solid';
 
 		for (i in 0...laneCount)
 		{
-			final button:TouchButton = new TouchButton(left + i * laneWidth, top, [ACTIONS[i]]);
+			final button:TouchButton = new TouchButton(i * laneWidth, top, [ACTIONS[i]]);
 			button.setLaneGraphic(laneWidth, laneHeight, laneColor(i), gradient);
 			button.allowSlideIn = true; // sliding across lanes is how you play rolls with two thumbs
 			button.idleAlpha = hidden ? 0 : ClientPrefs.data.controlsAlpha * 0.5;
