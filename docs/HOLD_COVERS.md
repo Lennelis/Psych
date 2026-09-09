@@ -55,6 +55,13 @@ sheet along and it will be picked up on a pixel stage automatically:
 a pixel stage got the ordinary splash run through the pixelate shader, which is an
 impression of pixel art rather than the thing itself.
 
+That sheet is drawn at scale 4 with a framerate of 33, and **blended with `screen`** -
+all three taken from V-Slice's own `pixel.json` note style. The blend is not decoration:
+about an eighth of the sheet's opaque pixels are near-black outlines, and drawn normally
+they sit on the arrow as black blobs. Screen turns them into light instead. Splash
+configs therefore take a `blend` field now - `add`, `screen`, `multiply` or `subtract`,
+the four the hardware renderer actually implements; anything else draws normally.
+
 ## Tuning them
 
 `assets/shared/images/holdCovers/holdCover.json`, all of it optional:
@@ -80,10 +87,14 @@ impression of pixel art rather than the thing itself.
 - `offsets` is measured from the strum's centre, in the **sheet's own pixels**: they are
   multiplied by `scale`, the same way V-Slice applies its hold cover offsets. A cover
   follows its strum, so tweens and modcharts move it too.
-- The shipped `[-10, 50]` is not decoration. The art is not centred on its own 300x400
-  canvas - the loop's glow sits about 10px right of centre and 50px above it - so those
-  numbers are what put the glow on the strum rather than up and to the right of it. The
-  pixel sheet's `[27.5, 0.5]` is the same correction for its 200x59 canvas.
+- The shipped `[-11.6, 45.8]` is not decoration. The art is not centred on its own
+  300x400 canvas - the loop's glow sits about 9px right of centre and 51px above it - so
+  those numbers are what put the glow on the strum rather than up and to the right of it.
+  They are V-Slice's placement, worked back out of it: with the note style's own offsets
+  at `[0, 0]`, `Strumline.playNoteHoldCover` and `INITIAL_OFFSET` put the cover 2.3px
+  left of the receptor's centre and 5.6px above it, and all four lanes agree on that to
+  within a pixel. The pixel sheet's `[27.8, 0.1]` is the same figure for its 200x59
+  canvas, and lands on the same answer from completely different numbers.
 - `antialiasing` can only ever turn it *off*; the player's own antialiasing setting
   still wins.
 
@@ -114,6 +125,12 @@ state:
 - `updateHoldCovers()` ends it: `playEnd()` once the song reaches the sustain's charted
   end, `stopCover()` the moment `wasHoldingSustain` says the player let go. The bot is
   exempt from the drop check, because it never does.
+
+The order of those two questions is load-bearing. A lane stops holding on the very frame
+its sustain ends - that is the same frame `finishConfirm` drops the strum to its ghost
+tap - so asking "did they let go?" before "did it finish?" answers yes to both and takes
+the end animation away from every hold that earned one. Completion is asked first, and
+the burst lands on the same frame as the ghost tap, which is the pop it is there for.
 
 One cover is built per strum and lives as long as it does, so a hold never waits on a
 pool and a lane's sheet is loaded once. They draw above the notes, which is what lets a

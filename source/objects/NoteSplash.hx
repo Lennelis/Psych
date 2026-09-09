@@ -24,7 +24,9 @@ typedef NoteSplashConfig = {
 	scale:Float,
 	allowRGB:Bool,
 	allowPixel:Bool,
-	rgb:Array<Null<RGB>>
+	rgb:Array<Null<RGB>>,
+	/** 'add', 'screen', 'multiply' or 'subtract'. Anything else, or absent, draws normally. */
+	?blend:String
 }
 
 class NoteSplash extends FlxSprite
@@ -128,7 +130,8 @@ class NoteSplash extends FlxSprite
 					scale: config.scale,
 					allowRGB: config.allowRGB,
 					allowPixel: config.allowPixel,
-					rgb: config.rgb
+					rgb: config.rgb,
+					blend: config.blend
 				}
 
 				for (i in Reflect.fields(config.animations))
@@ -400,7 +403,30 @@ class NoteSplash extends FlxSprite
 			scale: 1,
 			allowRGB: true,
 			allowPixel: true,
-			rgb: null
+			rgb: null,
+			blend: null
+		}
+	}
+
+	/**
+	 * How a splash skin's json asks to be blended.
+	 *
+	 * V-Slice's pixel splashes are drawn with 'screen', which is what turns their black
+	 * outlines into light instead of leaving them sitting there as black blobs. Only the
+	 * four modes the hardware renderer actually implements are honoured; anything else
+	 * draws normally rather than quietly falling back to something slower.
+	 */
+	public static function blendOf(name:String):openfl.display.BlendMode
+	{
+		if (name == null) return null;
+
+		return switch (name.trim().toLowerCase())
+		{
+			case 'add': ADD;
+			case 'screen': SCREEN;
+			case 'multiply': MULTIPLY;
+			case 'subtract': SUBTRACT;
+			default: null;
 		}
 	}
 
@@ -435,6 +461,7 @@ class NoteSplash extends FlxSprite
 			}
 		}
 
+		blend = blendOf(value.blend);
 		scale.set(value.scale, value.scale);
 		return config = value;
 	}

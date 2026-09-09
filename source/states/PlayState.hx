@@ -2960,11 +2960,16 @@ class PlayState extends MusicBeatState
 			var cover:HoldCover = playerHoldCovers[i];
 			if(cover == null || !cover.running) continue;
 
-			// The bot never lets go, so dropping only means anything in a lane the player
-			// is playing. wasHoldingSustain is the same signal the strums run on, so a
-			// cover can never outlast the confirm glow underneath it.
-			if(!cpuControlled && (i >= wasHoldingSustain.length || !wasHoldingSustain[i])) cover.stopCover();
-			else if(Conductor.songPosition >= playerHoldCoverEnd[i]) cover.playEnd();
+			// Completion is asked about first, and that order is the whole trick: the lane
+			// stops holding on the very frame the sustain ends, so testing whether the key
+			// is still down before testing whether the hold finished takes the end
+			// animation away from every hold that earned one.
+			//
+			// Below that, the bot never lets go, so dropping only means anything in a lane
+			// the player is playing. wasHoldingSustain is the same signal the strums run
+			// on, so a cover can never outlast the confirm glow underneath it.
+			if(Conductor.songPosition >= playerHoldCoverEnd[i]) cover.playEnd();
+			else if(!cpuControlled && (i >= wasHoldingSustain.length || !wasHoldingSustain[i])) cover.stopCover();
 		}
 
 		for (i in 0...opponentHoldCovers.length)
