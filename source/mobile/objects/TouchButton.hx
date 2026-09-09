@@ -46,6 +46,16 @@ class TouchButton extends FlxSprite
 	/** How quickly the button fades between its two alphas. Set to 0 to snap. */
 	public var alphaTweenSpeed:Float = 16;
 
+	/**
+	 * Things sitting on top of this button that take priority over it: a touch inside
+	 * one of them is not a touch on this.
+	 *
+	 * The pause button overlaps the top of a hitbox lane, and without this a tap on it
+	 * would pause the game and be played as a note on the way. V-Slice calls the same
+	 * idea `deadZones` on its hitbox hints.
+	 */
+	public var deadZones:Array<FlxSprite> = [];
+
 	public var onDown(default, null):FlxTypedSignal<TouchButton->Void> = new FlxTypedSignal<TouchButton->Void>();
 	public var onUp(default, null):FlxTypedSignal<TouchButton->Void> = new FlxTypedSignal<TouchButton->Void>();
 
@@ -125,13 +135,13 @@ class TouchButton extends FlxSprite
 				// already false. Skipping only justReleased let allowSlideIn take that
 				// stale entry as a fresh press, so every tap fired the button twice - the
 				// second one landing after the finger was gone.
-				if (!touch.pressed || !touch.overlaps(this, camera)) continue;
+				if (!touch.pressed || !touch.overlaps(this, camera) || blocked(touch)) continue;
 
 				if (heldIDs.indexOf(touch.touchPointID) != -1) stillHeld.push(touch.touchPointID);
 				else if (touch.justPressed || allowSlideIn) stillHeld.push(touch.touchPointID);
 			}
 
-			if (mouseEnabled && FlxG.mouse.pressed && FlxG.mouse.overlaps(this, camera))
+			if (mouseEnabled && FlxG.mouse.pressed && FlxG.mouse.overlaps(this, camera) && !blocked(FlxG.mouse))
 			{
 				if (heldIDs.indexOf(MOUSE_ID) != -1) stillHeld.push(MOUSE_ID);
 				else if (FlxG.mouse.justPressed || allowSlideIn) stillHeld.push(MOUSE_ID);
@@ -150,6 +160,40 @@ class TouchButton extends FlxSprite
 		}
 		else if (justReleased)
 			onUp.dispatch(this);
+	}
+
+	function blocked(input:flixel.input.FlxPointer):Bool
+	{
+		for (zone in deadZones)
+			if (zone != null && zone.exists && zone.visible && input.overlaps(zone, zone.camera)) return true;
+
+		return false;
+	}
+
+	/**
+	 * Dresses the button in real art instead of a drawn one, showing a single frame of a
+	 * Sparrow sheet.
+	 *
+	 * Returns false and leaves the button untouched when the sheet isn't there, so the
+	 * caller can fall back to the drawn graphic rather than ending up with an invisible
+	 * button.
+	 */
+	public function setSparrowGraphic(texture:String, prefix:String, frame:Int = 0, scaleTo:Float = 1):Bool
+	{
+		if (!Paths.fileExists('images/$texture.png', IMAGE) || !Paths.fileExists('images/$texture.xml', TEXT)) return false;
+
+		var atlas:flixel.graphics.frames.FlxAtlasFrames = Paths.getSparrowAtlas(texture);
+		if (atlas == null) return false;
+
+		frames = atlas;
+		animation.addByIndices('idle', prefix, [frame], '', 24, false);
+		if (!animation.exists('idle')) return false;
+
+		animation.play('idle');
+		scale.set(scaleTo, scaleTo);
+		updateHitbox();
+		alpha = idleAlpha;
+		return true;
 	}
 
 	function updateAlpha(elapsed:Float):Void

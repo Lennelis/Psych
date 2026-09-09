@@ -20,6 +20,9 @@ class MobileControls extends FlxSpriteGroup
 	public var hitbox(default, null):Hitbox;
 	public var pauseButton(default, null):TouchButton;
 
+	/** The faint disc the base game sits behind its pause button. Null without the art. */
+	public var pauseCircle(default, null):FlxSprite;
+
 	public function new()
 	{
 		super();
@@ -74,20 +77,69 @@ class MobileControls extends FlxSpriteGroup
 		}
 	}
 
-	/** Adds the small pause button in the top right corner. */
+	/**
+	 * Adds the pause button in the top right corner, the way the base game has it: the
+	 * button sprite over a faint disc, tapped to pause.
+	 *
+	 * The numbers are V-Slice's own, from `PlayState.initPauseSprites` - the button at
+	 * 0.8 scale, 35px in from the corner, the disc at 0.84 by 0.8 behind it at a tenth
+	 * opacity. It sits at full opacity there whatever the other controls are set to, so
+	 * it does here too.
+	 *
+	 * Without the art it falls back to the drawn button the pads use, so a build missing
+	 * those files still has a way to pause.
+	 */
 	public function addPauseButton():TouchButton
 	{
 		if (pauseButton != null) return pauseButton;
 
-		final size:Int = Std.int(VirtualPad.buttonSize * 0.6);
-		pauseButton = new TouchButton(FlxG.width - size - 20, 20, ['pause']);
-		pauseButton.setGraphic('II', size, size);
-		pauseButton.idleAlpha = ClientPrefs.data.controlsAlpha;
+		pauseButton = new TouchButton(0, 0, ['pause']);
+		pauseButton.idleAlpha = 1;
 		pauseButton.pressedAlpha = 1;
-		pauseButton.alpha = pauseButton.idleAlpha;
 		pauseButton.antialiasing = ClientPrefs.data.antialiasing;
+
+		if (pauseButton.setSparrowGraphic('pauseButton', 'pause', 0, 0.8))
+		{
+			pauseButton.setPosition(FlxG.width - pauseButton.width - 35, 35);
+			addPauseCircle();
+		}
+		else
+		{
+			final size:Int = Std.int(VirtualPad.buttonSize * 0.6);
+			pauseButton.setGraphic('II', size, size);
+			pauseButton.idleAlpha = ClientPrefs.data.controlsAlpha;
+			pauseButton.setPosition(FlxG.width - size - 20, 20);
+		}
+
+		pauseButton.alpha = pauseButton.idleAlpha;
 		add(pauseButton);
+
+		// A tap on the pause button must not be played as a note by the lane underneath
+		// it: the button hangs into the top of the rightmost one.
+		if (hitbox != null)
+			for (i in 0...Hitbox.ACTIONS.length)
+			{
+				final lane:TouchButton = hitbox.getLane(i);
+				if (lane != null) lane.deadZones.push(pauseButton);
+			}
+
 		return pauseButton;
+	}
+
+	function addPauseCircle():Void
+	{
+		if (!Paths.fileExists('images/pauseCircle.png', IMAGE)) return;
+
+		pauseCircle = new FlxSprite();
+		pauseCircle.loadGraphic(Paths.image('pauseCircle'));
+		pauseCircle.scale.set(0.84, 0.8);
+		pauseCircle.updateHitbox();
+		pauseCircle.setPosition(pauseButton.x + (pauseButton.width - pauseCircle.width) * 0.5,
+			pauseButton.y + (pauseButton.height - pauseCircle.height) * 0.5);
+		pauseCircle.alpha = 0.1;
+		pauseCircle.antialiasing = ClientPrefs.data.antialiasing;
+		pauseCircle.scrollFactor.set();
+		add(pauseCircle); // before the button, so it sits behind it
 	}
 
 	public function releaseAll():Void

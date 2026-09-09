@@ -226,6 +226,22 @@ class StrumNote extends FlxSprite
 		super.update(elapsed);
 	}
 
+	/**
+	 * Keeps a hold's confirm glow going without starting it over.
+	 *
+	 * Psych takes a sustain one piece per step and plays 'confirm' again on each of
+	 * them, so the bright first frame re-fires the whole way through a hold. V-Slice
+	 * plays it once and then settles - `StrumlineNote.holdConfirm` leaves a confirm
+	 * that is already running alone - so a confirm in progress is left to play out and
+	 * sit on its final frame until the hold ends and the ghost tap takes over.
+	 */
+	public function holdConfirm():Void
+	{
+		if(animation.curAnim != null && animation.curAnim.name == 'confirm') return;
+
+		playAnim('confirm', true);
+	}
+
 	public function playAnim(anim:String, ?force:Bool = false) {
 		// Any other animation cancels a pending fallback, so releasing the key mid-wait
 		// can't have it fire afterwards.

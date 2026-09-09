@@ -3248,7 +3248,7 @@ class PlayState extends MusicBeatState
 		}
 
 		if(opponentVocals.length <= 0) vocals.volume = 1;
-		strumPlayAnim(true, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate);
+		strumPlayAnim(true, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate, note.isSustainNote);
 		note.hitByOpponent = true;
 		startHoldCover(false, note);
 		
@@ -3321,9 +3321,13 @@ class PlayState extends MusicBeatState
 			if(!cpuControlled)
 			{
 				var spr = playerStrums.members[note.noteData];
-				if(spr != null) spr.playAnim('confirm', true);
+				if(spr != null)
+				{
+					if(isSus) spr.holdConfirm();
+					else spr.playAnim('confirm', true);
+				}
 			}
-			else strumPlayAnim(false, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate);
+			else strumPlayAnim(false, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate, isSus);
 			vocals.volume = 1;
 
 			if (!note.isSustainNote)
@@ -3719,7 +3723,13 @@ class PlayState extends MusicBeatState
 		#end
 	}
 
-	function strumPlayAnim(isDad:Bool, id:Int, time:Float) {
+	/**
+	 * Lights a strum for a note that just landed.
+	 *
+	 * `isSustain` keeps a hold from restarting the glow on every piece; the timer is
+	 * still refreshed, so the strum stays lit for as long as pieces keep arriving.
+	 */
+	function strumPlayAnim(isDad:Bool, id:Int, time:Float, ?isSustain:Bool = false) {
 		var spr:StrumNote = null;
 		if(isDad) {
 			spr = opponentStrums.members[id];
@@ -3728,7 +3738,8 @@ class PlayState extends MusicBeatState
 		}
 
 		if(spr != null) {
-			spr.playAnim('confirm', true);
+			if(isSustain) spr.holdConfirm();
+			else spr.playAnim('confirm', true);
 			spr.resetAnim = time;
 		}
 	}

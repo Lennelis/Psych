@@ -5,7 +5,7 @@
 	"pixel": {
 		"scale": 6,
 		"fps": 24,
-		"offsets": [27.8, 0.1],
+		"offsets": [27.8, 0.77],
 		"antialiasing": false
 	}
 }

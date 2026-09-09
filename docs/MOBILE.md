@@ -238,10 +238,24 @@ reporting a press forever.
 | `mobile/backend/StorageUtil.hx` | Writable paths, and unpacking bundled mods on first launch. |
 | `mobile/options/MobileOptionsSubState.hx` | Options → Mobile. |
 
-**No new art.** `TouchButtonGraphic` draws the buttons with the OpenFL drawing
-API and caches the results as `FlxGraphic`s, so the port adds nothing to
+**Almost no new art.** `TouchButtonGraphic` draws the pads and lanes with the
+OpenFL drawing API and caches the results as `FlxGraphic`s, so they add nothing to
 `assets/`, mods and `Paths` are untouched, and buttons stay sharp at any screen
 density.
+
+The **pause button** is the exception, and it is the base game's own: `pauseButton`
+over a faint `pauseCircle`, top right, tapped to pause. Everything about its
+placement is V-Slice's, from `PlayState.initPauseSprites` — the button at 0.8 scale
+35px in from the corner, the disc at 0.84 by 0.8 centred behind it at a tenth
+opacity, spilling past the screen edge exactly as it does there. It stays at full
+opacity whatever Controls Opacity is set to, again as in the base game. A build
+without those two files falls back to the drawn button, so there is always a way to
+pause.
+
+A tap on it must not also be played as a note, since the button hangs about 25px
+into the top of the rightmost lane. `TouchButton.deadZones` is what stops that: a
+lane ignores any touch that lands inside a button listed there, which is the same
+idea as the `deadZones` V-Slice puts on its hitbox hints.
 
 **Gameplay input** is wired in `PlayState.addMobileControls()`. Presses and
 releases are callbacks straight to `keyPressed`/`keyReleased` rather than polled,
