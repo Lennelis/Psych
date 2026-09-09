@@ -2871,6 +2871,16 @@ class PlayState extends MusicBeatState
 	/** Lanes that were inside a hold last frame, so a strum can drop the moment one ends. */
 	var wasHoldingSustain:Array<Bool> = [];
 
+	/**
+	 * When the hold in each lane actually finishes, per the chart.
+	 *
+	 * Sustain pieces are laid out at 0, step, 2*step ... (roundSus - 1) * step, so the
+	 * last one sits a whole step short of `strumTime + sustainLength`. Going by the
+	 * last piece alone dropped the strum early by that step - a tenth of a second or
+	 * so - leaving the end of the sustain still on screen.
+	 */
+	var holdEndTime:Array<Float> = [];
+
 	// Hold notes
 	private function keysCheck():Void
 	{
@@ -2889,6 +2899,7 @@ class PlayState extends MusicBeatState
 			holdPending.push(false);
 		}
 		while(wasHoldingSustain.length < holdPending.length) wasHoldingSustain.push(false);
+		while(holdEndTime.length < holdPending.length) holdEndTime.push(-1);
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
 		if(controls.controllerMode && pressArray.contains(true))
@@ -2924,6 +2935,10 @@ class PlayState extends MusicBeatState
 						{
 							goodNoteHit(n);
 							sustainArray[n.noteData] = true;
+
+							final head:Note = (n.parent != null) ? n.parent : n;
+							if(n.noteData >= 0 && n.noteData < holdEndTime.length)
+								holdEndTime[n.noteData] = head.strumTime + head.sustainLength;
 						}
 					}
 				}
@@ -2963,9 +2978,12 @@ class PlayState extends MusicBeatState
 			var spr:StrumNote = playerStrums.members[i];
 			if(spr == null) continue;
 
-			// A piece landing this frame or pieces still to come both mean the hold is
-			// live; it ends on the frame after the last piece is taken.
-			var holding:Bool = holdArray[i] && (sustainArray[i] || holdPending[i]);
+			// A piece landing this frame, or pieces still to come, both mean the hold is
+			// live. The last clause carries it through the final stretch after the last
+			// piece has been taken, up to where the sustain really ends. It only extends
+			// a hold that was already running, so it can't revive one that was dropped.
+			var holding:Bool = holdArray[i] && (sustainArray[i] || holdPending[i]
+				|| (wasHoldingSustain[i] && i < holdEndTime.length && Conductor.songPosition < holdEndTime[i]));
 
 			spr.keyHeld = holdArray[i];
 			spr.holdingSustain = holding;
