@@ -2881,6 +2881,14 @@ class PlayState extends MusicBeatState
 	 */
 	var holdEndTime:Array<Float> = [];
 
+	/**
+	 * The head note of the hold running in each lane.
+	 *
+	 * Needed to tell "more pieces of the hold I'm in" apart from "pieces of the next
+	 * hold in this lane", which Psych has already spawned a couple of seconds ahead.
+	 */
+	var holdHead:Array<Note> = [];
+
 	// Hold notes
 	private function keysCheck():Void
 	{
@@ -2900,6 +2908,7 @@ class PlayState extends MusicBeatState
 		}
 		while(wasHoldingSustain.length < holdPending.length) wasHoldingSustain.push(false);
 		while(holdEndTime.length < holdPending.length) holdEndTime.push(-1);
+		while(holdHead.length < holdPending.length) holdHead.push(null);
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
 		if(controls.controllerMode && pressArray.contains(true))
@@ -2914,15 +2923,20 @@ class PlayState extends MusicBeatState
 					var canHit:Bool = (n != null && !strumsBlocked[n.noteData] && n.canBeHit
 						&& n.mustPress && !n.tooLate && !n.wasGoodHit && !n.blockHit);
 
-					// Still inside a hold: it has pieces left to give, and either its head was
-					// hit or we were already holding this lane last frame. Checking for
-					// remaining pieces rather than "did one land this frame" is what stops the
-					// strum flickering between them. The second half of that matters with
-					// Guitar Hero sustains switched off, where a tail can be hit without its
-					// head and parent.wasGoodHit stays false for the whole hold.
+					// Still inside a hold: it has pieces left to give, and they belong to the
+					// hold being played. Checking for remaining pieces rather than "did one
+					// land this frame" is what stops the strum flickering between them.
+					//
+					// Both halves of that ownership test matter. parent.wasGoodHit covers the
+					// normal case; matching holdHead covers Guitar Hero sustains being switched
+					// off, where a tail can be hit without its head so wasGoodHit stays false
+					// for the whole hold. It has to be tied to this hold's head and not just
+					// "this lane was holding", because the next hold in the same lane is
+					// already spawned - counting its pieces left the hold looking endless and
+					// the ghost tap never arrived.
 					if(n != null && n.isSustainNote && n.mustPress && !n.wasGoodHit && !n.tooLate
 						&& n.noteData >= 0 && n.noteData < holdPending.length
-						&& (n.parent == null || n.parent.wasGoodHit || wasHoldingSustain[n.noteData]))
+						&& (n.parent == null || n.parent.wasGoodHit || n.parent == holdHead[n.noteData]))
 						holdPending[n.noteData] = true;
 
 					if (guitarHeroSustains)
@@ -2938,7 +2952,10 @@ class PlayState extends MusicBeatState
 
 							final head:Note = (n.parent != null) ? n.parent : n;
 							if(n.noteData >= 0 && n.noteData < holdEndTime.length)
+							{
 								holdEndTime[n.noteData] = head.strumTime + head.sustainLength;
+								holdHead[n.noteData] = n.parent;
+							}
 						}
 					}
 				}
@@ -2988,7 +3005,11 @@ class PlayState extends MusicBeatState
 			spr.keyHeld = holdArray[i];
 			spr.holdingSustain = holding;
 
-			if(wasHoldingSustain[i] && !holding) spr.finishConfirm();
+			if(wasHoldingSustain[i] && !holding)
+			{
+				spr.finishConfirm();
+				holdHead[i] = null;
+			}
 			wasHoldingSustain[i] = holding;
 		}
 	}
