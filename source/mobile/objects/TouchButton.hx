@@ -56,6 +56,12 @@ class TouchButton extends FlxSprite
 	 */
 	public var deadZones:Array<FlxSprite> = [];
 
+	/** Animation played on press, for buttons whose art has one. Null for none. */
+	public var pressAnim:String = null;
+
+	/** What to go back to once a press animation has played out. */
+	public var idleAnim:String = 'idle';
+
 	public var onDown(default, null):FlxTypedSignal<TouchButton->Void> = new FlxTypedSignal<TouchButton->Void>();
 	public var onUp(default, null):FlxTypedSignal<TouchButton->Void> = new FlxTypedSignal<TouchButton->Void>();
 
@@ -156,10 +162,21 @@ class TouchButton extends FlxSprite
 		if (justPressed)
 		{
 			TouchUtil.vibrate();
+			playPressAnim();
 			onDown.dispatch(this);
 		}
 		else if (justReleased)
 			onUp.dispatch(this);
+	}
+
+	public function playPressAnim():Void
+	{
+		if (pressAnim != null && animation.exists(pressAnim)) animation.play(pressAnim, true);
+	}
+
+	public function playIdleAnim():Void
+	{
+		if (idleAnim != null && animation.exists(idleAnim)) animation.play(idleAnim, true);
 	}
 
 	function blocked(input:flixel.input.FlxPointer):Bool
@@ -178,7 +195,7 @@ class TouchButton extends FlxSprite
 	 * caller can fall back to the drawn graphic rather than ending up with an invisible
 	 * button.
 	 */
-	public function setSparrowGraphic(texture:String, prefix:String, frame:Int = 0, scaleTo:Float = 1):Bool
+	public function setSparrowGraphic(texture:String, prefix:String, frame:Int = 0, scaleTo:Float = 1, ?pressFrames:Array<Int>):Bool
 	{
 		if (!Paths.fileExists('images/$texture.png', IMAGE) || !Paths.fileExists('images/$texture.xml', TEXT)) return false;
 
@@ -188,6 +205,16 @@ class TouchButton extends FlxSprite
 		frames = atlas;
 		animation.addByIndices('idle', prefix, [frame], '', 24, false);
 		if (!animation.exists('idle')) return false;
+
+		if (pressFrames != null && pressFrames.length > 0)
+		{
+			animation.addByIndices('press', prefix, pressFrames, '', 24, false);
+			if (animation.exists('press'))
+			{
+				pressAnim = 'press';
+				animation.finishCallback = function(name:String) if (name == pressAnim) playIdleAnim();
+			}
+		}
 
 		animation.play('idle');
 		scale.set(scaleTo, scaleTo);

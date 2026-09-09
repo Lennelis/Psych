@@ -36,8 +36,20 @@ class StrumNote extends FlxSprite
 	 */
 	public var holdingSustain:Bool = false;
 
-	/** Counts up once 'confirm' has finished playing. -1 when nothing is pending. */
+	/** Counts up once the glow has finished playing. -1 when nothing is pending. */
 	var confirmHoldTimer:Float = -1;
+
+	/**
+	 * Whether the glow belongs to a hold rather than a tap.
+	 *
+	 * `holdingSustain` covers the player, whose lane PlayState tracks every frame. The
+	 * opponent has no such bookkeeping, so this is set by `holdConfirm` instead and
+	 * cleared as soon as anything but a glow plays.
+	 */
+	var sustainConfirm:Bool = false;
+
+	inline function inHold():Bool
+		return holdingSustain || sustainConfirm;
 	private var noteData:Int = 0;
 	public var direction:Float = 90;
 	public var downScroll:Bool = false;
@@ -163,6 +175,13 @@ class StrumNote extends FlxSprite
 					animation.addByPrefix('confirm', 'right confirm', 24, false);
 			}
 		}
+		// The second pass of the glow, which a hold freezes on. Same frames as 'confirm'
+		// either way, exactly as V-Slice's note style points 'confirm-hold' back at the
+		// confirm frames - taken from the animation itself so a skin only has to define
+		// the one, pixel and otherwise.
+		var confirmAnim:flixel.animation.FlxAnimation = animation.getByName('confirm');
+		if(confirmAnim != null) animation.add('confirm-hold', confirmAnim.frames.copy(), confirmAnim.frameRate, false);
+
 		updateHitbox();
 
 		if(lastAnim != null)
@@ -180,10 +199,18 @@ class StrumNote extends FlxSprite
 
 	function onAnimationFinished(name:String):Void
 	{
+		// A hold gets the glow a second time and then freezes on its last frame, which is
+		// V-Slice going from 'confirm' to 'confirm-hold' and leaving it there.
+		if(name == 'confirm' && inHold() && animation.exists('confirm-hold'))
+		{
+			playAnim('confirm-hold', true);
+			return;
+		}
+
 		// resetAnim means something else already owns the revert - the opponent's
 		// strums, or the player's under botplay - so don't fight it. A hold that's
-		// still running keeps the confirm up until PlayState says it ended.
-		if(name == 'confirm' && resetAnim <= 0 && !holdingSustain) confirmHoldTimer = 0;
+		// still running keeps the glow up until PlayState says it ended.
+		if((name == 'confirm' || name == 'confirm-hold') && resetAnim <= 0 && !inHold()) confirmHoldTimer = 0;
 	}
 
 	/**
@@ -195,7 +222,7 @@ class StrumNote extends FlxSprite
 	public function finishConfirm():Void
 	{
 		confirmHoldTimer = -1;
-		if(animation.curAnim != null && animation.curAnim.name == 'confirm')
+		if(animation.curAnim != null && (animation.curAnim.name == 'confirm' || animation.curAnim.name == 'confirm-hold'))
 			playAnim(keyHeld ? 'pressed' : 'static');
 	}
 
@@ -227,25 +254,48 @@ class StrumNote extends FlxSprite
 	}
 
 	/**
-	 * Keeps a hold's confirm glow going without starting it over.
+	 * Keeps a hold's glow going without starting it over.
 	 *
 	 * Psych takes a sustain one piece per step and plays 'confirm' again on each of
-	 * them, so the bright first frame re-fires the whole way through a hold. V-Slice
-	 * plays it once and then settles - `StrumlineNote.holdConfirm` leaves a confirm
-	 * that is already running alone - so a confirm in progress is left to play out and
-	 * sit on its final frame until the hold ends and the ghost tap takes over.
+	 * them, so the bright first frame re-fired the whole way through a hold. V-Slice's
+	 * `StrumlineNote.holdConfirm` instead lets the glow run once, follows it with
+	 * 'confirm-hold', and leaves that sitting on its last frame until the hold is over.
+	 * A glow already running is left alone here, and `onAnimationFinished` moves it on.
 	 */
-	public function holdConfirm():Void
+	/** Lights the strum for a tapped note: a fresh glow, with no hold behind it. */
+	public function tapConfirm():Void
 	{
-		if(animation.curAnim != null && animation.curAnim.name == 'confirm') return;
-
+		sustainConfirm = false;
 		playAnim('confirm', true);
 	}
 
+	public function holdConfirm():Void
+	{
+		sustainConfirm = true;
+
+		if(animation.curAnim == null)
+		{
+			playAnim('confirm', true);
+			return;
+		}
+
+		switch(animation.curAnim.name)
+		{
+			case 'confirm': // still running, or waiting on its finish callback
+			case 'confirm-hold': // second pass, or frozen at the end of one
+			default: playAnim('confirm', true);
+		}
+	}
+
 	public function playAnim(anim:String, ?force:Bool = false) {
-		// Any other animation cancels a pending fallback, so releasing the key mid-wait
-		// can't have it fire afterwards.
-		if(anim != 'confirm') confirmHoldTimer = -1;
+		// Anything but the glow cancels a pending fallback, so releasing the key mid-wait
+		// can't have it fire afterwards, and ends the hold as far as the glow is
+		// concerned.
+		if(anim != 'confirm' && anim != 'confirm-hold')
+		{
+			confirmHoldTimer = -1;
+			sustainConfirm = false;
+		}
 		animation.play(anim, force);
 		if(animation.curAnim != null)
 		{

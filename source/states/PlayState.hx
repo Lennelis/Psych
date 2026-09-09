@@ -1652,7 +1652,7 @@ class PlayState extends MusicBeatState
 		if(mobileControls != null)
 		{
 			mobileControls.releaseAll();
-			mobileControls.visible = true;
+			mobileControls.setGameplayVisible(true);
 		}
 		#end
 
@@ -1984,7 +1984,7 @@ class PlayState extends MusicBeatState
 		if(mobileControls != null)
 		{
 			mobileControls.releaseAll();
-			mobileControls.visible = false;
+			mobileControls.setGameplayVisible(false);
 		}
 		#end
 		persistentDraw = true;
@@ -3324,7 +3324,7 @@ class PlayState extends MusicBeatState
 				if(spr != null)
 				{
 					if(isSus) spr.holdConfirm();
-					else spr.playAnim('confirm', true);
+					else spr.tapConfirm();
 				}
 			}
 			else strumPlayAnim(false, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate, isSus);
@@ -3739,7 +3739,7 @@ class PlayState extends MusicBeatState
 
 		if(spr != null) {
 			if(isSustain) spr.holdConfirm();
-			else spr.playAnim('confirm', true);
+			else spr.tapConfirm();
 			spr.resetAnim = time;
 		}
 	}

@@ -98,7 +98,10 @@ class MobileControls extends FlxSpriteGroup
 		pauseButton.pressedAlpha = 1;
 		pauseButton.antialiasing = ClientPrefs.data.antialiasing;
 
-		if (pauseButton.setSparrowGraphic('pauseButton', 'pause', 0, 0.8))
+		// Frames 6 to 32 are the squash and bounce V-Slice gives the same sheet on its
+		// back button. The game pauses on the press, so what is actually seen is the
+		// squash it freezes on while the menu is up, and the bounce back on resume.
+		if (pauseButton.setSparrowGraphic('pauseButton', 'pause', 0, 0.8, [for (i in 6...33) i]))
 		{
 			pauseButton.setPosition(FlxG.width - pauseButton.width - 35, 35);
 			addPauseCircle();
@@ -148,6 +151,21 @@ class MobileControls extends FlxSpriteGroup
 			if (button != null) button.release();
 
 		if (pauseButton != null) pauseButton.release();
+	}
+
+	/**
+	 * Hides the note controls without taking the pause button with them.
+	 *
+	 * The pause menu covers the game, but the button stays where it was: it freezes on
+	 * the squashed frame of its press animation, so the tap that opened the menu still
+	 * reads as a press, and finishes bouncing back when play resumes.
+	 */
+	public function setGameplayVisible(value:Bool):Void
+	{
+		if (hitbox != null) hitbox.visible = value;
+
+		for (button in noteButtons)
+			if (button != null) button.visible = value;
 	}
 
 	static function noteColor(i:Int):FlxColor
