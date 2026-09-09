@@ -773,9 +773,16 @@ class LoadingState extends MusicBeatState
 		//trace('precaching sound: $file');
 		if(!Paths.currentTrackedSounds.exists(file))
 		{
-			if (#if sys FileSystem.exists(file) || #end OpenFlAssets.exists(file, SOUND))
+			// The check below used to accept a file that only exists inside the package
+			// and then load it with Sound.fromFile anyway, which can only read loose files.
+			var sound:Sound = null;
+			#if sys
+			if(FileSystem.exists(file)) sound = Sound.fromFile(file);
+			#end
+			if(sound == null && OpenFlAssets.exists(file, SOUND)) sound = OpenFlAssets.getSound(file, false);
+
+			if (sound != null)
 			{
-				var sound:Sound = #if sys Sound.fromFile(file) #else OpenFlAssets.getSound(file, false) #end;
 				mutex.acquire();
 				Paths.currentTrackedSounds.set(file, sound);
 				mutex.release();
@@ -805,14 +812,14 @@ class LoadingState extends MusicBeatState
 			if (!Paths.currentTrackedAssets.exists(requestKey))
 			{
 				var file:String = Paths.getPath(requestKey, IMAGE);
-				if (#if sys FileSystem.exists(file) || #end OpenFlAssets.exists(file, IMAGE))
-				{
-					#if sys
-					var bitmap:BitmapData = BitmapData.fromFile(file);
-					#else
-					var bitmap:BitmapData = OpenFlAssets.getBitmapData(file, false);
-					#end
+				var bitmap:BitmapData = null;
+				#if sys
+				if(FileSystem.exists(file)) bitmap = BitmapData.fromFile(file);
+				#end
+				if(bitmap == null && OpenFlAssets.exists(file, IMAGE)) bitmap = OpenFlAssets.getBitmapData(file, false);
 
+				if (bitmap != null)
+				{
 					mutex.acquire();
 					requestedBitmaps.set(file, bitmap);
 					originalBitmapKeys.set(file, requestKey);

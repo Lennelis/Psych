@@ -1578,6 +1578,11 @@ class FunkinLua {
 			var result:Dynamic = null;
 			if(!isString)
 				result = LuaL.dofile(lua, scriptName);
+			// A script packaged inside the build (every base game script on Android) has
+			// no path LuaJIT can open, so hand it the source. Without this the file path
+			// itself gets executed as Lua and the script silently never runs.
+			else if(Assets.exists(scriptName))
+				result = LuaL.dostring(lua, Assets.getText(scriptName));
 			else
 				result = LuaL.dostring(lua, scriptName);
 

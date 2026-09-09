@@ -842,7 +842,7 @@ class PlayState extends MusicBeatState
 		#end
 		{
 			scriptFile = Paths.getSharedPath(scriptFile);
-			if(FileSystem.exists(scriptFile))
+			if(#if sys FileSystem.exists(scriptFile) || #end OpenFlAssets.exists(scriptFile))
 				doPush = true;
 		}
 
@@ -879,12 +879,8 @@ class PlayState extends MusicBeatState
 		var foundFile:Bool = false;
 		var fileName:String = Paths.video(name);
 
-		#if sys
-		if (FileSystem.exists(fileName))
-		#else
-		if (OpenFlAssets.exists(fileName))
-		#end
-		foundFile = true;
+		if (#if sys FileSystem.exists(fileName) || #end OpenFlAssets.exists(fileName))
+			foundFile = true;
 
 		if (foundFile)
 		{
@@ -3386,7 +3382,7 @@ class PlayState extends MusicBeatState
 		var scriptToLoad:String = Paths.getSharedPath(scriptFile);
 		#end
 
-		if(FileSystem.exists(scriptToLoad))
+		if(#if sys FileSystem.exists(scriptToLoad) || #end OpenFlAssets.exists(scriptToLoad))
 		{
 			if (Iris.instances.exists(scriptToLoad)) return false;
 

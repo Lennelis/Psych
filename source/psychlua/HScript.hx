@@ -103,7 +103,9 @@ class HScript extends Iris
 		{
 			var f:String = file.replace('\\', '/');
 			if(f.contains('/') && !f.contains('\n')) {
-				scriptThing = File.getContent(f);
+				// Loose file first so mods win, then the copy packaged with the build
+				if(FileSystem.exists(f)) scriptThing = File.getContent(f);
+				else if(openfl.utils.Assets.exists(f)) scriptThing = openfl.utils.Assets.getText(f);
 				scriptName = f;
 			}
 		}

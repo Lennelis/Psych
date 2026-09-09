@@ -77,8 +77,8 @@ class Main extends Sprite
 		// to the working directory, so pointing that at the app's own storage folder is
 		// all it takes to make those paths work on a phone.
 		Sys.setCwd(mobile.backend.StorageUtil.getStorageDirectory());
-		// The mods bundled with the build live inside the package on mobile; write them
-		// out before Mods goes looking for them.
+		// No-op while mods are off for mobile, but it has to run before Mods looks for
+		// anything, so it stays wired up here ready for when they're enabled.
 		mobile.backend.StorageUtil.unpackBundledFiles();
 		#end
 		#if TOUCH_CONTROLS_ALLOWED

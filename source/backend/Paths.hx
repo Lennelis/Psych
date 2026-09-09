@@ -284,10 +284,9 @@ class Paths
 	{
 		var path:String = getPath(key, TEXT, !ignoreMods);
 		#if sys
-		return (FileSystem.exists(path)) ? File.getContent(path) : null;
-		#else
-		return (OpenFlAssets.exists(path, TEXT)) ? Assets.getText(path) : null;
+		if(FileSystem.exists(path)) return File.getContent(path);
 		#end
+		return (OpenFlAssets.exists(path, TEXT)) ? Assets.getText(path) : null;
 	}
 
 	inline static public function font(key:String)
@@ -428,13 +427,18 @@ class Paths
 		//trace('precaching sound: $file');
 		if(!currentTrackedSounds.exists(file))
 		{
+			// Loose files first so a mod can override a sound, then whatever is packaged
+			// with the build. On desktop `assets` is a real folder next to the executable
+			// and the first branch always wins; on Android it lives inside the .apk, where
+			// only the second one can find anything.
+			var sound:Sound = null;
 			#if sys
-			if(FileSystem.exists(file))
-				currentTrackedSounds.set(file, Sound.fromFile(file));
-			#else
-			if(OpenFlAssets.exists(file, SOUND))
-				currentTrackedSounds.set(file, OpenFlAssets.getSound(file));
+			if(FileSystem.exists(file)) sound = Sound.fromFile(file);
 			#end
+			if(sound == null && OpenFlAssets.exists(file, SOUND)) sound = OpenFlAssets.getSound(file);
+
+			if(sound != null)
+				currentTrackedSounds.set(file, sound);
 			else if(beepOnNull)
 			{
 				trace('SOUND NOT FOUND: $key, PATH: $path');
