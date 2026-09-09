@@ -76,10 +76,17 @@ class Main extends Sprite
 		#end
 
 		// Credits to MAJigsaw77 (he's the og author for this code)
-		#if android
-		Sys.setCwd(Path.addTrailingSlash(Context.getExternalFilesDir()));
-		#elseif ios
-		Sys.setCwd(lime.system.System.applicationStorageDirectory);
+		#if mobile
+		// Everything Psych writes - saves, mods, modsList.txt, crash logs - is relative
+		// to the working directory, so pointing that at the app's own storage folder is
+		// all it takes to make those paths work on a phone.
+		Sys.setCwd(mobile.backend.StorageUtil.getStorageDirectory());
+		// The mods bundled with the build live inside the package on mobile; write them
+		// out before Mods goes looking for them.
+		mobile.backend.StorageUtil.unpackBundledFiles();
+		#end
+		#if TOUCH_CONTROLS_ALLOWED
+		mobile.backend.TouchUtil.init();
 		#end
 		#if VIDEOS_ALLOWED
 		hxvlc.util.Handle.init(#if (hxvlc >= "1.8.0")  ['--no-lua'] #end);
@@ -156,15 +163,20 @@ class Main extends Sprite
 		#if ACHIEVEMENTS_ALLOWED Achievements.load(); #end
 		addChild(new FlxGame(game.width, game.height, game.initialState, game.framerate, game.framerate, game.skipSplash, game.startFullscreen));
 
-		#if !mobile
 		fpsVar = new FPSCounter(10, 3, 0xFFFFFF);
 		addChild(fpsVar);
+		#if mobile
+		// The stage is at the phone's native resolution while the game is scaled to fit,
+		// so a 14px counter comes out unreadable on anything sharp.
+		final densityScale:Float = Lib.current.stage.stageHeight / game.height;
+		fpsVar.scaleX = fpsVar.scaleY = Math.max(1, Math.min(3, densityScale));
+		#else
 		Lib.current.stage.align = "tl";
 		Lib.current.stage.scaleMode = StageScaleMode.NO_SCALE;
+		#end
 		if(fpsVar != null) {
 			fpsVar.visible = ClientPrefs.data.showFPS;
 		}
-		#end
 
 		#if (linux || mac) // fix the app icon not showing up on the Linux Panel / Mac Dock
 		var icon = Image.fromFile("icon.png");

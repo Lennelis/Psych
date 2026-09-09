@@ -5,6 +5,10 @@ import flixel.input.gamepad.FlxGamepadInputID;
 import flixel.input.gamepad.mappings.FlxGamepadMapping;
 import flixel.input.keyboard.FlxKey;
 
+#if TOUCH_CONTROLS_ALLOWED
+import mobile.objects.TouchButton;
+#end
+
 class Controls
 {
 	//Keeping same use cases on stuff for it to be easier to understand/use
@@ -90,6 +94,14 @@ class Controls
 		var result:Bool = (FlxG.keys.anyJustPressed(keyboardBinds[key]) == true);
 		if(result) controllerMode = false;
 
+		#if TOUCH_CONTROLS_ALLOWED
+		if(!result && touchCheck(key, JUST_PRESSED))
+		{
+			controllerMode = false;
+			return true;
+		}
+		#end
+
 		return result || _myGamepadJustPressed(gamepadBinds[key]) == true;
 	}
 
@@ -97,6 +109,14 @@ class Controls
 	{
 		var result:Bool = (FlxG.keys.anyPressed(keyboardBinds[key]) == true);
 		if(result) controllerMode = false;
+
+		#if TOUCH_CONTROLS_ALLOWED
+		if(!result && touchCheck(key, PRESSED))
+		{
+			controllerMode = false;
+			return true;
+		}
+		#end
 
 		return result || _myGamepadPressed(gamepadBinds[key]) == true;
 	}
@@ -106,8 +126,43 @@ class Controls
 		var result:Bool = (FlxG.keys.anyJustReleased(keyboardBinds[key]) == true);
 		if(result) controllerMode = false;
 
+		#if TOUCH_CONTROLS_ALLOWED
+		if(!result && touchCheck(key, JUST_RELEASED))
+		{
+			controllerMode = false;
+			return true;
+		}
+		#end
+
 		return result || _myGamepadJustReleased(gamepadBinds[key]) == true;
 	}
+
+	#if TOUCH_CONTROLS_ALLOWED
+	/**
+	 * Looks for an on-screen button standing in for `key`.
+	 *
+	 * Touch buttons add themselves to `TouchButton.list` when they're created, so
+	 * nothing has to tell Controls which pad is on screen right now - which is why
+	 * every menu that already asked `controls.ACCEPT` works on a phone unchanged.
+	 * Buttons that stopped updating (a state handed over to a substate, say) report
+	 * `isAwake == false` and are skipped, so a press can't get stuck on.
+	 */
+	private function touchCheck(key:String, state:TouchState):Bool
+	{
+		for (button in TouchButton.list)
+		{
+			if (button == null || !button.isAwake || !button.hasAction(key)) continue;
+
+			switch(state)
+			{
+				case JUST_PRESSED: if(button.justPressed) return true;
+				case PRESSED: if(button.pressed) return true;
+				case JUST_RELEASED: if(button.justReleased) return true;
+			}
+		}
+		return false;
+	}
+	#end
 
 	public var controllerMode:Bool = false;
 	private function _myGamepadJustPressed(keys:Array<FlxGamepadInputID>):Bool
@@ -164,3 +219,12 @@ class Controls
 		gamepadBinds = ClientPrefs.gamepadBinds;
 	}
 }
+
+#if TOUCH_CONTROLS_ALLOWED
+private enum TouchState
+{
+	JUST_PRESSED;
+	PRESSED;
+	JUST_RELEASED;
+}
+#end

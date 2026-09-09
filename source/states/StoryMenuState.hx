@@ -186,6 +186,10 @@ class StoryMenuState extends MusicBeatState
 		changeDifficulty();
 
 		super.create();
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addVirtualPad(FULL, A_B);
+		#end
 	}
 
 	override function closeSubState() {

@@ -124,6 +124,10 @@ class MainMenuState extends MusicBeatState
 		#end
 
 		FlxG.camera.follow(camFollow, null, 0.15);
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addVirtualPad(FULL, A_B);
+		#end
 	}
 
 	function createMenuItem(name:String, x:Float, y:Float):FlxSprite

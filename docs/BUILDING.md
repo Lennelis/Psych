@@ -3,6 +3,9 @@
 * [Dependencies](#dependencies)
 * [Building](#building)
 
+> Building for Android or iOS? See [MOBILE.md](MOBILE.md) instead — it covers the
+> extra dependencies and the touch controls.
+
 ---
 
 # Dependencies

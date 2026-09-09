@@ -1,7 +1,14 @@
 package backend;
 
 import flixel.FlxState;
+import flixel.FlxSubState;
 import backend.PsychCamera;
+
+#if TOUCH_CONTROLS_ALLOWED
+import mobile.objects.VirtualPad;
+import mobile.objects.VirtualPad.VirtualPadAction;
+import mobile.objects.VirtualPad.VirtualPadDPad;
+#end
 
 class MusicBeatState extends FlxState
 {
@@ -21,6 +28,12 @@ class MusicBeatState extends FlxState
 
 	var _psychCameraInitialized:Bool = false;
 
+	#if TOUCH_CONTROLS_ALLOWED
+	/** The on-screen pad for this state, if it asked for one. */
+	public var virtualPad:VirtualPad;
+	public var virtualPadCamera:FlxCamera;
+	#end
+
 	public var variables:Map<String, Dynamic> = new Map<String, Dynamic>();
 	public static function getVariables()
 		return getState().variables;
@@ -38,6 +51,88 @@ class MusicBeatState extends FlxState
 		}
 		FlxTransitionableState.skipNextTransOut = false;
 		timePassedOnState = 0;
+	}
+
+	#if TOUCH_CONTROLS_ALLOWED
+	/**
+	 * Gives this state an on-screen pad. The buttons carry `Controls` action names,
+	 * so the state's existing `controls.UI_UP_P` / `controls.ACCEPT` checks start
+	 * responding to touch with no further changes.
+	 *
+	 * Call it at the end of `create()`, after everything else is added, so the pad
+	 * ends up on top.
+	 */
+	public function addVirtualPad(dPad:VirtualPadDPad = FULL, action:VirtualPadAction = A_B):VirtualPad
+	{
+		removeVirtualPad();
+
+		virtualPad = new VirtualPad(dPad, action);
+		add(virtualPad);
+		return virtualPad;
+	}
+
+	/**
+	 * Moves the pad onto a camera of its own.
+	 *
+	 * Worth doing wherever the state's camera moves - PlayState zooms and shakes it
+	 * every beat, and a pad riding along with that is unusable.
+	 */
+	public function addVirtualPadCamera(defaultDrawTarget:Bool = false):FlxCamera
+	{
+		if (virtualPad == null) return null;
+
+		virtualPadCamera = new FlxCamera();
+		virtualPadCamera.bgColor.alpha = 0;
+		FlxG.cameras.add(virtualPadCamera, defaultDrawTarget);
+		virtualPad.cameras = [virtualPadCamera];
+		return virtualPadCamera;
+	}
+
+	public function removeVirtualPad():Void
+	{
+		if (virtualPad != null)
+		{
+			remove(virtualPad, true);
+			virtualPad.destroy();
+			virtualPad = null;
+		}
+
+		if (virtualPadCamera != null)
+		{
+			FlxG.cameras.remove(virtualPadCamera, true);
+			virtualPadCamera = null;
+		}
+	}
+	#end
+
+	override function openSubState(SubState:FlxSubState):Void
+	{
+		#if TOUCH_CONTROLS_ALLOWED
+		// the tap that opened the substate shouldn't also be read by the substate
+		if (virtualPad != null) virtualPad.releaseAll();
+		#end
+		super.openSubState(SubState);
+	}
+
+	override function closeSubState():Void
+	{
+		#if TOUCH_CONTROLS_ALLOWED
+		if (virtualPad != null)
+		{
+			virtualPad.releaseAll();
+			virtualPad.visible = true;
+			virtualPad.active = true;
+		}
+		#end
+		super.closeSubState();
+	}
+
+	override function destroy():Void
+	{
+		#if TOUCH_CONTROLS_ALLOWED
+		removeVirtualPad();
+		#end
+		super.destroy();
 	}
 
 	public function initPsychCamera():PsychCamera

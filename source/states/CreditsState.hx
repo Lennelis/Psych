@@ -128,6 +128,10 @@ class CreditsState extends MusicBeatState
 		intendedColor = bg.color;
 		changeSelection();
 		super.create();
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addVirtualPad(FULL, A_B);
+		#end
 	}
 
 	var quitting:Bool = false;

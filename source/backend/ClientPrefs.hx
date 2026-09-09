@@ -77,6 +77,15 @@ import states.TitleState;
 	public var discordRPC:Bool = true;
 	public var loadingScreen:Bool = true;
 	public var language:String = 'en-US';
+
+	#if TOUCH_CONTROLS_ALLOWED
+	// How the player taps notes: 'Hitbox', 'Pad-Right', 'Pad-Left' or 'Keyboard'.
+	public var gameplayControls:String = 'Hitbox';
+	// 'Gradient', 'Solid' or 'Hidden'.
+	public var hitboxType:String = 'Gradient';
+	public var controlsAlpha:Float = 0.6;
+	public var vibration:Bool = true;
+	#end
 }
 
 class ClientPrefs {

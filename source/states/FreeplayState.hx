@@ -189,6 +189,10 @@ class FreeplayState extends MusicBeatState
 		changeSelection();
 		updateTexts();
 		super.create();
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addVirtualPad(FULL, A_B_C);
+		#end
 	}
 
 	override function closeSubState()

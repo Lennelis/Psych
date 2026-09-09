@@ -44,6 +44,10 @@ class FlashingState extends MusicBeatState
 		FlxTween.tween(texts, {alpha: 1.0}, 0.5, {
 			onComplete: (_) -> updateItems()
 		});
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addVirtualPad(NONE, A_B);
+		#end
 	}
 
 	override function update(elapsed:Float)

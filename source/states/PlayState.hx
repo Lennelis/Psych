@@ -207,6 +207,10 @@ class PlayState extends MusicBeatState
 	public var camHUD:FlxCamera;
 	public var camGame:FlxCamera;
 	public var camOther:FlxCamera;
+	#if TOUCH_CONTROLS_ALLOWED
+	public var mobileControls:MobileControls;
+	public var camTouch:FlxCamera;
+	#end
 	public var cameraSpeed:Float = 1;
 
 	public var songScore:Int = 0;
@@ -640,7 +644,46 @@ class PlayState extends MusicBeatState
 		cachePopUpScore();
 
 		if(eventNotes.length < 1) checkEventNote();
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addMobileControls();
+		#end
 	}
+
+	#if TOUCH_CONTROLS_ALLOWED
+	/**
+	 * Puts the touch controls on screen and hooks them up to the same
+	 * `keyPressed`/`keyReleased` the keyboard goes through.
+	 *
+	 * Presses and releases are wired as callbacks rather than polled, so a tap
+	 * registers on the frame the finger lands instead of a frame later - at 60fps a
+	 * frame is 16ms, which is a third of the sick window and would quietly cost the
+	 * player accuracy. Holds need no wiring at all: the lanes are tagged with the
+	 * `note_left`/`note_down`/`note_up`/`note_right` actions, so `keysCheck()` sees
+	 * them through `Controls` exactly like a held key.
+	 */
+	function addMobileControls():Void
+	{
+		camTouch = new FlxCamera();
+		camTouch.bgColor.alpha = 0;
+		FlxG.cameras.add(camTouch, false);
+
+		mobileControls = new MobileControls();
+		mobileControls.cameras = [camTouch]; // camHUD gets zoomed on every beat, the pad shouldn't
+		if(canPause) mobileControls.addPauseButton();
+		add(mobileControls);
+
+		for (i in 0...mobileControls.noteButtons.length)
+		{
+			var note:Int = i; // captured per iteration, otherwise every lane would report the last index
+			var button = mobileControls.noteButtons[note];
+			if(button == null) continue;
+
+			button.onDown.add(function(_) keyPressed(note));
+			button.onUp.add(function(_) keyReleased(note));
+		}
+	}
+	#end
 
 	function set_songSpeed(value:Float):Float
 	{
@@ -1589,7 +1632,15 @@ class PlayState extends MusicBeatState
 	override function closeSubState()
 	{
 		super.closeSubState();
-		
+
+		#if TOUCH_CONTROLS_ALLOWED
+		if(mobileControls != null)
+		{
+			mobileControls.releaseAll();
+			mobileControls.visible = true;
+		}
+		#end
+
 		stagesFunc(function(stage:BaseStage) stage.closeSubState());
 		if (paused)
 		{
@@ -1912,6 +1963,13 @@ class PlayState extends MusicBeatState
 	{
 		FlxG.camera.followLerp = 0;
 		persistentUpdate = false;
+		#if TOUCH_CONTROLS_ALLOWED
+		if(mobileControls != null)
+		{
+			mobileControls.releaseAll();
+			mobileControls.visible = false;
+		}
+		#end
 		persistentDraw = true;
 		paused = true;
 
@@ -3182,6 +3240,15 @@ class PlayState extends MusicBeatState
 
 		FlxG.stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
 		FlxG.stage.removeEventListener(KeyboardEvent.KEY_UP, onKeyRelease);
+
+		#if TOUCH_CONTROLS_ALLOWED
+		if(camTouch != null)
+		{
+			FlxG.cameras.remove(camTouch, true);
+			camTouch = null;
+		}
+		mobileControls = null;
+		#end
 
 		FlxG.camera.setFilters([]);
 

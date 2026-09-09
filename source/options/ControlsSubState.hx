@@ -110,6 +110,10 @@ class ControlsSubState extends MusicBeatSubstate
 		add(text);
 
 		createTexts();
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addVirtualPad(FULL, A_B);
+		#end
 	}
 
 	var lastID:Int = 0;

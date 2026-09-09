@@ -36,6 +36,17 @@ import backend.Language;
 
 import backend.ui.*; //Psych-UI
 
+#if TOUCH_CONTROLS_ALLOWED
+import mobile.backend.StorageUtil;
+import mobile.backend.TouchUtil;
+import mobile.objects.Hitbox;
+import mobile.objects.MobileControls;
+import mobile.objects.TouchButton;
+import mobile.objects.VirtualPad;
+import mobile.objects.VirtualPad.VirtualPadAction;
+import mobile.objects.VirtualPad.VirtualPadDPad;
+#end
+
 import objects.Alphabet;
 import objects.BGSprite;
 

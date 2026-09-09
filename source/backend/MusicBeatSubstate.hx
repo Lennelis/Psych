@@ -2,6 +2,12 @@ package backend;
 
 import flixel.FlxSubState;
 
+#if TOUCH_CONTROLS_ALLOWED
+import mobile.objects.VirtualPad;
+import mobile.objects.VirtualPad.VirtualPadAction;
+import mobile.objects.VirtualPad.VirtualPadDPad;
+#end
+
 class MusicBeatSubstate extends FlxSubState
 {
 	public function new()
@@ -24,6 +30,81 @@ class MusicBeatSubstate extends FlxSubState
 
 	inline function get_controls():Controls
 		return Controls.instance;
+
+	#if TOUCH_CONTROLS_ALLOWED
+	public var virtualPad:VirtualPad;
+	public var virtualPadCamera:FlxCamera;
+
+	/** Set when we hid the pad belonging to the state underneath, so we know to put it back. */
+	var hidStatePad:Bool = false;
+
+	/**
+	 * Gives this substate its own pad, hiding the one belonging to the state
+	 * underneath so two pads can't stack up on screen.
+	 */
+	public function addVirtualPad(dPad:VirtualPadDPad = FULL, action:VirtualPadAction = A_B):VirtualPad
+	{
+		removeVirtualPad();
+
+		final state:MusicBeatState = Std.isOfType(FlxG.state, MusicBeatState) ? cast FlxG.state : null;
+		if (state != null && state.virtualPad != null && state.virtualPad.visible)
+		{
+			state.virtualPad.releaseAll();
+			state.virtualPad.visible = false;
+			state.virtualPad.active = false;
+			hidStatePad = true;
+		}
+
+		virtualPad = new VirtualPad(dPad, action);
+		add(virtualPad);
+		return virtualPad;
+	}
+
+	public function addVirtualPadCamera(defaultDrawTarget:Bool = false):FlxCamera
+	{
+		if (virtualPad == null) return null;
+
+		virtualPadCamera = new FlxCamera();
+		virtualPadCamera.bgColor.alpha = 0;
+		FlxG.cameras.add(virtualPadCamera, defaultDrawTarget);
+		virtualPad.cameras = [virtualPadCamera];
+		return virtualPadCamera;
+	}
+
+	public function removeVirtualPad():Void
+	{
+		if (virtualPad != null)
+		{
+			remove(virtualPad, true);
+			virtualPad.destroy();
+			virtualPad = null;
+		}
+
+		if (virtualPadCamera != null)
+		{
+			FlxG.cameras.remove(virtualPadCamera, true);
+			virtualPadCamera = null;
+		}
+
+		if (hidStatePad)
+		{
+			hidStatePad = false;
+			final state:MusicBeatState = Std.isOfType(FlxG.state, MusicBeatState) ? cast FlxG.state : null;
+			if (state != null && state.virtualPad != null)
+			{
+				state.virtualPad.releaseAll();
+				state.virtualPad.visible = true;
+				state.virtualPad.active = true;
+			}
+		}
+	}
+
+	override function destroy():Void
+	{
+		removeVirtualPad();
+		super.destroy();
+	}
+	#end
 
 	override function update(elapsed:Float)
 	{

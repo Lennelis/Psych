@@ -12,6 +12,7 @@ class OptionsState extends MusicBeatState
 		'Graphics',
 		'Visuals',
 		'Gameplay'
+		#if TOUCH_CONTROLS_ALLOWED , 'Mobile' #end
 		#if TRANSLATIONS_ALLOWED , 'Language' #end
 	];
 	private var grpOptions:FlxTypedGroup<Alphabet>;
@@ -36,6 +37,10 @@ class OptionsState extends MusicBeatState
 				MusicBeatState.switchState(new options.NoteOffsetState());
 			case 'Language':
 				openSubState(new options.LanguageSubState());
+			#if TOUCH_CONTROLS_ALLOWED
+			case 'Mobile':
+				openSubState(new mobile.options.MobileOptionsSubState());
+			#end
 		}
 	}
 
@@ -76,6 +81,10 @@ class OptionsState extends MusicBeatState
 		ClientPrefs.saveSettings();
 
 		super.create();
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addVirtualPad(UP_DOWN, A_B);
+		#end
 	}
 
 	override function closeSubState()

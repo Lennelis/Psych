@@ -295,6 +295,10 @@ class ModsMenuState extends MusicBeatState
 
 		changeSelectedMod();
 		super.create();
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addVirtualPad(FULL, A_B);
+		#end
 	}
 	
 	var nextAttempt:Float = 1;
