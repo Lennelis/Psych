@@ -100,6 +100,13 @@ jobs:
           echo "ANDROID_KEYSTORE_ALIAS=psychengine" >> $GITHUB_ENV
 
       - name: Build the APK
+        env:
+          # :app:packageRelease died with an OutOfMemoryError zipping the APK. This
+          # build packs roughly 320MB, which is more than the Gradle daemon's default
+          # heap copes with, and lime leaves org.gradle.jvmargs commented out in the
+          # gradle.properties it generates - so raising it there would be overwritten
+          # on the next build. Passing it as a system property survives that.
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx5g
         run: |
           # officialBuild is what pulls in the weeks and songs; without it the
           # game boots to an empty menu, which is no use for testing the controls.
