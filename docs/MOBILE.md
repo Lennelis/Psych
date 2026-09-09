@@ -267,10 +267,10 @@ Using that folder instead of shared storage is what keeps the port off the
 permission prompt, and nothing that breaks on the next Android release. The
 trade-off is that the folder is harder for players to find with a file manager.
 
-The mods bundled with the build are sealed inside the APK, so
-`StorageUtil.unpackBundledFiles()` writes them out on first launch. It never
-overwrites a file that already exists, so an app update can't wipe edits a player
-made.
+`StorageUtil.unpackBundledFiles()` writes bundled mods out to that folder on first
+launch, never overwriting a file that already exists. It does nothing at the
+moment, because mods are off for mobile — see below — but it stays wired up ready
+for when they are enabled.
 
 Crash logs go to `crash/` inside that same folder — on a device you can't attach
 a debugger to, that file is the only way to find out why a build died.
@@ -298,4 +298,32 @@ Worth knowing before you file a bug:
   dragging individual buttons around.
 - **Nothing is exposed to Lua or HScript.** Mods can't read touch state or place
   their own buttons yet.
+- **Mods are off on mobile** (`MODS_ALLOWED` is desktop-only). Worth understanding
+  before turning it back on, because it is a one-line edit that quietly guts the
+  game.
+
+  Psych reads mod content off the real filesystem, and most of its asset lookups
+  are written as an *either/or* rather than a fallback:
+
+  ```haxe
+  #if MODS_ALLOWED
+  if (FileSystem.exists(path)) rawData = File.getContent(path);
+  #else
+  rawData = Assets.getText(path);
+  #end
+  ```
+
+  With the define on, the `Assets` branch isn't compiled at all. That's fine on
+  desktop, where `assets` is a loose folder beside the executable and the
+  filesystem lookup always succeeds. On Android `assets` lives inside the `.apk`,
+  nothing is on disk, and those lookups all come back empty — no weeks, no songs,
+  no character or stage data. The game boots to empty menus.
+
+  Enabling mods here means converting those sites (`Character`, `MenuCharacter`,
+  `Alphabet`, `DialogueCharacter`, `WeekData`, `CoolUtil.coolTextFile`, the script
+  loaders in `PlayState`, and others) from either/or into filesystem-then-`Assets`
+  fallbacks — the way `Song.loadFromJson` and `Paths.cacheBitmap` already do it.
+  The alternative some ports take is extracting the whole `assets` folder to
+  storage on first launch so the filesystem assumption holds, at the cost of
+  duplicating a few hundred MB on the device.
 - **iOS is untested** beyond compiling.
