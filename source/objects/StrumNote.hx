@@ -9,6 +9,23 @@ class StrumNote extends FlxSprite
 {
 	public var rgbShader:RGBShaderReference;
 	public var resetAnim:Float = 0;
+
+	/**
+	 * How long the confirm animation stays up after it has finished playing, before
+	 * the strum drops back. Ported from V-Slice, where it lives on
+	 * `funkin.play.notes.StrumlineNote` as `CONFIRM_HOLD_TIME`.
+	 */
+	public static var CONFIRM_HOLD_TIME:Float = 0.15;
+
+	/**
+	 * Whether this lane's key is being held. `PlayState` keeps it up to date for the
+	 * player's strums; it stays false for the opponent, which is what makes them fall
+	 * back to 'static' instead of the ghost tap.
+	 */
+	public var keyHeld:Bool = false;
+
+	/** Counts up once 'confirm' has finished playing. -1 when nothing is pending. */
+	var confirmHoldTimer:Float = -1;
 	private var noteData:Int = 0;
 	public var direction:Float = 90;
 	public var downScroll:Bool = false;
@@ -60,6 +77,7 @@ class StrumNote extends FlxSprite
 
 		texture = skin; //Load texture and anims
 		scrollFactor.set();
+		animation.finishCallback = onAnimationFinished;
 		playAnim('static');
 	}
 
@@ -148,6 +166,26 @@ class StrumNote extends FlxSprite
 		x += ((FlxG.width / 2) * player);
 	}
 
+	function onAnimationFinished(name:String):Void
+	{
+		// resetAnim means something else already owns the revert - the opponent's
+		// strums, or the player's under botplay - so don't fight it.
+		if(name == 'confirm' && resetAnim <= 0) confirmHoldTimer = 0;
+	}
+
+	/**
+	 * Drops the confirm animation right now, skipping the grace period.
+	 *
+	 * V-Slice ends a hold with no delay at all, unlike a tapped note, so `PlayState`
+	 * calls this the moment a sustain runs out.
+	 */
+	public function finishConfirm():Void
+	{
+		confirmHoldTimer = -1;
+		if(animation.curAnim != null && animation.curAnim.name == 'confirm')
+			playAnim(keyHeld ? 'pressed' : 'static');
+	}
+
 	override function update(elapsed:Float) {
 		if(resetAnim > 0) {
 			resetAnim -= elapsed;
@@ -156,10 +194,29 @@ class StrumNote extends FlxSprite
 				resetAnim = 0;
 			}
 		}
+
+		if(confirmHoldTimer >= 0)
+		{
+			confirmHoldTimer += elapsed;
+			if(confirmHoldTimer >= CONFIRM_HOLD_TIME)
+			{
+				confirmHoldTimer = -1;
+				playAnim(keyHeld ? 'pressed' : 'static');
+			}
+		}
+		else if(keyHeld && animation.curAnim != null && animation.curAnim.name == 'static')
+		{
+			// V-Slice re-checks this every frame: a held key never sits on 'static'.
+			playAnim('pressed');
+		}
+
 		super.update(elapsed);
 	}
 
 	public function playAnim(anim:String, ?force:Bool = false) {
+		// Any other animation cancels a pending fallback, so releasing the key mid-wait
+		// can't have it fire afterwards.
+		if(anim != 'confirm') confirmHoldTimer = -1;
 		animation.play(anim, force);
 		if(animation.curAnim != null)
 		{

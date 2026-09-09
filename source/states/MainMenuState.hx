@@ -126,7 +126,8 @@ class MainMenuState extends MusicBeatState
 		FlxG.camera.follow(camFollow, null, 0.15);
 
 		#if TOUCH_CONTROLS_ALLOWED
-		addVirtualPad(FULL, A_B);
+		// No d-pad here: the menu items are tappable directly, so only Back is needed.
+		addVirtualPad(NONE, B);
 		#end
 	}
 

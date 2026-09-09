@@ -2868,6 +2868,9 @@ class PlayState extends MusicBeatState
 		return -1;
 	}
 
+	/** Lanes that were feeding a sustain last frame, so a strum can drop the moment one ends. */
+	var wasHittingSustain:Array<Bool> = [];
+
 	// Hold notes
 	private function keysCheck():Void
 	{
@@ -2875,11 +2878,13 @@ class PlayState extends MusicBeatState
 		var holdArray:Array<Bool> = [];
 		var pressArray:Array<Bool> = [];
 		var releaseArray:Array<Bool> = [];
+		var sustainArray:Array<Bool> = [];
 		for (key in keysArray)
 		{
 			holdArray.push(controls.pressed(key));
 			pressArray.push(controls.justPressed(key));
 			releaseArray.push(controls.justReleased(key));
+			sustainArray.push(false);
 		}
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
@@ -2902,7 +2907,10 @@ class PlayState extends MusicBeatState
 						var released:Bool = !holdArray[n.noteData];
 
 						if (!released)
+						{
 							goodNoteHit(n);
+							sustainArray[n.noteData] = true;
+						}
 					}
 				}
 			}
@@ -2920,6 +2928,33 @@ class PlayState extends MusicBeatState
 			for (i in 0...releaseArray.length)
 				if(releaseArray[i] || strumsBlocked[i] == true)
 					keyReleased(i);
+
+		updateStrumHoldState(holdArray, sustainArray);
+	}
+
+	/**
+	 * Keeps the player's strums in step with what's actually held down.
+	 *
+	 * Mirrors how V-Slice's Strumline behaves. A tapped note lets the confirm
+	 * animation play out and then waits `StrumNote.CONFIRM_HOLD_TIME` before falling
+	 * back to the ghost tap, while a sustain drops the instant it runs out - that
+	 * difference in timing is the whole point of it.
+	 */
+	function updateStrumHoldState(holdArray:Array<Bool>, sustainArray:Array<Bool>):Void
+	{
+		while(wasHittingSustain.length < sustainArray.length) wasHittingSustain.push(false);
+
+		for (i in 0...sustainArray.length)
+		{
+			if(i >= playerStrums.length) break;
+
+			var spr:StrumNote = playerStrums.members[i];
+			if(spr == null) continue;
+
+			spr.keyHeld = holdArray[i];
+			if(wasHittingSustain[i] && !sustainArray[i]) spr.finishConfirm();
+			wasHittingSustain[i] = sustainArray[i];
+		}
 	}
 
 	function noteMiss(daNote:Note):Void { //You didn't hit the key and let it go offscreen, also used by Hurt Notes

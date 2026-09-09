@@ -2,6 +2,7 @@ package mobile.options;
 
 import options.BaseOptionsMenu;
 import options.Option;
+import mobile.backend.WidescreenScaleMode;
 import mobile.objects.MobileControls;
 
 /**
@@ -44,6 +45,13 @@ class MobileOptionsSubState extends BaseOptionsMenu
 		option.onChange = refreshControls;
 		addOption(option);
 
+		var option:Option = new Option('Widescreen',
+			"If checked, the game fills a screen wider than 16:9 instead of sitting between black bars.\nIt widens the view rather than stretching, so nothing is squashed, and the on-screen\nbuttons reach the real edges. Menu backgrounds drawn for 16:9 may not reach the sides.\nTakes effect when you leave this menu.",
+			'widescreen',
+			BOOL);
+		option.onChange = onChangeWidescreen;
+		addOption(option);
+
 		var option:Option = new Option('Vibration',
 			'If checked, buttons give a short buzz when pressed.',
 			'vibration',
@@ -51,6 +59,13 @@ class MobileOptionsSubState extends BaseOptionsMenu
 		addOption(option);
 
 		super();
+	}
+
+	function onChangeWidescreen():Void
+	{
+		// Cameras take their size from FlxG.width when a state is built, so the change
+		// only lands properly on the next state - backing out of here is enough.
+		WidescreenScaleMode.enabled = ClientPrefs.data.widescreen;
 	}
 
 	/** Rebuilds this menu's pad so opacity and style changes show up right away. */

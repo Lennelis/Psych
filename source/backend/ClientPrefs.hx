@@ -85,6 +85,8 @@ import states.TitleState;
 	public var hitboxType:String = 'Gradient';
 	public var controlsAlpha:Float = 0.6;
 	public var vibration:Bool = true;
+	// Fill a screen wider than 16:9 instead of sitting in pillarbox bars.
+	public var widescreen:Bool = false;
 	#end
 }
 
@@ -188,6 +190,10 @@ class ClientPrefs {
 		
 		if(Main.fpsVar != null)
 			Main.fpsVar.visible = data.showFPS;
+
+		#if TOUCH_CONTROLS_ALLOWED
+		mobile.backend.WidescreenScaleMode.enabled = data.widescreen;
+		#end
 
 		#if (!html5 && !switch)
 		FlxG.autoPause = ClientPrefs.data.autoPause;
