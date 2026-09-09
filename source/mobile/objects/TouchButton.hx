@@ -120,7 +120,12 @@ class TouchButton extends FlxSprite
 		{
 			for (touch in FlxG.touches.list)
 			{
-				if (touch.justReleased || !touch.overlaps(this, camera)) continue;
+				// `pressed`, not just "not released": Flixel keeps a touch in the list for
+				// one more frame after it ends, in the RELEASED state with justReleased
+				// already false. Skipping only justReleased let allowSlideIn take that
+				// stale entry as a fresh press, so every tap fired the button twice - the
+				// second one landing after the finger was gone.
+				if (!touch.pressed || !touch.overlaps(this, camera)) continue;
 
 				if (heldIDs.indexOf(touch.touchPointID) != -1) stillHeld.push(touch.touchPointID);
 				else if (touch.justPressed || allowSlideIn) stillHeld.push(touch.touchPointID);
