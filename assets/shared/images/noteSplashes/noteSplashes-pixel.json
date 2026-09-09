@@ -1,0 +1,175 @@
+{
+	"animations": {
+		"purple": {
+			"name": "purple",
+			"noteData": 0,
+			"prefix": "purple1",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"blue": {
+			"name": "blue",
+			"noteData": 1,
+			"prefix": "blue1",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"green": {
+			"name": "green",
+			"noteData": 2,
+			"prefix": "green1",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"red": {
+			"name": "red",
+			"noteData": 3,
+			"prefix": "orange1",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"purple2": {
+			"name": "purple2",
+			"noteData": 4,
+			"prefix": "purple2",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"blue2": {
+			"name": "blue2",
+			"noteData": 5,
+			"prefix": "blue2",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"green2": {
+			"name": "green2",
+			"noteData": 6,
+			"prefix": "green2",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"red2": {
+			"name": "red2",
+			"noteData": 7,
+			"prefix": "orange2",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"purple3": {
+			"name": "purple3",
+			"noteData": 8,
+			"prefix": "purple3",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"blue3": {
+			"name": "blue3",
+			"noteData": 9,
+			"prefix": "blue3",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"green3": {
+			"name": "green3",
+			"noteData": 10,
+			"prefix": "green3",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		},
+		"red3": {
+			"name": "red3",
+			"noteData": 11,
+			"prefix": "orange3",
+			"indices": [],
+			"offsets": [
+				-143.4,
+				-149
+			],
+			"fps": [
+				22,
+				26
+			]
+		}
+	},
+	"scale": 6,
+	"allowRGB": false,
+	"allowPixel": false
+}

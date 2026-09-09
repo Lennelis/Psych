@@ -45,6 +45,30 @@ class NoteSplash extends FlxSprite
 	public static var defaultNoteSplash(default, never):String = "noteSplashes/noteSplashes";
 	public static var configs:Map<String, NoteSplashConfig> = new Map();
 
+	/** Which sheets have a `-pixel` twin, so spawning a splash is not a file lookup. */
+	public static var pixelVariants:Map<String, String> = new Map();
+
+	/**
+	 * The pixel version of a splash sheet, on the stages that call for one.
+	 *
+	 * Without a sheet of its own a pixel stage gets the ordinary splash put through the
+	 * pixelate shader, which is an impression of pixel art rather than the thing itself.
+	 * Any skin can bring its own by sitting a `-pixel` sheet beside it.
+	 */
+	public static function pixelVariantOf(splash:String):String
+	{
+		if (!PlayState.isPixelStage || splash == null || splash.length < 1 || splash.endsWith('-pixel')) return splash;
+
+		var found:String = pixelVariants.get(splash);
+		if (found == null)
+		{
+			var pixelName:String = '$splash-pixel';
+			found = Paths.fileExists('images/$pixelName.png', IMAGE) ? pixelName : splash;
+			pixelVariants.set(splash, found);
+		}
+		return found;
+	}
+
 	public function new(?x:Float = 0, ?y:Float = 0, ?splash:String)
 	{
 		super(x, y);
@@ -68,6 +92,7 @@ class NoteSplash extends FlxSprite
 			splash = defaultNoteSplash + getSplashSkinPostfix();
 			if (PlayState.SONG != null && PlayState.SONG.splashSkin != null && PlayState.SONG.splashSkin.length > 0) splash = PlayState.SONG.splashSkin;
 		}
+		splash = pixelVariantOf(splash);
 
 		texture = splash;
 		frames = Paths.getSparrowAtlas(texture);
@@ -200,6 +225,7 @@ class NoteSplash extends FlxSprite
 			var loadedTexture:String = defaultNoteSplash + getSplashSkinPostfix();
 			if (note != null && note.noteSplashData.texture != null) loadedTexture = note.noteSplashData.texture;
 			else if (PlayState.SONG != null && PlayState.SONG.splashSkin != null && PlayState.SONG.splashSkin.length > 0) loadedTexture = PlayState.SONG.splashSkin;
+			loadedTexture = pixelVariantOf(loadedTexture);
 
 			if (texture != loadedTexture) loadSplash(loadedTexture);
 		}

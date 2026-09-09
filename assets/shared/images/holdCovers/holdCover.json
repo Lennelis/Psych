@@ -1,0 +1,11 @@
+{
+	"scale": 1,
+	"fps": 24,
+	"offsets": [-10, 50],
+	"pixel": {
+		"scale": 6,
+		"fps": 24,
+		"offsets": [27.5, 0.5],
+		"antialiasing": false
+	}
+}

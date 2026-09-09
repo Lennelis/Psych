@@ -18,52 +18,53 @@ punctuation.
 The opponent gets covers too. Theirs start and loop the same way but vanish at the end
 instead of playing it out, matching what V-Slice does with `isPlayer`.
 
-## Adding the art
+## The art
 
-Four Sparrow sheets, one per note colour, under `assets/shared/images/holdCovers/`:
+Four Sparrow sheets, one per note colour, in `assets/shared/images/holdCovers/`:
+`holdCoverPurple`, `holdCoverBlue`, `holdCoverGreen`, `holdCoverRed`, each a `.png` and
+an `.xml`. The colour names are Psych's own lane names (`Note.colArray`) in title case,
+so left is purple, down is blue, up is green and right is red.
 
-```
-assets/shared/images/holdCovers/holdCoverPurple.png
-assets/shared/images/holdCovers/holdCoverPurple.xml
-assets/shared/images/holdCovers/holdCoverBlue.png
-assets/shared/images/holdCovers/holdCoverBlue.xml
-assets/shared/images/holdCovers/holdCoverGreen.png
-assets/shared/images/holdCovers/holdCoverGreen.xml
-assets/shared/images/holdCovers/holdCoverRed.png
-assets/shared/images/holdCovers/holdCoverRed.xml
-```
+The sheets that ship here have one start frame, four loop frames and eight end frames
+each, all drawn on a 300x400 canvas.
 
-The colour names are Psych's own lane names (`Note.colArray`) in title case, so left is
-purple, down is blue, up is green and right is red.
+A missing sheet is not an error: that lane simply gets no cover, and a game with none of
+the four behaves exactly as it did before the feature existed.
 
-A sheet that is missing is not an error: that lane simply gets no cover, and a game
-with none of the four behaves exactly as it did before the feature existed. That is
-also why this can be added to the repo before the art is.
-
-**Animation prefixes.** Each sheet needs the three animations above. These prefixes are
-tried in order, so art exported from V-Slice or named the obvious way needs no config:
+**Animation prefixes.** These are tried in order, so art named the way V-Slice names it
+needs no configuration at all:
 
 - start: `holdCoverStartPurple`, `holdCoverStart`, `hold cover start Purple`, `hold cover start`, `start`
-- hold: `holdCoverPurple`, `holdCoverHoldPurple`, `holdCoverHold`, `hold cover hold Purple`, `hold cover Purple`, `hold cover hold`, `hold`
-- end: `holdCoverEndPurple`, `holdCoverEnd`, `hold cover end Purple`, `hold cover end`, `end`
+- hold: `holdCoverPurple`, `holdCoverHoldPurple`, `holdCoverHold`, `hold cover hold Purple`, `hold cover Purple`, `hold cover hold`, `hold`, `loop`
+- end: `holdCoverEndPurple`, `holdCoverEnd`, `hold cover end Purple`, `hold cover end`, `end`, `explode`
 
 The looping **hold** animation is the only one a cover cannot do without - it is what is
 on screen for all but a few frames. Without it the sheet is ignored; without a start or
 an end, the cover skips straight to the loop or straight to disappearing.
 
-**Pixel stages** use `holdCoverPurple-pixel` and friends when those exist, and fall back
-to the normal sheets otherwise. Antialiasing is off for them either way.
+## Pixel stages
+
+A pixel stage looks for `holdCoverPurple-pixel` and friends first, then falls back to a
+single `pixelNoteHoldCover` sheet used by every lane - which is what ships here, since
+the pixel cover is a few white sparks with nothing colour about it. It has no start
+animation, so those covers open straight into the loop.
+
+Pixel stages also get their own note splashes now. Any splash skin can bring a `-pixel`
+sheet along and it will be picked up on a pixel stage automatically:
+`noteSplashes-pixel` sits beside `noteSplashes` and is used in its place. Before this,
+a pixel stage got the ordinary splash run through the pixelate shader, which is an
+impression of pixel art rather than the thing itself.
 
 ## Tuning them
 
-Everything below is optional. `assets/shared/images/holdCovers/holdCover.json`:
+`assets/shared/images/holdCovers/holdCover.json`, all of it optional:
 
 ```json
 {
-  "scale": 1.0,
+  "scale": 1,
   "fps": 24,
-  "offsets": [0, 0],
-  "antialiasing": true,
+  "offsets": [-10, 50],
+  "pixel": { "scale": 6, "fps": 24, "offsets": [27.5, 0.5], "antialiasing": false },
   "colors": {
     "Purple": {
       "offsets": [0, -4],
@@ -73,13 +74,18 @@ Everything below is optional. `assets/shared/images/holdCovers/holdCover.json`:
 }
 ```
 
-- `scale`, `fps`, `offsets` and `antialiasing` apply to every colour.
-- Anything inside `colors` overrides them for that one colour, and can name the
-  animation prefixes outright when the sheet uses something the list above won't guess.
-- `offsets` is measured in pixels from the strum's centre, which is where a cover sits
-  by default. It follows the strum, so tweens and modcharts move it too.
-- `antialiasing` is only ever able to turn it *off* - the player's own antialiasing
-  setting still wins.
+- Top level applies to every cover. A `pixel` block overrides it when a pixel sheet is
+  in use, and a `colors` entry overrides both for that one colour - which can also name
+  the animation prefixes outright when a sheet uses something the list above won't guess.
+- `offsets` is measured from the strum's centre, in the **sheet's own pixels**: they are
+  multiplied by `scale`, the same way V-Slice applies its hold cover offsets. A cover
+  follows its strum, so tweens and modcharts move it too.
+- The shipped `[-10, 50]` is not decoration. The art is not centred on its own 300x400
+  canvas - the loop's glow sits about 10px right of centre and 50px above it - so those
+  numbers are what put the glow on the strum rather than up and to the right of it. The
+  pixel sheet's `[27.5, 0.5]` is the same correction for its 200x59 canvas.
+- `antialiasing` can only ever turn it *off*; the player's own antialiasing setting
+  still wins.
 
 On desktop a mod can replace any of these files from its own `images/holdCovers/`
 folder, the same as note splashes. Mods are compiled out on mobile (see
@@ -108,5 +114,9 @@ state:
 - `updateHoldCovers()` ends it: `playEnd()` once the song reaches the sustain's charted
   end, `stopCover()` the moment `wasHoldingSustain` says the player let go. The bot is
   exempt from the drop check, because it never does.
+
+One cover is built per strum and lives as long as it does, so a hold never waits on a
+pool and a lane's sheet is loaded once. They draw above the notes, which is what lets a
+cover hide the end of the trail underneath it.
 
 Nothing is exposed to Lua or HScript yet.

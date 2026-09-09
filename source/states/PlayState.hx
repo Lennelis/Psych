@@ -3436,6 +3436,7 @@ class PlayState extends MusicBeatState
 		backend.NoteTypesConfig.clearNoteTypesData();
 
 		NoteSplash.configs.clear();
+		NoteSplash.pixelVariants.clear();
 		HoldCover.clearConfig();
 		instance = null;
 		super.destroy();

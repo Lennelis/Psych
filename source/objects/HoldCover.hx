@@ -23,6 +23,15 @@ class HoldCover extends FlxSprite
 	public static var defaultPath(default, never):String = 'holdCovers/holdCover';
 
 	/**
+	 * One sheet for every lane on a pixel stage.
+	 *
+	 * The pixel cover is a handful of white sparks with nothing colour about it, so
+	 * V-Slice ships a single sheet rather than four. Per-colour `-pixel` sheets still
+	 * win where they exist.
+	 */
+	public static var pixelPath(default, never):String = 'holdCovers/pixelNoteHoldCover';
+
+	/**
 	 * Prefixes tried in order, most specific first. COLOR stands in for the title cased
 	 * colour name, so the first start candidate looks for `holdCoverStartPurple`.
 	 *
@@ -30,8 +39,8 @@ class HoldCover extends FlxSprite
 	 * being renamed to fit.
 	 */
 	static var START_PREFIXES(default, never):Array<String> = ["holdCoverStart$COLOR", "holdCoverStart", "hold cover start $COLOR", "hold cover start", "start"];
-	static var HOLD_PREFIXES(default, never):Array<String> = ["holdCover$COLOR", "holdCoverHold$COLOR", "holdCoverHold", "hold cover hold $COLOR", "hold cover $COLOR", "hold cover hold", "hold"];
-	static var END_PREFIXES(default, never):Array<String> = ["holdCoverEnd$COLOR", "holdCoverEnd", "hold cover end $COLOR", "hold cover end", "end"];
+	static var HOLD_PREFIXES(default, never):Array<String> = ["holdCover$COLOR", "holdCoverHold$COLOR", "holdCoverHold", "hold cover hold $COLOR", "hold cover $COLOR", "hold cover hold", "hold", "loop"];
+	static var END_PREFIXES(default, never):Array<String> = ["holdCoverEnd$COLOR", "holdCoverEnd", "hold cover end $COLOR", "hold cover end", "end", "explode"];
 
 	/** Parsed `images/holdCovers/holdCover.json`, kept between songs. Cached even when absent. */
 	static var config:Dynamic = null;
@@ -46,12 +55,13 @@ class HoldCover extends FlxSprite
 	/** True while the start or hold animation is up - not while the end plays out. */
 	public var running(default, null):Bool = false;
 
-	/** Extra nudge from the strum centre, on top of anything the json asks for. */
+	/** Nudge from the strum centre, in the sheet's own pixels - scale is applied after. */
 	public var offsetX:Float = 0;
 	public var offsetY:Float = 0;
 
 	var hasStart:Bool = false;
 	var hasEnd:Bool = false;
+	var usingPixel:Bool = false;
 
 	public function new(noteData:Int, ?strum:StrumNote)
 	{
@@ -84,7 +94,11 @@ class HoldCover extends FlxSprite
 		if (color.length < 1) return null;
 
 		var base:String = defaultPath + color;
-		if (PlayState.isPixelStage && sheetExists(base + '-pixel')) return base + '-pixel';
+		if (PlayState.isPixelStage)
+		{
+			if (sheetExists(base + '-pixel')) return base + '-pixel';
+			if (sheetExists(pixelPath)) return pixelPath;
+		}
 
 		return sheetExists(base) ? base : null;
 	}
@@ -100,11 +114,19 @@ class HoldCover extends FlxSprite
 		frames = Paths.getSparrowAtlas(texture);
 		if (frames == null) return;
 
+		usingPixel = (texture == pixelPath || texture.endsWith('-pixel'));
+
 		var color:String = colorName(noteData);
 		var conf:Dynamic = getConfig();
-		var colorConf:Dynamic = getColorConfig(conf, color);
-		var named:Dynamic = readField(colorConf, 'animations');
-		var fps:Int = Std.int(readNumber([colorConf, conf], 'fps', 24));
+
+		// Most specific first: this colour's own block, then the pixel block when a pixel
+		// sheet is in use, then whatever the file says for every cover.
+		var chain:Array<Dynamic> = [getColorConfig(conf, color)];
+		if (usingPixel) chain.push(readField(conf, 'pixel'));
+		chain.push(conf);
+
+		var named:Dynamic = readFirst(chain, 'animations');
+		var fps:Int = Std.int(readNumber(chain, 'fps', 24));
 
 		hasStart = addAnim('start', readString(named, 'start'), START_PREFIXES, color, fps, false);
 		var hasHold:Bool = addAnim('hold', readString(named, 'hold'), HOLD_PREFIXES, color, fps, true);
@@ -114,22 +136,20 @@ class HoldCover extends FlxSprite
 		// screen for all but a few frames of a hold.
 		if (!hasHold) return;
 
-		var newScale:Float = readNumber([colorConf, conf], 'scale', 1);
+		var newScale:Float = readNumber(chain, 'scale', usingPixel ? PlayState.daPixelZoom : 1);
 		scale.set(newScale, newScale);
 		updateHitbox();
 
-		var offsets:Array<Dynamic> = readArray([colorConf, conf], 'offsets');
+		var offsets:Array<Dynamic> = readArray(chain, 'offsets');
 		if (offsets != null && offsets.length > 1)
 		{
 			offsetX = numberOf(offsets[0], 0);
 			offsetY = numberOf(offsets[1], 0);
 		}
 
-		var anti:Dynamic = readField(colorConf, 'antialiasing');
-		if (anti == null) anti = readField(conf, 'antialiasing');
-
+		var anti:Dynamic = readFirst(chain, 'antialiasing');
 		if (anti != null) antialiasing = (anti == true && ClientPrefs.data.antialiasing);
-		else if (PlayState.isPixelStage) antialiasing = false;
+		else if (usingPixel || PlayState.isPixelStage) antialiasing = false;
 
 		animation.finishCallback = onAnimationFinished;
 		loaded = true;
@@ -164,9 +184,8 @@ class HoldCover extends FlxSprite
 
 		running = true;
 		visible = true;
-		alpha = ClientPrefs.data.holdCoverAlpha;
 		animation.play(hasStart ? 'start' : 'hold', true);
-		alignToStrum();
+		syncToStrum();
 	}
 
 	/** The hold was played to its end: see the end animation out, then disappear. */
@@ -182,7 +201,7 @@ class HoldCover extends FlxSprite
 		}
 
 		animation.play('end', true);
-		alignToStrum();
+		syncToStrum();
 	}
 
 	/** The hold was dropped, or the song moved on. Gone at once, no end animation. */
@@ -203,26 +222,32 @@ class HoldCover extends FlxSprite
 	}
 
 	/**
-	 * Centres the cover on the strum, whatever size the current frame happens to be.
+	 * Centres the cover on the strum, whatever size the current frame happens to be, and
+	 * keeps it no more visible than the strum it belongs to.
 	 *
 	 * `offset` is measured from the frame top left and `origin` sits at its centre, so
 	 * shifting by half the frame puts both the drawn centre and the point the scale is
 	 * taken about on (x, y). The cover stays put even if the sheet's frames differ in
 	 * size, and it follows the strum through tweens and modcharts.
+	 *
+	 * The alpha goes through the strum because the opponent's can be dimmed to a third by
+	 * middlescroll or switched off altogether, and a glow burning over a strum that isn't
+	 * there would be a strange thing to be shown.
 	 */
-	function alignToStrum():Void
+	function syncToStrum():Void
 	{
 		if (strum == null) return;
 
+		alpha = ClientPrefs.data.holdCoverAlpha * strum.alpha;
 		offset.set(frameWidth * 0.5, frameHeight * 0.5);
-		setPosition(strum.x + strum.width * 0.5 + offsetX, strum.y + strum.height * 0.5 + offsetY);
+		setPosition(strum.x + strum.width * 0.5 + offsetX * scale.x, strum.y + strum.height * 0.5 + offsetY * scale.y);
 	}
 
 	override function update(elapsed:Float)
 	{
 		super.update(elapsed);
 
-		if (visible) alignToStrum();
+		if (visible) syncToStrum();
 	}
 
 	override function destroy()
@@ -276,6 +301,17 @@ class HoldCover extends FlxSprite
 		return Reflect.hasField(source, field) ? Reflect.field(source, field) : null;
 	}
 
+	/** The first of these sources to carry the field at all, null when none does. */
+	static function readFirst(sources:Array<Dynamic>, field:String):Dynamic
+	{
+		for (source in sources)
+		{
+			var value:Dynamic = readField(source, field);
+			if (value != null) return value;
+		}
+		return null;
+	}
+
 	static function readString(source:Dynamic, field:String):String
 	{
 		var value:Dynamic = readField(source, field);
@@ -304,7 +340,10 @@ class HoldCover extends FlxSprite
 
 	static function numberOf(value:Dynamic, defaultValue:Float):Float
 	{
-		if (value == null || !Std.isOfType(value, Float)) return defaultValue;
+		// Int is checked alongside Float because json hands whole numbers back as Int on
+		// static targets, and a scale that quietly fell back to its default would be a
+		// miserable thing to have to find on a device.
+		if (value == null || !(Std.isOfType(value, Float) || Std.isOfType(value, Int))) return defaultValue;
 
 		var num:Float = cast value;
 		return Math.isNaN(num) ? defaultValue : num;
