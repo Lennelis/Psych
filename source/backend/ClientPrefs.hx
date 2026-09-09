@@ -192,7 +192,10 @@ class ClientPrefs {
 			Main.fpsVar.visible = data.showFPS;
 
 		#if TOUCH_CONTROLS_ALLOWED
-		mobile.backend.WidescreenScaleMode.enabled = data.widescreen;
+		// Installed here rather than in Main: this runs from TitleState.create, by
+		// which point the game is on the stage and a state exists, which assigning a
+		// scale mode requires.
+		mobile.backend.WidescreenScaleMode.apply(data.widescreen);
 		#end
 
 		#if (!html5 && !switch)

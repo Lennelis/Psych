@@ -65,7 +65,7 @@ class MobileOptionsSubState extends BaseOptionsMenu
 	{
 		// Cameras take their size from FlxG.width when a state is built, so the change
 		// only lands properly on the next state - backing out of here is enough.
-		WidescreenScaleMode.enabled = ClientPrefs.data.widescreen;
+		WidescreenScaleMode.apply(ClientPrefs.data.widescreen);
 	}
 
 	/** Rebuilds this menu's pad so opacity and style changes show up right away. */

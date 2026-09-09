@@ -159,13 +159,6 @@ class Main extends Sprite
 		#if ACHIEVEMENTS_ALLOWED Achievements.load(); #end
 		addChild(new FlxGame(game.width, game.height, game.initialState, game.framerate, game.framerate, game.skipSplash, game.startFullscreen));
 
-		#if TOUCH_CONTROLS_ALLOWED
-		// Has to come after FlxGame exists, because assigning a scale mode measures the
-		// stage straight away. It letterboxes exactly like the default until the
-		// widescreen pref switches it on, which ClientPrefs.loadPrefs does.
-		FlxG.scaleMode = new mobile.backend.WidescreenScaleMode();
-		#end
-
 		fpsVar = new FPSCounter(10, 3, 0xFFFFFF);
 		addChild(fpsVar);
 		#if mobile

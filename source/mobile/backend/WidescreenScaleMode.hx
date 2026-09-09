@@ -34,6 +34,32 @@ class WidescreenScaleMode extends RatioScaleMode
 		instance = this;
 	}
 
+	/**
+	 * Installs the scale mode if it isn't already, then switches it on or off.
+	 *
+	 * This has to wait until the game is actually on the stage. Assigning
+	 * `FlxG.scaleMode` calls `FlxGame.onResize` straight away, which reads
+	 * `FlxG.stage` and the running state - and while `Main`'s constructor is still
+	 * going, `FlxGame` has not been added to the stage and no state exists, so both
+	 * are null. Calling it from there crashes before the first frame, enabled or not.
+	 */
+	public static function apply(enable:Bool):Void
+	{
+		if (!isReady()) return;
+
+		if (instance == null || FlxG.scaleMode != instance) FlxG.scaleMode = new WidescreenScaleMode();
+
+		enabled = enable;
+	}
+
+	/**
+	 * Everything `FlxGame.onResize` dereferences, checked in order. It reads
+	 * `FlxG.stage` and calls `_state.onResize`, so all three have to exist before a
+	 * scale mode can be assigned or re-measured.
+	 */
+	static inline function isReady():Bool
+		return FlxG.game != null && FlxG.game.stage != null && FlxG.state != null;
+
 	override function updateGameSize(Width:Int, Height:Int):Void
 	{
 		// FlxG.width gets widened below, so every measurement has to start again from
@@ -41,6 +67,12 @@ class WidescreenScaleMode extends RatioScaleMode
 		// result a bit further than the last.
 		untyped FlxG.width = FlxG.initialWidth;
 		untyped FlxG.height = FlxG.initialHeight;
+
+		if (FlxG.initialWidth <= 0 || FlxG.initialHeight <= 0 || Height <= 0)
+		{
+			super.updateGameSize(Width, Height);
+			return;
+		}
 
 		final gameRatio:Float = FlxG.initialWidth / FlxG.initialHeight;
 		final screenRatio:Float = Width / Height;
@@ -66,7 +98,7 @@ class WidescreenScaleMode extends RatioScaleMode
 	{
 		enabled = value;
 
-		if (instance != null && FlxG.stage != null)
+		if (instance != null && isReady())
 		{
 			instance.onMeasure(FlxG.stage.stageWidth, FlxG.stage.stageHeight);
 			FlxG.signals.gameResized.dispatch(FlxG.stage.stageWidth, FlxG.stage.stageHeight);
