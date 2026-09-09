@@ -1,7 +1,9 @@
 package mobile.backend;
 
 #if android
-import android.content.Context;
+// extension-androidtools 2.x moved these out of the `android` package, which is
+// where Psych's own Main.hx used to import them from.
+import extension.androidtools.content.Context;
 #end
 import haxe.io.Path;
 import openfl.utils.Assets;
@@ -22,7 +24,13 @@ class StorageUtil
 	public static function getStorageDirectory():String
 	{
 		#if android
-		return Path.addTrailingSlash(Context.getExternalFilesDir());
+		// The JNI call hands back an empty string if it can't reach the Java side.
+		// Left alone that becomes "/", and the game would try to run out of the
+		// filesystem root.
+		final external:String = Context.getExternalFilesDir();
+		if (external != null && external.length > 0) return Path.addTrailingSlash(external);
+
+		return Path.addTrailingSlash(lime.system.System.applicationStorageDirectory);
 		#elseif ios
 		return Path.addTrailingSlash(lime.system.System.applicationStorageDirectory);
 		#else

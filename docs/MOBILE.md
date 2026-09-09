@@ -75,6 +75,11 @@ top.
   gives the port `Context.getExternalFilesDir()`), minus `hxdiscord_rpc` (no
   Android build, and `DISCORD_ALLOWED` is off for mobile anyway).
 
+  `extension-androidtools` needs to be **2.x**, which the script installs. Version
+  2 moved these classes from `android.*` to `extension.androidtools.*`; Psych's own
+  `Main.hx` was written against the 1.x package and would no longer compile against
+  it, which is why the storage code lives in `mobile/backend/StorageUtil.hx` now.
+
 #### Pointing lime at the toolchain
 
 `haxelib run lime setup android` asks for the three paths interactively. Lime also
