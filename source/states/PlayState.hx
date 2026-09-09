@@ -2868,8 +2868,8 @@ class PlayState extends MusicBeatState
 		return -1;
 	}
 
-	/** Lanes that were feeding a sustain last frame, so a strum can drop the moment one ends. */
-	var wasHittingSustain:Array<Bool> = [];
+	/** Lanes that were inside a hold last frame, so a strum can drop the moment one ends. */
+	var wasHoldingSustain:Array<Bool> = [];
 
 	// Hold notes
 	private function keysCheck():Void
@@ -2879,13 +2879,16 @@ class PlayState extends MusicBeatState
 		var pressArray:Array<Bool> = [];
 		var releaseArray:Array<Bool> = [];
 		var sustainArray:Array<Bool> = [];
+		var holdPending:Array<Bool> = [];
 		for (key in keysArray)
 		{
 			holdArray.push(controls.pressed(key));
 			pressArray.push(controls.justPressed(key));
 			releaseArray.push(controls.justReleased(key));
 			sustainArray.push(false);
+			holdPending.push(false);
 		}
+		while(wasHoldingSustain.length < holdPending.length) wasHoldingSustain.push(false);
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
 		if(controls.controllerMode && pressArray.contains(true))
@@ -2899,6 +2902,17 @@ class PlayState extends MusicBeatState
 				for (n in notes) { // I can't do a filter here, that's kinda awesome
 					var canHit:Bool = (n != null && !strumsBlocked[n.noteData] && n.canBeHit
 						&& n.mustPress && !n.tooLate && !n.wasGoodHit && !n.blockHit);
+
+					// Still inside a hold: it has pieces left to give, and either its head was
+					// hit or we were already holding this lane last frame. Checking for
+					// remaining pieces rather than "did one land this frame" is what stops the
+					// strum flickering between them. The second half of that matters with
+					// Guitar Hero sustains switched off, where a tail can be hit without its
+					// head and parent.wasGoodHit stays false for the whole hold.
+					if(n != null && n.isSustainNote && n.mustPress && !n.wasGoodHit && !n.tooLate
+						&& n.noteData >= 0 && n.noteData < holdPending.length
+						&& (n.parent == null || n.parent.wasGoodHit || wasHoldingSustain[n.noteData]))
+						holdPending[n.noteData] = true;
 
 					if (guitarHeroSustains)
 						canHit = canHit && n.parent != null && n.parent.wasGoodHit;
@@ -2929,7 +2943,7 @@ class PlayState extends MusicBeatState
 				if(releaseArray[i] || strumsBlocked[i] == true)
 					keyReleased(i);
 
-		updateStrumHoldState(holdArray, sustainArray);
+		updateStrumHoldState(holdArray, sustainArray, holdPending);
 	}
 
 	/**
@@ -2940,10 +2954,8 @@ class PlayState extends MusicBeatState
 	 * back to the ghost tap, while a sustain drops the instant it runs out - that
 	 * difference in timing is the whole point of it.
 	 */
-	function updateStrumHoldState(holdArray:Array<Bool>, sustainArray:Array<Bool>):Void
+	function updateStrumHoldState(holdArray:Array<Bool>, sustainArray:Array<Bool>, holdPending:Array<Bool>):Void
 	{
-		while(wasHittingSustain.length < sustainArray.length) wasHittingSustain.push(false);
-
 		for (i in 0...sustainArray.length)
 		{
 			if(i >= playerStrums.length) break;
@@ -2951,9 +2963,15 @@ class PlayState extends MusicBeatState
 			var spr:StrumNote = playerStrums.members[i];
 			if(spr == null) continue;
 
+			// A piece landing this frame or pieces still to come both mean the hold is
+			// live; it ends on the frame after the last piece is taken.
+			var holding:Bool = holdArray[i] && (sustainArray[i] || holdPending[i]);
+
 			spr.keyHeld = holdArray[i];
-			if(wasHittingSustain[i] && !sustainArray[i]) spr.finishConfirm();
-			wasHittingSustain[i] = sustainArray[i];
+			spr.holdingSustain = holding;
+
+			if(wasHoldingSustain[i] && !holding) spr.finishConfirm();
+			wasHoldingSustain[i] = holding;
 		}
 	}
 

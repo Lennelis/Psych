@@ -24,6 +24,18 @@ class StrumNote extends FlxSprite
 	 */
 	public var keyHeld:Bool = false;
 
+	/**
+	 * Whether a sustain is still being held in this lane. `PlayState` keeps it up to
+	 * date.
+	 *
+	 * Psych splits a sustain into a piece per step and only hits one as each comes
+	 * into range, so between pieces the confirm animation finishes and sits on its
+	 * last frame. Without knowing a hold is still going, that finish would arm the
+	 * fallback below and the strum would flick to the ghost tap over and over for
+	 * the length of the hold.
+	 */
+	public var holdingSustain:Bool = false;
+
 	/** Counts up once 'confirm' has finished playing. -1 when nothing is pending. */
 	var confirmHoldTimer:Float = -1;
 	private var noteData:Int = 0;
@@ -169,8 +181,9 @@ class StrumNote extends FlxSprite
 	function onAnimationFinished(name:String):Void
 	{
 		// resetAnim means something else already owns the revert - the opponent's
-		// strums, or the player's under botplay - so don't fight it.
-		if(name == 'confirm' && resetAnim <= 0) confirmHoldTimer = 0;
+		// strums, or the player's under botplay - so don't fight it. A hold that's
+		// still running keeps the confirm up until PlayState says it ended.
+		if(name == 'confirm' && resetAnim <= 0 && !holdingSustain) confirmHoldTimer = 0;
 	}
 
 	/**
