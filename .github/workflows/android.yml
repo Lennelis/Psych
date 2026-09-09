@@ -52,8 +52,13 @@ jobs:
           yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
           "$SDKMANAGER" --install "ndk;21.4.7075529" "platforms;android-33" "build-tools;33.0.2"
 
-          # Lime reads all three of these straight from the environment, which is
-          # what lets this run without `lime setup android` asking questions.
+          # Lime reads all of these straight from the environment, which is what
+          # lets this run without `lime setup android` asking questions. Together
+          # they're exactly what that command would have written to its config:
+          # the two paths, JAVA_HOME (already set by setup-java), and the
+          # ANDROID_SETUP flag, which lime checks on its own before anything else
+          # and refuses the target without.
+          echo "ANDROID_SETUP=true" >> $GITHUB_ENV
           echo "ANDROID_SDK=$ANDROID_HOME" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/21.4.7075529" >> $GITHUB_ENV
           # The runner ships build-tools newer than AGP 7.3.1 expects, and lime

@@ -81,10 +81,17 @@ top.
 reads them straight from the environment, which is easier to keep straight:
 
 ```bash
+export ANDROID_SETUP=true
 export ANDROID_SDK=$HOME/Android/Sdk
 export ANDROID_NDK_ROOT=$HOME/Android/Sdk/ndk/21.4.7075529
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ```
+
+Those four are exactly what `lime setup android` writes to `~/.lime/config.xml`.
+`ANDROID_SETUP` is the flag it sets when it finishes, and lime checks that one
+before it looks at anything else — without it you get *"You need to run lime setup
+android before you can use the Android target"* no matter how correct the paths
+are.
 
 If your SDK has several build-tools installed, lime picks the newest, which AGP
 7.3.1 may be too old to accept. Pin it:

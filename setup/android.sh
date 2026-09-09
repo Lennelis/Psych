@@ -33,12 +33,15 @@ echo
 echo Checking the Android toolchain...
 # `lime setup android` asks for these interactively and writes them to ~/.lime/config.xml.
 # Lime also reads them straight from the environment, which is what makes an
-# unattended setup (and CI) possible.
+# unattended setup (and CI) possible. ANDROID_SETUP is the flag that command sets
+# once it finishes; lime checks it before anything else and refuses the Android
+# target without it, however correct the paths are.
 if [ -z "$ANDROID_SDK" ] && [ -n "$ANDROID_HOME" ]; then
 	ANDROID_SDK="$ANDROID_HOME"
 fi
 
 MISSING=""
+if [ -z "$ANDROID_SETUP" ]; then MISSING="$MISSING ANDROID_SETUP"; fi
 if [ -z "$ANDROID_SDK" ]; then MISSING="$MISSING ANDROID_SDK"; fi
 if [ -z "$ANDROID_NDK_ROOT" ]; then MISSING="$MISSING ANDROID_NDK_ROOT"; fi
 if [ -z "$JAVA_HOME" ]; then MISSING="$MISSING JAVA_HOME"; fi
@@ -47,6 +50,7 @@ if [ -n "$MISSING" ]; then
 	echo "Not set:$MISSING"
 	echo
 	echo "Set them in your shell, for example:"
+	echo "  export ANDROID_SETUP=true"
 	echo "  export ANDROID_SDK=\$HOME/Android/Sdk"
 	echo "  export ANDROID_NDK_ROOT=\$HOME/Android/Sdk/ndk/21.4.7075529"
 	echo "  export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"
@@ -54,6 +58,7 @@ if [ -n "$MISSING" ]; then
 	echo "Or run 'haxelib run lime setup android' and answer its questions instead."
 	echo "Either way, see docs/MOBILE.md for which versions to install."
 else
+	echo "ANDROID_SETUP     $ANDROID_SETUP"
 	echo "ANDROID_SDK       $ANDROID_SDK"
 	echo "ANDROID_NDK_ROOT  $ANDROID_NDK_ROOT"
 	echo "JAVA_HOME         $JAVA_HOME"
