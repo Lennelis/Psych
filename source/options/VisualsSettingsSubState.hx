@@ -79,6 +79,23 @@ class VisualsSettingsSubState extends BaseOptionsMenu
 		addOption(option);
 		option.onChange = playNoteSplashes;
 
+		var option:Option = new Option('Hold Covers',
+			"If unchecked, hides the glow that covers a strum\nwhile a sustain is being held.",
+			'holdCovers',
+			BOOL);
+		addOption(option);
+
+		var option:Option = new Option('Hold Cover Opacity',
+			'How much transparent should the Hold Covers be.',
+			'holdCoverAlpha',
+			PERCENT);
+		option.scrollSpeed = 1.6;
+		option.minValue = 0.0;
+		option.maxValue = 1;
+		option.changeValue = 0.1;
+		option.decimals = 1;
+		addOption(option);
+
 		var option:Option = new Option('Hide HUD',
 			'If checked, hides most HUD elements.',
 			'hideHud',

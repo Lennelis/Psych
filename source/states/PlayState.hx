@@ -166,6 +166,7 @@ class PlayState extends MusicBeatState
 	public var opponentStrums:FlxTypedGroup<StrumNote> = new FlxTypedGroup<StrumNote>();
 	public var playerStrums:FlxTypedGroup<StrumNote> = new FlxTypedGroup<StrumNote>();
 	public var grpNoteSplashes:FlxTypedGroup<NoteSplash> = new FlxTypedGroup<NoteSplash>();
+	public var grpHoldCovers:FlxTypedGroup<HoldCover> = new FlxTypedGroup<HoldCover>();
 
 	public var camZooming:Bool = false;
 	public var camZoomingMult:Float = 1;
@@ -510,6 +511,7 @@ class PlayState extends MusicBeatState
 
 		generateSong();
 
+		noteGroup.add(grpHoldCovers);
 		noteGroup.add(grpNoteSplashes);
 
 		camFollow = new FlxObject();
@@ -1603,6 +1605,23 @@ class PlayState extends MusicBeatState
 
 			strumLineNotes.add(babyArrow);
 			babyArrow.playerPosition();
+
+			if(ClientPrefs.data.holdCovers)
+			{
+				var cover:HoldCover = new HoldCover(i, babyArrow);
+				grpHoldCovers.add(cover);
+
+				if(player == 1)
+				{
+					playerHoldCovers[i] = cover;
+					playerHoldCoverEnd[i] = -1;
+				}
+				else
+				{
+					opponentHoldCovers[i] = cover;
+					opponentHoldCoverEnd[i] = -1;
+				}
+			}
 		}
 	}
 
@@ -1911,6 +1930,8 @@ class PlayState extends MusicBeatState
 			}
 		}
 		#end
+
+		updateHoldCovers();
 
 		setOnScripts('botPlay', cpuControlled);
 		callOnScripts('onUpdatePost', [elapsed]);
@@ -2889,6 +2910,72 @@ class PlayState extends MusicBeatState
 	 */
 	var holdHead:Array<Note> = [];
 
+	/** One hold cover per strum, indexed by lane. Empty while hold covers are switched off. */
+	var playerHoldCovers:Array<HoldCover> = [];
+	var opponentHoldCovers:Array<HoldCover> = [];
+
+	/** When the hold each cover is up for ends, per the chart. */
+	var playerHoldCoverEnd:Array<Float> = [];
+	var opponentHoldCoverEnd:Array<Float> = [];
+
+	/**
+	 * Puts a cover over the strum a hold is being played on.
+	 *
+	 * Every note hit on either side comes through here, and it does nothing unless the
+	 * note actually carries a sustain - so a hold begun by its head, begun by one of its
+	 * pieces with Guitar Hero sustains switched off, or played by the bot, all reach it
+	 * the same way. A cover already up is left alone, which is what keeps one unbroken
+	 * loop running across all the pieces of a single hold.
+	 */
+	public function startHoldCover(player:Bool, note:Note):Void
+	{
+		if(note == null || !ClientPrefs.data.holdCovers) return;
+
+		var head:Note = (note.isSustainNote && note.parent != null) ? note.parent : note;
+
+		// Nothing to cover on a tap, nor on a sustain too short to have been given any
+		// pieces - that one would be over before the start animation had a frame.
+		if(head.sustainLength <= 0 || (!note.isSustainNote && head.tail.length < 1)) return;
+
+		var data:Int = Math.round(Math.abs(note.noteData));
+		var covers:Array<HoldCover> = player ? playerHoldCovers : opponentHoldCovers;
+		if(data < 0 || data >= covers.length || covers[data] == null) return;
+
+		var ends:Array<Float> = player ? playerHoldCoverEnd : opponentHoldCoverEnd;
+		ends[data] = head.strumTime + head.sustainLength;
+		covers[data].playStart();
+	}
+
+	/**
+	 * Sees finished covers out and cuts dropped ones short.
+	 *
+	 * Only a hold played to its end earns the end animation, and only on the player's
+	 * side: V-Slice makes the opponent's covers vanish at the end instead of playing it,
+	 * so they do here too.
+	 */
+	function updateHoldCovers():Void
+	{
+		for (i in 0...playerHoldCovers.length)
+		{
+			var cover:HoldCover = playerHoldCovers[i];
+			if(cover == null || !cover.running) continue;
+
+			// The bot never lets go, so dropping only means anything in a lane the player
+			// is playing. wasHoldingSustain is the same signal the strums run on, so a
+			// cover can never outlast the confirm glow underneath it.
+			if(!cpuControlled && (i >= wasHoldingSustain.length || !wasHoldingSustain[i])) cover.stopCover();
+			else if(Conductor.songPosition >= playerHoldCoverEnd[i]) cover.playEnd();
+		}
+
+		for (i in 0...opponentHoldCovers.length)
+		{
+			var cover:HoldCover = opponentHoldCovers[i];
+			if(cover == null || !cover.running) continue;
+
+			if(Conductor.songPosition >= opponentHoldCoverEnd[i]) cover.stopCover();
+		}
+	}
+
 	// Hold notes
 	private function keysCheck():Void
 	{
@@ -3158,6 +3245,7 @@ class PlayState extends MusicBeatState
 		if(opponentVocals.length <= 0) vocals.volume = 1;
 		strumPlayAnim(true, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate);
 		note.hitByOpponent = true;
+		startHoldCover(false, note);
 		
 		stagesFunc(function(stage:BaseStage) stage.opponentNoteHit(note));
 		var result:Dynamic = callOnLuas('opponentNoteHit', [notes.members.indexOf(note), Math.abs(note.noteData), note.noteType, note.isSustainNote]);
@@ -3181,6 +3269,7 @@ class PlayState extends MusicBeatState
 		if(result == LuaUtils.Function_Stop) return;
 
 		note.wasGoodHit = true;
+		if(!note.hitCausesMiss) startHoldCover(true, note);
 
 		if (note.hitsoundVolume > 0 && !note.hitsoundDisabled)
 			FlxG.sound.play(Paths.sound(note.hitsound), note.hitsoundVolume);
@@ -3347,6 +3436,7 @@ class PlayState extends MusicBeatState
 		backend.NoteTypesConfig.clearNoteTypesData();
 
 		NoteSplash.configs.clear();
+		HoldCover.clearConfig();
 		instance = null;
 		super.destroy();
 	}
