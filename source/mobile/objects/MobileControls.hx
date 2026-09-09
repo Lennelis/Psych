@@ -52,7 +52,10 @@ class MobileControls extends FlxSpriteGroup
 		final size:Int = VirtualPad.buttonSize;
 		final step:Int = size + 12;
 		final margin:Int = 26;
-		final originX:Float = rightSide ? FlxG.width - margin - size - step * 2 : margin;
+		// Measured from the real edges of the screen, which widescreen puts half a cutout
+		// outside the game's own band.
+		final edge:Float = mobile.backend.WidescreenScaleMode.cutout * 0.5;
+		final originX:Float = rightSide ? FlxG.width + edge - margin - size - step * 2 : margin - edge;
 		final bottom:Float = FlxG.height - margin - size;
 
 		// left, down, up, right laid out as a cross, in note-data order
@@ -103,7 +106,7 @@ class MobileControls extends FlxSpriteGroup
 		// squash it freezes on while the menu is up, and the bounce back on resume.
 		if (pauseButton.setSparrowGraphic('pauseButton', 'pause', 0, 0.8, [for (i in 6...33) i]))
 		{
-			pauseButton.setPosition(FlxG.width - pauseButton.width - 35, 35);
+			pauseButton.setPosition(FlxG.width + mobile.backend.WidescreenScaleMode.cutout * 0.5 - pauseButton.width - 35, 35);
 			addPauseCircle();
 		}
 		else
@@ -111,7 +114,7 @@ class MobileControls extends FlxSpriteGroup
 			final size:Int = Std.int(VirtualPad.buttonSize * 0.6);
 			pauseButton.setGraphic('II', size, size);
 			pauseButton.idleAlpha = ClientPrefs.data.controlsAlpha;
-			pauseButton.setPosition(FlxG.width - size - 20, 20);
+			pauseButton.setPosition(FlxG.width + mobile.backend.WidescreenScaleMode.cutout * 0.5 - size - 20, 20);
 		}
 
 		pauseButton.alpha = pauseButton.idleAlpha;
@@ -153,19 +156,56 @@ class MobileControls extends FlxSpriteGroup
 		if (pauseButton != null) pauseButton.release();
 	}
 
-	/**
-	 * Hides the note controls without taking the pause button with them.
-	 *
-	 * The pause menu covers the game, but the button stays where it was: it freezes on
-	 * the squashed frame of its press animation, so the tap that opened the menu still
-	 * reads as a press, and finishes bouncing back when play resumes.
-	 */
+	/** Hides or shows the note controls, leaving the pause button to the two below. */
 	public function setGameplayVisible(value:Bool):Void
 	{
 		if (hitbox != null) hitbox.visible = value;
 
 		for (button in noteButtons)
 			if (button != null) button.visible = value;
+	}
+
+	/**
+	 * Clears the controls away as the pause menu opens.
+	 *
+	 * The button and its disc go out instantly rather than fading, because the menu
+	 * draws its own copy of them mid-press over the top - the same split V-Slice makes
+	 * between `preparePauseUI` here and `transitionIn` there.
+	 */
+	public function onPause():Void
+	{
+		releaseAll();
+		setGameplayVisible(false);
+
+		if (pauseButton != null)
+		{
+			pauseButton.playIdleAnim();
+			pauseButton.alpha = 0;
+		}
+
+		if (pauseCircle != null)
+		{
+			flixel.tweens.FlxTween.cancelTweensOf(pauseCircle);
+			pauseCircle.alpha = 0;
+		}
+	}
+
+	/** Brings them back as play resumes, over a quarter of a second as V-Slice does. */
+	public function onResume():Void
+	{
+		releaseAll();
+		setGameplayVisible(true);
+
+		// The button fades in on its own: TouchButton eases its alpha towards idleAlpha
+		// every frame, so leaving it at zero is the fade.
+		if (pauseButton != null) pauseButton.alpha = 0;
+
+		if (pauseCircle != null)
+		{
+			flixel.tweens.FlxTween.cancelTweensOf(pauseCircle);
+			pauseCircle.alpha = 0;
+			flixel.tweens.FlxTween.tween(pauseCircle, {alpha: 0.1}, 0.25, {ease: flixel.tweens.FlxEase.quartOut});
+		}
 	}
 
 	static function noteColor(i:Int):FlxColor

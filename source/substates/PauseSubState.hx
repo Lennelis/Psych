@@ -30,6 +30,60 @@ class PauseSubState extends MusicBeatSubstate
 
 	public static var songName:String = null;
 
+	#if TOUCH_CONTROLS_ALLOWED
+	/**
+	 * The pause button again, mid-press, drawn by the menu itself.
+	 *
+	 * PlayState stops updating the moment this substate opens, so its own button can't
+	 * animate - which is why V-Slice hides that one and has `PauseSubState.transitionIn`
+	 * draw a copy here playing the press through. The disc behind it pops out to 1.4 and
+	 * shrinks back past its resting size, both fading out, and the button follows a beat
+	 * later. Those numbers are all theirs.
+	 */
+	function addPauseButtonPress():Void
+	{
+		if(!Paths.fileExists('images/pauseButton.png', IMAGE) || !Paths.fileExists('images/pauseButton.xml', TEXT)) return;
+
+		var atlas:flixel.graphics.frames.FlxAtlasFrames = Paths.getSparrowAtlas('pauseButton');
+		if(atlas == null) return;
+
+		var button:FlxSprite = new FlxSprite();
+		button.frames = atlas;
+		button.animation.addByIndices('confirm', 'pause', [for (i in 6...33) i], '', 24, false);
+		if(!button.animation.exists('confirm')) return;
+
+		button.antialiasing = ClientPrefs.data.antialiasing;
+		button.scrollFactor.set();
+		button.scale.set(0.8, 0.8);
+		button.updateHitbox();
+		button.setPosition(FlxG.width + mobile.backend.WidescreenScaleMode.cutout * 0.5 - button.width - 35, 35);
+		button.animation.play('confirm');
+
+		if(Paths.fileExists('images/pauseCircle.png', IMAGE))
+		{
+			var circle:FlxSprite = new FlxSprite();
+			circle.loadGraphic(Paths.image('pauseCircle'));
+			circle.antialiasing = ClientPrefs.data.antialiasing;
+			circle.scrollFactor.set();
+
+			// Positioned at its resting size, then left to scale about its own centre.
+			circle.scale.set(0.84, 0.8);
+			circle.updateHitbox();
+			circle.setPosition(button.x + (button.width - circle.width) * 0.5, button.y + (button.height - circle.height) * 0.5);
+
+			circle.scale.set(0.84 * 1.4, 0.8 * 1.4);
+			circle.alpha = 0.4;
+			add(circle);
+
+			FlxTween.tween(circle.scale, {x: 0.84 * 0.8, y: 0.8 * 0.8}, 0.4, {ease: FlxEase.backInOut});
+			FlxTween.tween(circle, {alpha: 0}, 0.6, {ease: FlxEase.quartOut});
+		}
+
+		add(button);
+		FlxTween.tween(button, {alpha: 0}, 0.6, {ease: FlxEase.quartOut, startDelay: 0.3});
+	}
+	#end
+
 	override function create()
 	{
 		if(Difficulty.list.length < 2) menuItemsOG.remove('Change Difficulty'); //No need to change difficulty if there is only one!
@@ -73,6 +127,10 @@ class PauseSubState extends MusicBeatSubstate
 		bg.alpha = 0;
 		bg.scrollFactor.set();
 		add(bg);
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addPauseButtonPress();
+		#end
 
 		var levelInfo:FlxText = new FlxText(20, 15, 0, PlayState.SONG.song, 32);
 		levelInfo.scrollFactor.set();

@@ -236,7 +236,25 @@ reporting a press forever.
 | `mobile/backend/TouchButtonGraphic.hx` | Draws every button at runtime. |
 | `mobile/backend/TouchUtil.hx` | The frame counter behind `isAwake`, and vibration. |
 | `mobile/backend/StorageUtil.hx` | Writable paths, and unpacking bundled mods on first launch. |
+| `mobile/backend/WidescreenScaleMode.hx` | Fills a screen wider than 16:9 instead of leaving bars. |
 | `mobile/options/MobileOptionsSubState.hx` | Options → Mobile. |
+
+**Widescreen**, on by default, keeps the game's own 1280x720 coordinate space and
+widens the *cameras* instead. Each one is made `cutout` game-pixels wider and moved
+half of that to the left, so it draws into the bars either side; a camera crops to
+its own size and `FlxGame` doesn't crop at all, which is what makes that work.
+
+Doing it the other way round — raising `FlxG.width`, as V-Slice's
+`FullScreenScaleMode` does — is what the first version tried, and it doesn't suit
+this engine. V-Slice's states are written against a variable width; Psych's are laid
+out at fixed coordinates, so everything ended up hugging the left edge with the new
+space piled up on the right. Widening the view rather than the world leaves every
+menu centred where it was designed to be, and a camera flash covers the whole screen
+because the camera now *is* the whole screen.
+
+Anything that needs the true edge rather than the game's own band — the hitbox lanes,
+the pads, the pause button — lays itself out from `-cutout / 2` to
+`FlxG.width + cutout / 2`.
 
 **Almost no new art.** `TouchButtonGraphic` draws the pads and lanes with the
 OpenFL drawing API and caches the results as `FlxGraphic`s, so they add nothing to

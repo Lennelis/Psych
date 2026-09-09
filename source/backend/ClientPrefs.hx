@@ -88,7 +88,7 @@ import states.TitleState;
 	public var controlsAlpha:Float = 0.6;
 	public var vibration:Bool = true;
 	// Fill a screen wider than 16:9 instead of sitting in pillarbox bars.
-	public var widescreen:Bool = false;
+	public var widescreen:Bool = true;
 	#end
 }
 

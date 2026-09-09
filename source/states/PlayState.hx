@@ -1651,8 +1651,7 @@ class PlayState extends MusicBeatState
 		#if TOUCH_CONTROLS_ALLOWED
 		if(mobileControls != null)
 		{
-			mobileControls.releaseAll();
-			mobileControls.setGameplayVisible(true);
+			mobileControls.onResume();
 		}
 		#end
 
@@ -1983,8 +1982,7 @@ class PlayState extends MusicBeatState
 		#if TOUCH_CONTROLS_ALLOWED
 		if(mobileControls != null)
 		{
-			mobileControls.releaseAll();
-			mobileControls.setGameplayVisible(false);
+			mobileControls.onPause();
 		}
 		#end
 		persistentDraw = true;
@@ -3239,7 +3237,13 @@ class PlayState extends MusicBeatState
 				{
 					var holdAnim:String = animToPlay + '-hold';
 					if(char.animation.exists(holdAnim)) animToPlay = holdAnim;
-					if(char.getAnimationName() == holdAnim || char.getAnimationName() == holdAnim + '-loop') canPlay = false;
+
+					// Already singing this one, so leave it alone. V-Slice never restarts a
+					// sing animation mid-hold - all it does is keep the hold timer from
+					// running out - so the character settles into the pose instead of
+					// starting the note again on every piece of the sustain.
+					var playing:String = char.getAnimationName();
+					if(playing == animToPlay || playing == animToPlay + '-loop') canPlay = false;
 				}
 
 				if(canPlay) char.playAnim(animToPlay, true);
@@ -3300,7 +3304,13 @@ class PlayState extends MusicBeatState
 					{
 						var holdAnim:String = animToPlay + '-hold';
 						if(char.animation.exists(holdAnim)) animToPlay = holdAnim;
-						if(char.getAnimationName() == holdAnim || char.getAnimationName() == holdAnim + '-loop') canPlay = false;
+
+						// Already singing this one, so leave it alone. V-Slice never restarts a
+						// sing animation mid-hold - all it does is keep the hold timer from
+						// running out - so the character settles into the pose instead of
+						// starting the note again on every piece of the sustain.
+						var playing:String = char.getAnimationName();
+						if(playing == animToPlay || playing == animToPlay + '-loop') canPlay = false;
 					}
 	
 					if(canPlay) char.playAnim(animToPlay, true);
