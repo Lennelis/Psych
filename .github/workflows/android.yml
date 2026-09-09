@@ -1,0 +1,143 @@
+# Builds an installable Android APK and uploads it as a workflow artifact.
+#
+# This exists so you don't need an Android SDK, an NDK or a JDK on your own
+# machine to get a build onto a phone. docs/MOBILE.md covers building locally.
+
+name: Build Android APK
+
+on:
+  push:
+    branches: [ claude/psych-engine-mobile-port-9sau2w ]
+
+  # Run it by hand from the Actions tab, with these switches.
+  workflow_dispatch:
+    inputs:
+      videos:
+        description: 'Include video cutscenes (hxvlc). The most fragile native dependency - leave off if the build fails in it.'
+        type: boolean
+        default: false
+      armv7:
+        description: 'Also build 32-bit armeabi-v7a. Roughly doubles the build time; only needed for phones older than about 2016.'
+        type: boolean
+        default: false
+
+jobs:
+  buildAndroid:
+    runs-on: ubuntu-latest
+    # hxcpp compiles the whole engine from scratch, which is slow. This is well
+    # above a normal run and only there so a hung build gives up on its own.
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4.1.7
+
+      # Lime 8.1.2 generates Gradle 7.4.2 with Android Gradle Plugin 7.3.1, and
+      # neither runs on a JDK newer than 17.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: krdlab/setup-haxe@master
+        with:
+          haxe-version: 4.3.4
+
+      # NDK r21e specifically: newer NDKs changed the toolchain layout hxcpp
+      # expects, and the failure shows up deep inside a C++ compile where the
+      # error tells you nothing useful.
+      - name: Install the Android NDK and SDK pieces
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --install "ndk;21.4.7075529" "platforms;android-33" "build-tools;33.0.2"
+
+          # Lime reads all three of these straight from the environment, which is
+          # what lets this run without `lime setup android` asking questions.
+          echo "ANDROID_SDK=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/21.4.7075529" >> $GITHUB_ENV
+          # The runner ships build-tools newer than AGP 7.3.1 expects, and lime
+          # would otherwise pick the newest one it finds.
+          echo "ANDROID_BUILD_TOOLS=33.0.2" >> $GITHUB_ENV
+
+      - name: Cache Haxe libraries
+        id: haxelib-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/haxelib
+          key: haxelib-android-${{ hashFiles('setup/android.sh') }}
+
+      - name: Install Haxe libraries
+        if: steps.haxelib-cache.outputs.cache-hit != 'true'
+        run: |
+          haxelib setup ~/haxelib
+          chmod +x ./setup/android.sh
+          ./setup/android.sh
+
+      - name: Point haxelib at the cache
+        if: steps.haxelib-cache.outputs.cache-hit == 'true'
+        run: haxelib setup ~/haxelib
+
+      # Android won't install an unsigned APK. This key is generated fresh every
+      # run and thrown away with the runner, which is fine for sideloading but
+      # means each APK is signed by a different key: uninstall the previous build
+      # before installing a new one, or Android rejects it as a downgrade from a
+      # different signer. docs/MOBILE.md shows how to use your own keystore for a
+      # stable one.
+      - name: Generate a throwaway signing key
+        run: |
+          keytool -genkeypair -keystore "$PWD/ci.keystore" -alias psychengine \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass throwaway -keypass throwaway \
+            -dname "CN=Psych Engine, OU=CI, O=Psych Engine, C=US"
+          echo "ANDROID_KEYSTORE=ci.keystore" >> $GITHUB_ENV
+          echo "ANDROID_KEYSTORE_PASSWORD=throwaway" >> $GITHUB_ENV
+          echo "ANDROID_KEYSTORE_ALIAS=psychengine" >> $GITHUB_ENV
+
+      - name: Build the APK
+        run: |
+          # officialBuild is what pulls in the weeks and songs; without it the
+          # game boots to an empty menu, which is no use for testing the controls.
+          FLAGS="-D officialBuild"
+
+          if [ "${{ inputs.videos }}" != "true" ]; then
+            FLAGS="$FLAGS -D NO_VIDEOS"
+          fi
+
+          if [ "${{ inputs.armv7 }}" = "true" ]; then
+            FLAGS="$FLAGS -D ARMV7"
+          fi
+
+          echo "Building with: $FLAGS"
+          haxelib run lime build android -release $FLAGS
+
+      - name: Find the APK
+        id: apk
+        run: |
+          APK=$(find export -name '*.apk' -not -name '*unsigned*' | head -1)
+          if [ -z "$APK" ]; then
+            echo "No signed APK was produced. Everything found under export:"
+            find export -name '*.apk' || echo "  (no .apk at all)"
+            exit 1
+          fi
+          echo "Built $APK ($(du -h "$APK" | cut -f1))"
+          echo "path=$APK" >> $GITHUB_OUTPUT
+
+      - name: Publish Artifact
+        uses: actions/upload-artifact@v4.3.4
+        with:
+          name: PsychEngine-android
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+
+      # A failed hxcpp or Gradle build says almost nothing in the step log; these
+      # are the files that actually explain what happened.
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4.3.4
+        with:
+          name: android-build-logs
+          path: |
+            export/release/android/haxe/
+            export/release/android/bin/app/build/outputs/logs/
+          if-no-files-found: ignore

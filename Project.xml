@@ -36,7 +36,9 @@
 	<section if="officialBuild">
 		<define name="TITLE_SCREEN_EASTER_EGG"/>
 		<define name="BASE_GAME_FILES" />
-		<define name="VIDEOS_ALLOWED" if="windows || linux || android || mac" unless="32bits"/> <!-- IF YOU WANT TO USE VIDEOS ON YOUR SOURCE MOD, GET THIS LINE OUTSIDE OF THE SECTION -->
+		<define name="VIDEOS_ALLOWED" if="windows || linux || android || mac" unless="32bits || NO_VIDEOS"/> <!-- IF YOU WANT TO USE VIDEOS ON YOUR SOURCE MOD, GET THIS LINE OUTSIDE OF THE SECTION -->
+		<!-- hxvlc does build for Android, but it's the most fragile native dependency here.
+		     Build with -DNO_VIDEOS to leave it out; only cutscenes are affected. -->
 	</section>
 
 	<!-- ____________________________ Window Settings ___________________________ -->
@@ -144,29 +146,56 @@
 	<!-- ___________________________ Mobile Targets _____________________________ -->
 
 	<section if="android">
-		<!-- 21 is the floor for the NDK toolchain lime uses; 34 is what Google Play requires -->
-		<android minimum-sdk-version="21" target-sdk-version="34" install-location="auto" />
+		<!--
+			21 is the floor for the NDK toolchain lime uses. Target 33 rather than 34:
+			lime sets compileSdkVersion from this, and lime 8.1.2 generates Gradle 7.4.2
+			with Android Gradle Plugin 7.3.1, which refuses a compileSdk above 33. AGP 8
+			would take 34 but drops the manifest `package` attribute lime's template
+			still uses, so bumping it means patching the template too.
 
-		<permission name="android.permission.VIBRATE" />
-		<permission name="android.permission.INTERNET" />
-		<permission name="android.permission.ACCESS_NETWORK_STATE" />
-		<permission name="android.permission.WAKE_LOCK" />
+			No <permission> entries here on purpose: lime already defaults to exactly the
+			four this needs (INTERNET, ACCESS_NETWORK_STATE, VIBRATE, WAKE_LOCK). Add one
+			with `<android permission="..."/>` if you need more.
+
+			Saves, mods and crash logs go to the app's own external files directory, which
+			needs no runtime permission at all. See mobile/backend/StorageUtil.hx.
+		-->
+		<android minimum-sdk-version="21" target-sdk-version="33" install-location="auto" />
 
 		<!--
-			Saves, mods and crash logs go to the app's own external files directory, which
-			needs no runtime permission and survives Android's storage restrictions. See
-			mobile/backend/StorageUtil.hx.
+			Lime builds armeabi-v7a AND arm64-v8a by default, and each ABI is a separate
+			full hxcpp compile of the whole engine - it roughly doubles an already slow
+			build. arm64 is what Google Play requires and what every phone since about
+			2016 runs, so drop 32-bit unless it's asked for:
+			`lime build android -DARMV7`.
+			Don't set HXCPP_ARM64 or HXCPP_ARMV7 here: lime sets them per ABI itself, and
+			setting one globally would leak into the other ABI's compile.
 		-->
+		<architecture exclude="ARMV7" unless="ARMV7" />
 
-		<!-- 64-bit is mandatory on Play; build ARMv7 too with `lime build android -DARMV7` -->
-		<architecture name="ARM64" unless="ARMV7" />
-		<architecture name="ARMV7" if="ARMV7" />
-		<haxedef name="HXCPP_ARM64" unless="ARMV7" />
+		<!--
+			Left unset, lime picks the newest build-tools installed in the SDK, which is
+			usually right. Set ANDROID_BUILD_TOOLS to pin one - worth doing on a machine
+			that has several, since AGP 7.3.1 is old enough to disagree with the newest.
+		-->
+		<section if="ANDROID_BUILD_TOOLS">
+			<config type="android" build-tools-version="${ANDROID_BUILD_TOOLS}" />
+		</section>
+
+		<!--
+			Android refuses to install an unsigned APK, so a release build needs a
+			keystore. Set these three in the environment (or pass them with -D) and lime
+			signs the build; leave them unset and nothing here applies. Nothing secret
+			lives in this file. See docs/MOBILE.md.
+		-->
+		<section if="ANDROID_KEYSTORE">
+			<certificate path="${ANDROID_KEYSTORE}" password="${ANDROID_KEYSTORE_PASSWORD}" alias="${ANDROID_KEYSTORE_ALIAS}" />
+		</section>
 	</section>
 
 	<section if="ios">
-		<config:ios deployment="13.0" device="universal" />
-		<haxedef name="HXCPP_ARM64" />
+		<!-- Lime and hxcpp pick the iOS architectures themselves, nothing to set here. -->
+		<config type="ios" deployment="13.0" device="universal" />
 	</section>
 
 	<!-- ______________________________ Haxedefines _____________________________ -->

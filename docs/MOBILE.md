@@ -4,6 +4,8 @@ This documents the mobile port: how to build it, how the touch controls are put
 together, and what still doesn't work.
 
 * [Building for Android](#building-for-android)
+  * [The easy way: let GitHub build it](#the-easy-way-let-github-build-it)
+  * [Building locally](#building-locally)
 * [Building for iOS](#building-for-ios)
 * [Trying the touch controls on desktop](#trying-the-touch-controls-on-desktop)
 * [How the touch controls work](#how-the-touch-controls-work)
@@ -14,56 +16,150 @@ together, and what still doesn't work.
 
 ## Building for Android
 
+There are two routes. The CI one needs nothing installed.
+
+### The easy way: let GitHub build it
+
+`.github/workflows/android.yml` builds a signed, installable APK on a GitHub
+runner. Open the repo's **Actions** tab, pick **Build Android APK**, hit **Run
+workflow**, and download the `PsychEngine-android` artifact when it finishes. It
+also runs automatically on every push to the mobile port branch.
+
+Two switches on the Run workflow form:
+
+| Switch | Default | What it does |
+| --- | --- | --- |
+| `videos` | off | Includes hxvlc for video cutscenes. It's the most fragile native dependency here, so it's off by default — turn it on if you want cutscenes and are willing to have the build fail in it. |
+| `armv7` | off | Also builds 32-bit `armeabi-v7a`. Each ABI is a separate full hxcpp compile, so this roughly doubles the build time. Only needed for phones older than about 2016. |
+
+The APK is signed with a throwaway key generated fresh each run. That's fine for
+sideloading, but it means **each build is signed by a different key** — uninstall
+the previous build before installing a new one, or Android refuses it as coming
+from a different signer. Use your own keystore (below) if that gets annoying.
+
+Expect the first run to take a while: hxcpp compiles the whole engine from
+scratch. Later runs reuse a cache of the Haxe libraries, not the C++ objects, so
+they aren't much faster.
+
+### Building locally
+
 Everything in [BUILDING.md](BUILDING.md) still applies; this is what's needed on
-top of it.
+top.
 
-### Dependencies
+#### Dependencies
 
-- **JDK 17** — newer JDKs break the Gradle version lime generates.
-- **Android SDK** with platform 34, build-tools 34.x and NDK **r21e**
-  (`21.4.7075529`). Newer NDKs drop the toolchain layout hxcpp expects, and the
-  build fails deep inside a C++ compile where the error tells you nothing useful.
-  Android Studio's SDK Manager is the easiest way to get all three.
-- The `extension-androidtools` haxelib, which is what gives us
-  `Context.getExternalFilesDir()`:
+- **JDK 17.** Not newer. Lime 8.1.2 generates Gradle 7.4.2 with Android Gradle
+  Plugin 7.3.1, and neither runs on a JDK past 17.
+- **Android SDK** with:
+  - platform **android-33**
+  - build-tools **33.0.2**
+  - NDK **r21e** (`21.4.7075529`)
+
+  NDK r21e specifically. Newer NDKs changed the toolchain layout hxcpp expects,
+  and the failure surfaces deep inside a C++ compile where the error tells you
+  nothing useful. Android Studio's SDK Manager is the easiest way to get all
+  three, or from the command line:
+
+  ```bash
+  sdkmanager --install "ndk;21.4.7075529" "platforms;android-33" "build-tools;33.0.2"
+  ```
+
+- The Haxe libraries, via the setup script:
+
+  ```bash
+  chmod +x ./setup/android.sh && ./setup/android.sh   # Linux, macOS
+  setup\android.bat                                   # Windows
+  ```
+
+  Same list as the desktop setup, plus `extension-androidtools` (which is what
+  gives the port `Context.getExternalFilesDir()`), minus `hxdiscord_rpc` (no
+  Android build, and `DISCORD_ALLOWED` is off for mobile anyway).
+
+#### Pointing lime at the toolchain
+
+`haxelib run lime setup android` asks for the three paths interactively. Lime also
+reads them straight from the environment, which is easier to keep straight:
 
 ```bash
-haxelib git extension-androidtools https://github.com/MAJigsaw77/extension-androidtools.git
+export ANDROID_SDK=$HOME/Android/Sdk
+export ANDROID_NDK_ROOT=$HOME/Android/Sdk/ndk/21.4.7075529
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ```
 
-### One-time lime setup
+If your SDK has several build-tools installed, lime picks the newest, which AGP
+7.3.1 may be too old to accept. Pin it:
 
 ```bash
-haxelib run lime setup android
+export ANDROID_BUILD_TOOLS=33.0.2
 ```
 
-It asks for the paths to the SDK, the NDK and the JDK. Point it at the NDK r21e
-folder specifically, not the `ndk` parent directory.
+Running `./setup/android.sh` prints which of these are set, so use it to check.
 
-### Building
+#### Building
 
 ```bash
-# debug APK, installed and launched on the connected device
-haxelib run lime test android -debug
-
-# release APK
-haxelib run lime build android -release
-
-# 32-bit device (arm-v7a instead of the default arm64-v8a)
-haxelib run lime build android -release -DARMV7
+haxelib run lime build android -release -D officialBuild -D NO_VIDEOS
 ```
 
-The APK lands in `export/release/android/bin/app/build/outputs/apk/`.
+The flags matter:
 
-Google Play requires a 64-bit build, which is the default here. Ship ARMv7 as a
-separate ABI only if you need to support phones older than about 2016.
+- **`-D officialBuild`** is what includes the weeks and songs. Without it the game
+  builds and boots to an empty menu — no use for testing the controls.
+- **`-D NO_VIDEOS`** leaves out hxvlc. It does have an Android build, but it's the
+  likeliest thing to break; drop the flag once the rest works and you want
+  cutscenes.
+- **`-D ARMV7`** adds the 32-bit ABI. Off by default because each ABI is a
+  separate full compile.
+- **`-debug`** instead of `-release` gets you a debug-signed APK with no keystore
+  needed, but an unoptimised hxcpp build struggles to hold 60fps on a phone, so
+  it's not much use for actually playing.
 
-### If Lua won't build
+The APK lands at:
+
+```
+export/release/android/bin/app/build/outputs/apk/release/PsychEngine-release.apk
+```
+
+#### Signing
+
+Android won't install an unsigned APK, and a `-release` build with no keystore
+comes out unsigned. Make a keystore once:
+
+```bash
+keytool -genkeypair -keystore ~/psych.keystore -alias psychengine \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Then point the build at it. `Project.xml` reads these three from the environment
+and passes them to Gradle; nothing secret goes in the repo:
+
+```bash
+export ANDROID_KEYSTORE=$HOME/psych.keystore
+export ANDROID_KEYSTORE_PASSWORD=whatever-you-chose
+export ANDROID_KEYSTORE_ALIAS=psychengine
+```
+
+Keep the same keystore and you can install updates over each other. Lose it and
+you can't — you'd have to uninstall first.
+
+#### Getting it onto the phone
+
+```bash
+adb install -r export/release/android/bin/app/build/outputs/apk/release/PsychEngine-release.apk
+```
+
+Or copy the APK across and open it in a file manager, with "install from unknown
+sources" allowed for that app. `haxelib run lime test android` builds, installs
+and launches in one step if a device is already connected over adb.
+
+`adb logcat` is where `trace()` output and crash messages go.
+
+#### If Lua won't build
 
 `LUA_ALLOWED` is on for Android because LuaJIT does compile for `arm64-v8a`, but
-it's the most fragile part of the build. If linc_luajit fails to compile, drop
-`|| android` from the `LUA_ALLOWED` line in `Project.xml`. You lose Lua mods;
-HScript mods keep working, since hscript-iris is pure Haxe.
+it's the most fragile part of the Haxe side of the build. If linc_luajit fails,
+drop `|| android` from the `LUA_ALLOWED` line in `Project.xml`. You lose Lua
+mods; HScript mods keep working, since hscript-iris is pure Haxe.
 
 ---
 
@@ -177,9 +273,12 @@ Worth knowing before you file a bug:
   mouse, a keyboard and PsychUI windows. They open on a phone and are not usable.
   Adapting them is a much larger job than the rest of this port combined.
 - **This has been type-checked, not run.** Every configuration compiles clean
-  (touch on, touch off, `mobile`, `android`), but no build has been put on a
-  device. Expect the first run to turn up layout and sizing problems the compiler
-  can't see.
+  (touch on, touch off, `mobile`, `android`), but no APK has been built and put on
+  a device. Expect the first run to turn up layout and sizing problems the
+  compiler can't see, and the Android build itself to need a nudge.
+- **Notched phones will letterbox.** Lime's manifest template doesn't set
+  `windowLayoutInDisplayCutoutMode`, so the game keeps clear of the cutout instead
+  of drawing under it. Fixing it means overriding the manifest template.
 - **The pad is laid out in the game's 1280x720 space**, so on a phone wider than
   16:9 the buttons sit inside the letterbox rather than at the true screen edge.
   Fine, but not ideal on a tall phone.
