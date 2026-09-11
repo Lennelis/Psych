@@ -200,7 +200,7 @@ class Paths
 	{
 		#if MODS_ALLOWED
 		var file:String = modsVideo(key);
-		if(FileSystem.exists(file)) return file;
+		if(FileSystem.exists(file)) return nativePath(file);
 		#end
 		return 'assets/videos/$key.$VIDEO_EXT';
 	}
@@ -245,7 +245,7 @@ class Paths
 			var file:String = getPath(key, IMAGE, parentFolder, true);
 			#if MODS_ALLOWED
 			if (FileSystem.exists(file))
-				bitmap = BitmapData.fromFile(file);
+				bitmap = BitmapData.fromFile(nativePath(file));
 			else #end if (OpenFlAssets.exists(file, IMAGE))
 				bitmap = OpenFlAssets.getBitmapData(file);
 
@@ -294,9 +294,40 @@ class Paths
 		var folderKey:String = Language.getFileTranslation('fonts/$key');
 		#if MODS_ALLOWED
 		var file:String = modFolders(folderKey);
-		if(FileSystem.exists(file)) return file;
+		if(FileSystem.exists(file)) return nativePath(file);
 		#end
 		return 'assets/$folderKey';
+	}
+
+	/**
+	 * A path the engine's own libraries can open, rather than just Haxe.
+	 *
+	 * Haxe's file functions are the C library's, so a relative path is resolved against
+	 * the working directory - which is why mods are found at all, `Main` points the
+	 * working directory at the folder they live in. Lime's are SDL's, and on Android SDL
+	 * resolves a relative path against the app's internal storage folder and then against
+	 * the assets inside the apk, neither of which is where a mod is. So `FileSystem`
+	 * would say a mod's icon is right there and `BitmapData.fromFile` would hand back
+	 * null for the same path, and every mod icon came out as Flixel's placeholder.
+	 *
+	 * Making it absolute settles the disagreement: an absolute path goes straight to the
+	 * filesystem on every backend. Only mobile needs it - on desktop the two already
+	 * agree - so desktop keeps the exact paths it always had, cache keys and all.
+	 */
+	public static function nativePath(path:String):String
+	{
+		#if mobile
+		if(path == null || path.length < 1 || path.charAt(0) == '/') return path;
+
+		try
+		{
+			return FileSystem.absolutePath(path);
+		}
+		catch(e:Dynamic)
+			return path;
+		#else
+		return path;
+		#end
 	}
 
 	/**
@@ -476,7 +507,7 @@ class Paths
 			// only the second one can find anything.
 			var sound:Sound = null;
 			#if sys
-			if(FileSystem.exists(file)) sound = Sound.fromFile(file);
+			if(FileSystem.exists(file)) sound = Sound.fromFile(nativePath(file));
 			#end
 			if(sound == null && OpenFlAssets.exists(file, SOUND)) sound = OpenFlAssets.getSound(file);
 

@@ -864,7 +864,7 @@ class ModItem extends FlxSpriteGroup
 		}
 		
 		var bmp:BitmapData = null;
-		if (FileSystem.exists(file)) bmp = BitmapData.fromFile(file);
+		if (FileSystem.exists(file)) bmp = BitmapData.fromFile(Paths.nativePath(file));
 		else isPixel = false;
 
 		if(FileSystem.exists(file))

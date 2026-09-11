@@ -391,6 +391,32 @@ Sites that are genuinely mod-only — `Mods.getPack`, the Lua mod-settings calls
 saving from the editors — were left alone. So were the runtime-shader gates in
 `ShaderFunctions`, which simply start working on mobile now that the define is on.
 
+### Haxe and lime disagree about relative paths
+
+Finding a mod's files and *opening* them turn out to be different problems.
+`FileSystem.exists` and `File.getContent` are the C library's, so a relative path is
+resolved against the working directory — which is why pointing that at
+`.PsychEngine/` is enough to make `mods/…` work. Lime's file reads are SDL's, and on
+Android SDL resolves a relative path against the app's internal storage folder first
+and the assets inside the `.apk` second. A mod is in neither.
+
+So the filesystem would say `mods/mymod/images/icons/icon-bf.png` is right there,
+and `BitmapData.fromFile` would hand back `null` for the very same string. Every mod
+icon came out as Flixel's placeholder — the Haxe logo `checkEmptyFrame` substitutes
+for a sprite with no graphic — and `HealthIcon` read a width straight off the null
+and took freeplay down with it.
+
+`Paths.nativePath(path)` makes a path absolute before anything in lime sees it, which
+both sides agree on. It's used wherever a real file is handed to a library rather
+than read by Haxe: `BitmapData.fromFile` and `Sound.fromFile` in `Paths` and in
+`LoadingState`'s threaded preloaders, mod fonts, mod videos, and the mod icons in the
+mods menu. It does nothing off mobile, so desktop keeps the exact paths — and asset
+cache keys — it always had.
+
+`HealthIcon` now falls back to `icon-face` when a graphic won't load and gives up
+quietly if even that fails. A file that exists isn't always a file that loads, and a
+truncated png in one mod shouldn't be able to close the game.
+
 ---
 
 ## What isn't done

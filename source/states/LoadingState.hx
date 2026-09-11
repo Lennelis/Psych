@@ -772,7 +772,7 @@ class LoadingState extends MusicBeatState
 			// and then load it with Sound.fromFile anyway, which can only read loose files.
 			var sound:Sound = null;
 			#if sys
-			if(FileSystem.exists(file)) sound = Sound.fromFile(file);
+			if(FileSystem.exists(file)) sound = Sound.fromFile(Paths.nativePath(file));
 			#end
 			if(sound == null && OpenFlAssets.exists(file, SOUND)) sound = OpenFlAssets.getSound(file, false);
 
@@ -809,7 +809,7 @@ class LoadingState extends MusicBeatState
 				var file:String = Paths.getPath(requestKey, IMAGE);
 				var bitmap:BitmapData = null;
 				#if sys
-				if(FileSystem.exists(file)) bitmap = BitmapData.fromFile(file);
+				if(FileSystem.exists(file)) bitmap = BitmapData.fromFile(Paths.nativePath(file));
 				#end
 				if(bitmap == null && OpenFlAssets.exists(file, IMAGE)) bitmap = OpenFlAssets.getBitmapData(file, false);
 
