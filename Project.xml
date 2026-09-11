@@ -21,18 +21,15 @@
 	<!-- ______________________ PSYCH ENGINE CUSTOMIZATION ______________________ -->
 
 	<!--
-		Deliberately NOT enabled for mobile. Psych reads mod content off the real
-		filesystem, and most of its asset lookups are written as an either/or:
-		with MODS_ALLOWED on they check FileSystem and never fall back to the
-		packaged assets (see Character, MenuCharacter, Alphabet, DialogueCharacter,
-		WeekData, CoolUtil.coolTextFile, and the script loaders in PlayState).
-		That holds on desktop, where `assets` is a loose folder beside the
-		executable. On Android it lives inside the .apk, so turning this on made the
-		base game invisible: no weeks, no songs, no character or stage data.
-		Supporting mods on mobile means converting those sites from either/or to a
-		real fallback, which is its own piece of work - see docs/MOBILE.md.
+		Mods read their content off the real filesystem, so most of Psych's asset
+		lookups used to be written as an either/or: with MODS_ALLOWED on they checked
+		FileSystem and never fell back to the packaged assets. That holds on desktop,
+		where `assets` is a loose folder beside the executable, but on Android it lives
+		inside the .apk - which is why switching this on once made the base game
+		invisible. Those sites now go through Paths.pathExists and Paths.getFileContent,
+		which look in both places, so it is safe on every target. See docs/MOBILE.md.
 	-->
-	<define name="MODS_ALLOWED" if="desktop" />
+	<define name="MODS_ALLOWED" />
 	<define name="HSCRIPT_ALLOWED" if="desktop || mobile" /> <!-- hscript-iris is pure Haxe, so it works on phones as-is -->
 	<define name="LUA_ALLOWED" if="desktop || android" /> <!-- iOS forbids JIT, so LuaJIT is desktop + Android only -->
 	<define name="ACHIEVEMENTS_ALLOWED" />
@@ -165,14 +162,26 @@
 			would take 34 but drops the manifest `package` attribute lime's template
 			still uses, so bumping it means patching the template too.
 
-			No <permission> entries here on purpose: lime already defaults to exactly the
-			four this needs (INTERNET, ACCESS_NETWORK_STATE, VIBRATE, WAKE_LOCK). Add one
-			with `<android permission="..."/>` if you need more.
+			The four permissions lime defaults to are spelled out below rather than left
+			implicit, because the moment one <android permission="..."/> is declared lime
+			stops applying its defaults - and losing VIBRATE would take the haptics with
+			it.
 
-			Saves, mods and crash logs go to the app's own external files directory, which
-			needs no runtime permission at all. See mobile/backend/StorageUtil.hx.
+			The storage three are what put mods somewhere a file manager can reach.
+			MANAGE_EXTERNAL_STORAGE is the Android 11 and up one, granted through a
+			settings page rather than a dialog; the older pair covers Android 10 and
+			below. All of it is optional in practice: refused, the game falls back to its
+			own folder and only mod installation gets harder. See
+			mobile/backend/StorageUtil.hx.
 		-->
 		<android minimum-sdk-version="21" target-sdk-version="33" install-location="auto" />
+		<android permission="android.permission.INTERNET" />
+		<android permission="android.permission.ACCESS_NETWORK_STATE" />
+		<android permission="android.permission.VIBRATE" />
+		<android permission="android.permission.WAKE_LOCK" />
+		<android permission="android.permission.READ_EXTERNAL_STORAGE" />
+		<android permission="android.permission.WRITE_EXTERNAL_STORAGE" />
+		<android permission="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
 		<!--
 			Lime builds armeabi-v7a AND arm64-v8a by default, and each ABI is a separate

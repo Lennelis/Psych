@@ -94,15 +94,17 @@ class Mods
 	inline public static function directoriesWithFile(path:String, fileToFind:String, mods:Bool = true)
 	{
 		var foldersToCheck:Array<String> = [];
-		//Main folder
-		if(FileSystem.exists(path + fileToFind))
+		// Main folder. Checked with Paths.pathExists rather than the filesystem alone
+		// because the game's own copy of these lives inside the build on a phone, and
+		// leaving it out is what left every merged list with nothing but mods in it.
+		if(Paths.pathExists(path + fileToFind))
 			foldersToCheck.push(path + fileToFind);
 
 		// Week folder
 		if(Paths.currentLevel != null && Paths.currentLevel != path)
 		{
 			var pth:String = Paths.getFolderPath(fileToFind, Paths.currentLevel);
-			if(!foldersToCheck.contains(pth) && FileSystem.exists(pth))
+			if(!foldersToCheck.contains(pth) && Paths.pathExists(pth))
 				foldersToCheck.push(pth);
 		}
 

@@ -292,23 +292,81 @@ a pad riding along with that is unusable.
 
 ## Where files live on a phone
 
-Android gives every app a private folder under
-`Android/data/com.shadowmario.psychengine/files`, and `Main` makes that the
-working directory on startup. Every relative path Psych already used — `mods/`,
-`modsList.txt`, `crash/`, the save file — then works untouched.
+Everything the game writes lives in **`/storage/emulated/0/.PsychEngine/`** —
+`mods/`, `modsList.txt`, `crash/` — and `Main` makes that the working directory on
+startup, so every relative path Psych already used works untouched.
 
-Using that folder instead of shared storage is what keeps the port off the
-`WRITE_EXTERNAL_STORAGE` / `MANAGE_EXTERNAL_STORAGE` treadmill: no runtime
-permission prompt, and nothing that breaks on the next Android release. The
-trade-off is that the folder is harder for players to find with a file manager.
+That is shared storage, the part of the phone a file manager can actually browse,
+which is the point: a mod you can't copy into place is no use. The app's own folder
+under `Android/data` was where this went originally, and it needs no permission at
+all, but Android 11 stopped file managers from opening it.
 
-`StorageUtil.unpackBundledFiles()` writes bundled mods out to that folder on first
-launch, never overwriting a file that already exists. It does nothing at the
-moment, because mods are off for mobile — see below — but it stays wired up ready
-for when they are enabled.
+The leading dot keeps the tree out of galleries and music players, which would
+otherwise index every mod's artwork and every song in it. A `.nomedia` file goes in
+beside it — the dot is a convention scanners respect, `.nomedia` is the part that's
+actually specified. The cost of the dot is that most file managers hide the folder
+until you turn on "show hidden files".
+
+Reaching shared storage needs permission, and the answer can be no:
+
+- **Android 11 and up** want All files access, which is a settings page rather than
+  a dialog. The game asks on launch if it couldn't write, and what you choose takes
+  effect on the *next* launch, because the working directory is fixed at startup.
+- **Android 10 and below** get the old read/write pair as a normal prompt.
+- **Refused either way**, everything falls back to the app's own folder. The game
+  runs exactly as before; only installing mods gets harder.
+
+Permission is never assumed: `StorageUtil` makes the folder, writes a file into it
+and deletes it again. `Permissions.getGrantedPermissions` in extension-androidtools
+looks up `requestPermissions` — signature and all — and calls it with no arguments,
+so asking Android what it granted is not an option. Writing a file answers the
+question that actually matters anyway.
+
+`StorageUtil.unpackBundledFiles()` writes the bundled example mods out to that
+folder on first launch, never overwriting a file that already exists, and makes sure
+`mods/` is there even when there is nothing to unpack — so there's somewhere obvious
+to drop a folder.
 
 Crash logs go to `crash/` inside that same folder — on a device you can't attach
 a debugger to, that file is the only way to find out why a build died.
+
+---
+
+## How mods were made to work
+
+Psych reads mod content off the real filesystem, and most of its asset lookups used
+to be written as an *either/or* rather than a fallback:
+
+```haxe
+#if MODS_ALLOWED
+if (FileSystem.exists(path)) rawData = File.getContent(path);
+#else
+rawData = Assets.getText(path);
+#end
+```
+
+With the define on, the `Assets` branch isn't compiled at all. That's fine on
+desktop, where `assets` is a loose folder beside the executable and the filesystem
+lookup always succeeds. On Android `assets` lives inside the `.apk`, nothing is on
+disk, and those lookups all came back empty — no weeks, no songs, no character or
+stage data. Turning the define on was a one-line edit that booted to empty menus.
+
+Around thirty of those sites now go through two helpers instead:
+
+| Helper | What it does |
+| --- | --- |
+| `Paths.pathExists(path)` | True if the path is a real file **or** packed into the build. |
+| `Paths.getFileContent(path)` | Reads it from disk if it's there, from the build if it isn't. |
+
+A real file wins, which is what lets a mod override something bundled. The ones
+worth knowing about are `CoolUtil.coolTextFile` and `Mods.directoriesWithFile`,
+since every merged list in the game runs through them — note skins, splashes, intro
+text, dialogue — and with the filesystem-only check those all came back with nothing
+but mods in them.
+
+Sites that are genuinely mod-only — `Mods.getPack`, the Lua mod-settings calls,
+saving from the editors — were left alone. So were the runtime-shader gates in
+`ShaderFunctions`, which simply start working on mobile now that the define is on.
 
 ---
 
@@ -333,32 +391,7 @@ Worth knowing before you file a bug:
   dragging individual buttons around.
 - **Nothing is exposed to Lua or HScript.** Mods can't read touch state or place
   their own buttons yet.
-- **Mods are off on mobile** (`MODS_ALLOWED` is desktop-only). Worth understanding
-  before turning it back on, because it is a one-line edit that quietly guts the
-  game.
+- **Mods are on**, but nothing installs them for you: a mod is a folder you copy
+  into `.PsychEngine/mods/` yourself. No in-game browser, no zip import.
 
-  Psych reads mod content off the real filesystem, and most of its asset lookups
-  are written as an *either/or* rather than a fallback:
-
-  ```haxe
-  #if MODS_ALLOWED
-  if (FileSystem.exists(path)) rawData = File.getContent(path);
-  #else
-  rawData = Assets.getText(path);
-  #end
-  ```
-
-  With the define on, the `Assets` branch isn't compiled at all. That's fine on
-  desktop, where `assets` is a loose folder beside the executable and the
-  filesystem lookup always succeeds. On Android `assets` lives inside the `.apk`,
-  nothing is on disk, and those lookups all come back empty — no weeks, no songs,
-  no character or stage data. The game boots to empty menus.
-
-  Enabling mods here means converting those sites (`Character`, `MenuCharacter`,
-  `Alphabet`, `DialogueCharacter`, `WeekData`, `CoolUtil.coolTextFile`, the script
-  loaders in `PlayState`, and others) from either/or into filesystem-then-`Assets`
-  fallbacks — the way `Song.loadFromJson` and `Paths.cacheBitmap` already do it.
-  The alternative some ports take is extracting the whole `assets` folder to
-  storage on first launch so the filesystem assumption holds, at the cost of
-  duplicating a few hundred MB on the device.
 - **iOS is untested** beyond compiling.

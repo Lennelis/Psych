@@ -480,10 +480,9 @@ class LoadingState extends MusicBeatState
 				#if MODS_ALLOWED
 				var moddyFile:String = Paths.modsJson('$folder/preload');
 				if (FileSystem.exists(moddyFile)) json = Json.parse(File.getContent(moddyFile));
-				else json = Json.parse(File.getContent(path));
-				#else
-				json = Json.parse(Assets.getText(path));
+				else
 				#end
+				json = Json.parse(Paths.getFileContent(path));
 
 				if(json != null)
 				{
@@ -712,11 +711,7 @@ class LoadingState extends MusicBeatState
 		try
 		{
 			var path:String = Paths.getPath('characters/$char.json', TEXT);
-			#if MODS_ALLOWED
-			var character:Dynamic = Json.parse(File.getContent(path));
-			#else
-			var character:Dynamic = Json.parse(Assets.getText(path));
-			#end
+			var character:Dynamic = Json.parse(Paths.getFileContent(path));
 
 			var isAnimateAtlas:Bool = false;
 			var img:String = character.image;

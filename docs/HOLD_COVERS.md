@@ -98,9 +98,8 @@ the four the hardware renderer actually implements; anything else draws normally
 - `antialiasing` can only ever turn it *off*; the player's own antialiasing setting
   still wins.
 
-On desktop a mod can replace any of these files from its own `images/holdCovers/`
-folder, the same as note splashes. Mods are compiled out on mobile (see
-[MOBILE.md](MOBILE.md)), so a mobile build uses the bundled sheets.
+A mod can replace any of these files from its own `images/holdCovers/` folder, the
+same as note splashes, on desktop and on mobile alike.
 
 ## Options
 

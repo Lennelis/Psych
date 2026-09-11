@@ -299,6 +299,49 @@ class Paths
 		return 'assets/$folderKey';
 	}
 
+	/**
+	 * Whether a path can be read, wherever it happens to live.
+	 *
+	 * A path can point at a real file - a mod, or anything unpacked next to the game -
+	 * or at something sealed inside the build. Desktop blurs the two, because `assets/`
+	 * is a folder on disk there and `FileSystem.exists` finds it either way. On a phone
+	 * it is not: the game's own files are inside the apk, so asking the filesystem about
+	 * them always says no. Checking both is what lets mods be switched on without every
+	 * bundled character, week and stage going missing.
+	 */
+	public static function pathExists(path:String):Bool
+	{
+		if(path == null || path.length < 1) return false;
+
+		#if sys
+		if(FileSystem.exists(path)) return true;
+		#end
+		return OpenFlAssets.exists(path);
+	}
+
+	/**
+	 * Reads a text file from wherever it lives, preferring a real file over the build's
+	 * own copy so a mod can override it. Null when there is nothing to read.
+	 */
+	public static function getFileContent(path:String):String
+	{
+		if(path == null || path.length < 1) return null;
+
+		#if sys
+		if(FileSystem.exists(path))
+		{
+			try
+			{
+				return File.getContent(path);
+			}
+			catch(e:Dynamic)
+				trace('Paths: could not read "$path" ($e)');
+		}
+		#end
+
+		return OpenFlAssets.exists(path, TEXT) ? OpenFlAssets.getText(path) : null;
+	}
+
 	public static function fileExists(key:String, type:AssetType, ?ignoreMods:Bool = false, ?parentFolder:String = null)
 	{
 		#if MODS_ALLOWED

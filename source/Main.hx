@@ -77,9 +77,15 @@ class Main extends Sprite
 		// to the working directory, so pointing that at the app's own storage folder is
 		// all it takes to make those paths work on a phone.
 		Sys.setCwd(mobile.backend.StorageUtil.getStorageDirectory());
-		// No-op while mods are off for mobile, but it has to run before Mods looks for
-		// anything, so it stays wired up here ready for when they're enabled.
+		// Has to run before Mods goes looking for anything.
 		mobile.backend.StorageUtil.unpackBundledFiles();
+		#if android
+		// Only asks if shared storage turned out to be out of reach. On Android 11 and
+		// up this opens a settings page rather than a dialog, and what the player
+		// chooses there takes effect next launch, since the line above has already
+		// fixed where the game reads and writes.
+		mobile.backend.StorageUtil.requestStorageAccess();
+		#end
 		#end
 		#if TOUCH_CONTROLS_ALLOWED
 		mobile.backend.TouchUtil.init();

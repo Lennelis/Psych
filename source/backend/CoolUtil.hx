@@ -43,12 +43,11 @@ class CoolUtil
 
 	inline public static function coolTextFile(path:String):Array<String>
 	{
-		var daList:String = null;
-		#if (sys && MODS_ALLOWED)
-		if(FileSystem.exists(path)) daList = File.getContent(path);
-		#else
-		if(Assets.exists(path)) daList = Assets.getText(path);
-		#end
+		// Either a real file - a mod, or anything unpacked beside the game - or something
+		// sealed inside the build. Every list in the game comes through here, so checking
+		// only one of the two is what emptied the note skin and splash menus, the intro
+		// text and the dialogue on a phone the first time mods were switched on.
+		var daList:String = Paths.getFileContent(path);
 		return daList != null ? listFromString(daList) : [];
 	}
 
