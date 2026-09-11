@@ -254,6 +254,15 @@ which would leave the title screen hugging the left edge, so those sprites add
 for 1280 grow to cover with `CoolUtil.fillScreen`, which scales rather than
 stretches. Both are no-ops at 1280, so desktop is unaffected.
 
+A screen a menu shares between a fixed layout and full-width furniture needs both
+treatments at once. The story menu is the case: its black bar and yellow band are
+built at `FlxG.width` and already reach the edges, while the score, the week title,
+the difficulty arrows, the tracklist and the week names are a 1280-wide composition
+that has to stay together — so those take the offset, and the week art, a strip
+rather than a full background, takes `CoolUtil.fillBanner`, which covers the width
+and then clips the height it gains back to the strip instead of letting it spill over
+the week names below.
+
 Widening the *cameras* instead, and leaving the world at 1280, was tried and does not
 work here: Psych's menus set `scrollFactor.set()` on nearly everything, and a
 screen-fixed sprite doesn't move with its camera — it just ends up sitting half a
@@ -263,6 +272,15 @@ cutout to the left of where the camera now begins.
 OpenFL drawing API and caches the results as `FlxGraphic`s, so they add nothing to
 `assets/`, mods and `Paths` are untouched, and buttons stay sharp at any screen
 density.
+
+**A touch button is hit-tested against the camera it names.** A button that names
+none is tested against whatever the default draw target is — the game camera — while
+it is *drawn* through its group's camera. During a song those are not the same place:
+the game camera is zoomed to the stage's `defaultCamZoom` and bumped on every beat,
+so the pause menu's pad took taps up to a hundred pixels from where it was on screen,
+which is why its buttons sometimes did nothing at all. `addVirtualPad` now names the
+camera the pad is drawn through, and `FlxSpriteGroup` passes that down to every
+button. `MobileControls` was already right — it is handed `camTouch` explicitly.
 
 The **pause button** is the exception, and it is the base game's own: `pauseButton`
 over a faint `pauseCircle`, top right, tapped to pause. Everything about its

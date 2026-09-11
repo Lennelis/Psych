@@ -107,6 +107,46 @@ class CoolUtil
 		return sprite;
 	}
 
+	/**
+	 * Grows a banner until it spans the screen, then trims it back to the strip it is
+	 * allowed to occupy.
+	 *
+	 * `fillScreen` is for backgrounds that own the whole screen. A banner doesn't: the
+	 * story menu's week art is a strip with a black bar above it and the week names
+	 * below, and a wider screen left the 1280-wide art short of the right edge with the
+	 * yellow behind it showing through. Scaling it to cover keeps the art's proportions,
+	 * and the overflow it gains in height is cut off rather than allowed to spill over
+	 * the things drawn either side of it.
+	 *
+	 * @param top    Screen y the strip starts at.
+	 * @param height How tall the strip is, at the size the art was drawn for.
+	 */
+	public static function fillBanner(sprite:FlxSprite, top:Float, height:Float):FlxSprite
+	{
+		if(sprite == null || sprite.frameWidth <= 0 || sprite.frameHeight <= 0) return sprite;
+
+		sprite.clipRect = null;
+		sprite.scale.set(1, 1);
+		sprite.setPosition(0, top);
+
+		var scale:Float = FlxG.width / sprite.frameWidth;
+		if(scale <= 1) return sprite; // already reaches both edges, leave it exactly as it was
+
+		sprite.scale.set(scale, scale);
+
+		// A sprite scales about its origin, which is its own centre, so lining that up
+		// with the strip's centre is what puts the art where it belongs.
+		sprite.setPosition((FlxG.width - sprite.frameWidth) * 0.5, top + (height - sprite.frameHeight) * 0.5);
+
+		// clipRect is measured on the frame, before scale, so the strip has to be
+		// converted back into the art's own pixels.
+		var visible:Float = height / scale;
+		if(visible < sprite.frameHeight)
+			sprite.clipRect = new flixel.math.FlxRect(0, (sprite.frameHeight - visible) * 0.5, sprite.frameWidth, visible);
+
+		return sprite;
+	}
+
 	public static function floorDecimal(value:Float, decimals:Int):Float
 	{
 		if(decimals < 1)

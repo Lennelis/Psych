@@ -56,6 +56,12 @@ class MusicBeatSubstate extends FlxSubState
 		}
 
 		virtualPad = new VirtualPad(dPad, action);
+		// Buttons are hit-tested against the camera they say they are on, and a button
+		// that names none is tested against the game camera - which during a song is
+		// zoomed and scrolled somewhere else entirely, so taps landed a hundred pixels
+		// from where the pad was drawn. Naming the camera it is drawn through keeps the
+		// two in step. FlxSpriteGroup passes this down to every button.
+		virtualPad.cameras = [camera];
 		add(virtualPad);
 		return virtualPad;
 	}
