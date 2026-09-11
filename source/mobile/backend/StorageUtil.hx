@@ -61,7 +61,36 @@ class StorageUtil
 		return cachedDirectory;
 	}
 
+	/**
+	 * One line about where the game is reading and writing, for the mobile options menu.
+	 *
+	 * Nothing about storage access is visible from inside the game otherwise - the folder
+	 * is picked before the first frame and never mentioned again - so when a device won't
+	 * hand over shared storage there's no way to tell that from the game simply not asking.
+	 */
+	public static function describe():String
+	{
+		final folder:String = getStorageDirectory();
+
+		#if android
+		if (usingSharedStorage) return 'Mods live in $folder';
+
+		var text:String = 'No luck writing to shared storage, so mods live in\n$folder\nwhich a file manager can only reach before Android 11.';
+		text += '\nAndroid says all files access is ' + (hasAllFilesAccess() ? 'granted' : 'not granted') + '.';
+		if (lastRequest != null) text += ' Last asked for $lastRequest.';
+		return text;
+		#else
+		return 'Files live in $folder';
+		#end
+	}
+
 	#if android
+	/** What the last request actually asked Android for, since none of it reports back. */
+	public static var lastRequest(default, null):String = null;
+
+	/** Flipped once a request has been made, so a second press tries the other way in. */
+	static var askedOnce:Bool = false;
+
 	/** The app's own folder, which is always writable and never needs asking. */
 	static function getPrivateDirectory():String
 	{
@@ -74,24 +103,111 @@ class StorageUtil
 		return Path.addTrailingSlash(lime.system.System.applicationStorageDirectory);
 	}
 
+	/**
+	 * Where shared storage is mounted.
+	 *
+	 * `Environment.getExternalStorageDirectory` is the answer Android itself gives, but it
+	 * is a JNI call, and every JNI call in the extension returns an empty string rather
+	 * than an error when it can't reach the Java side. The rest of the list is the same
+	 * path spelled the ways it has been spelled since Android 4, so a JNI failure costs
+	 * the mods folder nothing.
+	 */
+	static function sharedRoot():String
+	{
+		final candidates:Array<String> = [];
+
+		try
+		{
+			candidates.push(Environment.getExternalStorageDirectory());
+		}
+		catch (e:Dynamic)
+			trace('StorageUtil: Environment.getExternalStorageDirectory failed ($e)');
+
+		candidates.push(Sys.getEnv('EXTERNAL_STORAGE'));
+		candidates.push('/storage/emulated/0');
+		candidates.push('/sdcard');
+
+		for (path in candidates)
+		{
+			if (path == null || path.length == 0) continue;
+
+			try
+			{
+				if (FileSystem.exists(path) && FileSystem.isDirectory(path)) return path;
+			}
+			catch (e:Dynamic) {}
+		}
+
+		return null;
+	}
+
+	/** The folder the game wants in shared storage, whether or not it can be written to. */
+	public static function sharedFolder():String
+	{
+		final root:String = sharedRoot();
+		if (root == null) return null;
+
+		return Path.addTrailingSlash(Path.addTrailingSlash(root) + FOLDER_NAME);
+	}
+
 	static function resolveAndroidDirectory():String
 	{
-		final shared:String = Environment.getExternalStorageDirectory();
+		final folder:String = sharedFolder();
 
-		if (shared != null && shared.length > 0)
+		if (folder != null && canWriteTo(folder))
 		{
-			final folder:String = Path.addTrailingSlash(Path.addTrailingSlash(shared) + FOLDER_NAME);
-
-			if (canWriteTo(folder))
-			{
-				usingSharedStorage = true;
-				writeNoMedia(folder);
-				return folder;
-			}
+			usingSharedStorage = true;
+			writeNoMedia(folder);
+			return folder;
 		}
 
 		trace('StorageUtil: no access to shared storage, mods will live in the app folder instead');
+		usingSharedStorage = false;
 		return getPrivateDirectory();
+	}
+
+	/**
+	 * Looks again, and moves the game over if shared storage opened up.
+	 *
+	 * All files access is granted on a settings page, not in a dialog, so the game is
+	 * still running while it happens and gets no result back. Re-resolving when focus
+	 * comes back means the grant takes effect there and then instead of next launch.
+	 *
+	 * @return whether the game is on shared storage now.
+	 */
+	public static function refresh():Bool
+	{
+		if (usingSharedStorage) return true;
+
+		final previous:String = cachedDirectory;
+		cachedDirectory = null;
+		final folder:String = getStorageDirectory();
+
+		if (!usingSharedStorage || folder == previous) return usingSharedStorage;
+
+		Sys.setCwd(folder);
+		unpackBundledFiles();
+
+		#if MODS_ALLOWED
+		// The mods list was read out of the old folder, so everything about it is stale.
+		Mods.updatedOnState = false;
+		Mods.pushGlobalMods();
+		Mods.loadTopMod();
+		#end
+
+		trace('StorageUtil: moved to $folder');
+		return true;
+	}
+
+	/** True when Android says the app may reach shared storage, going by Android not a probe. */
+	public static function hasAllFilesAccess():Bool
+	{
+		try
+		{
+			return Environment.isExternalStorageManager();
+		}
+		catch (e:Dynamic)
+			return false;
 	}
 
 	/**
@@ -99,27 +215,70 @@ class StorageUtil
 	 *
 	 * Android 11 replaced the old write permission with All files access, which is a
 	 * settings page rather than a dialog - the app carries on running while the player
-	 * is over there, and what they choose only takes effect on the next launch, because
-	 * the working directory is fixed at startup.
+	 * is over there, so `refresh` runs when focus comes back to pick up a grant without
+	 * needing a restart.
+	 *
+	 * Two things here are worked around rather than trusted. `VERSION.SDK_INT` is a JNI
+	 * call that gives 0 when it fails, and 0 would send the request down the pre-Android
+	 * 11 path, where asking for WRITE_EXTERNAL_STORAGE on a modern phone is refused
+	 * without ever showing a dialog - so an unreadable version is treated as new. And
+	 * there are two settings pages for All files access, the per-app one and the list of
+	 * every app; `requestSetting` returns nothing whether it opened one or threw, so a
+	 * second press tries the other.
 	 *
 	 * Worth knowing: `Permissions.getGrantedPermissions` in extension-androidtools is
 	 * broken - it looks up `requestPermissions`, signature and all, then calls it with
-	 * no arguments - so this never asks Android what it granted. It writes a file and
-	 * sees whether that worked, which is the question it actually wants answered.
+	 * no arguments - so there is no asking Android what it granted that way.
 	 */
 	public static function requestStorageAccess():Void
 	{
-		if (usingSharedStorage || cachedDirectory == null) return; // already in, or nothing tried yet
+		if (usingSharedStorage) return; // already in
+
+		getStorageDirectory(); // so a probe that just works never bothers the player
+		if (usingSharedStorage) return;
+
+		var sdk:Int = 0;
+		try
+		{
+			sdk = VERSION.SDK_INT;
+		}
+		catch (e:Dynamic)
+			trace('StorageUtil: could not read the Android version ($e)');
 
 		try
 		{
-			if (VERSION.SDK_INT >= VERSION_CODES.R)
-				Settings.requestSetting('MANAGE_ALL_FILES_ACCESS_PERMISSION');
+			if (sdk <= 0 || sdk >= VERSION_CODES.R)
+			{
+				final setting:String = askedOnce ? 'MANAGE_ALL_FILES_ACCESS_PERMISSION' : 'MANAGE_APP_ALL_FILES_ACCESS_PERMISSION';
+				lastRequest = 'android.settings.$setting';
+				Settings.requestSetting(setting);
+			}
 			else
+			{
+				lastRequest = 'READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE';
 				Permissions.requestPermissions(['READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE']);
+			}
+
+			askedOnce = true;
+			listenForGrant();
 		}
 		catch (e:Dynamic)
 			trace('StorageUtil: could not ask for storage access ($e)');
+	}
+
+	static var listening:Bool = false;
+
+	/** Shared storage is granted elsewhere, so the answer arrives as the game regaining focus. */
+	static function listenForGrant():Void
+	{
+		if (listening) return;
+
+		listening = true;
+		flixel.FlxG.signals.focusGained.add(function()
+		{
+			if (usingSharedStorage) return;
+			refresh();
+		});
 	}
 
 	/** Makes the folder and writes a file in it, because nothing else proves it's writable. */

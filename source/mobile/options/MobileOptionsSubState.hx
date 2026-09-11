@@ -2,6 +2,7 @@ package mobile.options;
 
 import options.BaseOptionsMenu;
 import options.Option;
+import mobile.backend.StorageUtil;
 import mobile.backend.WidescreenScaleMode;
 import mobile.objects.MobileControls;
 
@@ -58,8 +59,65 @@ class MobileOptionsSubState extends BaseOptionsMenu
 			BOOL);
 		addOption(option);
 
+		#if android
+		// Not a preference: the checkbox shows whether the mods folder in shared storage
+		// is reachable, and pressing it asks Android for it again. Option reads its value
+		// through getValue every frame, so overriding that is enough to make a row that
+		// reports on something instead of storing it.
+		storageOption = new Option('Mods Folder', StorageUtil.describe(), 'storageAccess', BOOL);
+		storageOption.getValue = () -> StorageUtil.usingSharedStorage;
+		storageOption.setValue = function(value:Dynamic)
+		{
+			// Reset-to-default hits this too, and that shouldn't open a settings page.
+			if (value == true) StorageUtil.requestStorageAccess();
+			return StorageUtil.usingSharedStorage;
+		};
+		addOption(storageOption);
+		#end
+
 		super();
 	}
+
+	#if android
+	var storageOption:Option;
+	var storageDescription:String;
+	var storageCheck:Float = 0;
+
+	/**
+	 * Keeps the storage row's description current.
+	 *
+	 * All files access is granted on a settings page, so the player comes back to this menu
+	 * with the answer already decided - the row has to notice on its own rather than being
+	 * told. `changeSelection` would do it, but it also plays the scroll sound.
+	 */
+	override function update(elapsed:Float):Void
+	{
+		super.update(elapsed);
+
+		if (storageOption == null) return;
+
+		// Asking Android whether it granted all files access is a JNI call, and the answer
+		// only ever changes while the player is away in Settings.
+		storageCheck -= elapsed;
+		if (storageCheck > 0) return;
+		storageCheck = 0.5;
+
+		final description:String = StorageUtil.describe();
+		if (description == storageDescription) return;
+
+		storageDescription = description;
+		storageOption.description = description;
+
+		if (curOption != storageOption) return;
+
+		descText.text = description;
+		descText.screenCenter(Y);
+		descText.y += 270;
+		descBox.setPosition(descText.x - 10, descText.y - 10);
+		descBox.setGraphicSize(Std.int(descText.width + 20), Std.int(descText.height + 25));
+		descBox.updateHitbox();
+	}
+	#end
 
 	function onChangeWidescreen():Void
 	{

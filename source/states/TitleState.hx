@@ -74,6 +74,14 @@ class TitleState extends MusicBeatState
 		{
 			ClientPrefs.loadPrefs();
 			Language.reloadPhrases();
+
+			#if android
+			// Shared storage is the only place a player can actually drop a mod folder,
+			// and asking for it opens a settings page. That happens here rather than in
+			// Main because the answer comes back as the game regaining focus, which needs
+			// Flixel to be running to hear.
+			mobile.backend.StorageUtil.requestStorageAccess();
+			#end
 		}
 
 		curWacky = FlxG.random.getObject(getIntroTextShit());

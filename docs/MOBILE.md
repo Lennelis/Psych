@@ -310,8 +310,10 @@ until you turn on "show hidden files".
 Reaching shared storage needs permission, and the answer can be no:
 
 - **Android 11 and up** want All files access, which is a settings page rather than
-  a dialog. The game asks on launch if it couldn't write, and what you choose takes
-  effect on the *next* launch, because the working directory is fixed at startup.
+  a dialog. The request goes out on the way into the title screen, and the grant
+  comes back as the game regaining focus — `StorageUtil.refresh()` re-resolves the
+  folder there and then, moves the working directory over and re-reads the mods list,
+  so it works without a restart.
 - **Android 10 and below** get the old read/write pair as a normal prompt.
 - **Refused either way**, everything falls back to the app's own folder. The game
   runs exactly as before; only installing mods gets harder.
@@ -321,6 +323,27 @@ and deletes it again. `Permissions.getGrantedPermissions` in extension-androidto
 looks up `requestPermissions` — signature and all — and calls it with no arguments,
 so asking Android what it granted is not an option. Writing a file answers the
 question that actually matters anyway.
+
+Three things about that request are worked around rather than trusted, because every
+JNI call in the extension fails by returning nothing:
+
+- **Where shared storage is mounted.** `Environment.getExternalStorageDirectory()`
+  is asked first, then `$EXTERNAL_STORAGE`, `/storage/emulated/0` and `/sdcard` —
+  the same path spelled the ways it has been spelled since Android 4. A JNI failure
+  costs the mods folder nothing.
+- **Which Android this is.** `VERSION.SDK_INT` gives `0` when it fails, and `0` would
+  send the request down the pre-Android 11 path, where asking for
+  `WRITE_EXTERNAL_STORAGE` on a modern phone is refused *without showing a dialog* —
+  which looks exactly like the game never asking. An unreadable version is treated
+  as new.
+- **Which settings page.** There are two for All files access, the per-app one and
+  the list of every app, and `requestSetting` returns nothing whether it opened one
+  or threw. The first press tries the per-app page, a second press tries the list.
+
+None of that is visible from inside the game on its own, so **Options → Mobile
+Settings** has a **Mods Folder** row: the checkbox is whether shared storage is in
+use, the description is the folder actually in use plus whether Android reports all
+files access as granted, and pressing it asks again.
 
 `StorageUtil.unpackBundledFiles()` writes the bundled example mods out to that
 folder on first launch, never overwriting a file that already exists, and makes sure
