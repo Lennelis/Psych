@@ -437,6 +437,25 @@ truncated png in one mod shouldn't be able to close the game.
 
 ---
 
+## Type-checking against what CI actually builds
+
+Every library this engine uses is pinned to a version in `setup/android.sh`, and all but
+one of them is a haxelib version number that resolves to the same code everywhere.
+`flxanimate` is the exception: it is pinned to a git commit, and a checkout of the same
+`4.0.0` version number from a different commit can have a different API.
+
+That is not hypothetical. `anim.existsByName()` exists in one checkout of flxanimate
+4.0.0 and not in the commit this engine pins, so a call to it passed six clean local
+type-checks and then failed the build in seven seconds. Anything type-checked outside CI
+wants the pinned commit on its classpath, ahead of whatever haxelib has installed:
+
+```
+git clone https://github.com/Dot-Stuff/flxanimate
+git -C flxanimate checkout 768740a56b26aa0c072720e0d1236b94afe68e3e
+# then, before -lib flxanimate:
+-cp /path/to/flxanimate
+```
+
 ## What isn't done
 
 Worth knowing before you file a bug:

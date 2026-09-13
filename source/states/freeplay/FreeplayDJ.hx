@@ -98,6 +98,15 @@ class FreeplayDJ extends PsychFlxAnimate
 	/** False when the atlas wouldn't load, which leaves the menu to carry on without him. */
 	public var loaded(default, null):Bool = false;
 
+	/**
+	 * The animations that actually got added, by name.
+	 *
+	 * Kept here rather than asked of flxanimate: which of `existsByName`, `getByName` and
+	 * friends exist depends on the exact commit the engine is pinned to, and this needs
+	 * none of them.
+	 */
+	var loadedAnimations:Map<String, Bool> = [];
+
 	public function new(x:Float, y:Float, ?data:FreeplayDJData)
 	{
 		super(x, y);
@@ -142,13 +151,14 @@ class FreeplayDJ extends PsychFlxAnimate
 		try
 		{
 			anim.addByFrameLabel(name, frameLabel, 24, looped);
+			loadedAnimations.set(name, true);
 		}
 		catch (e:Dynamic)
 			trace('FreeplayDJ: no frame label "$frameLabel" for "$name" ($e)');
 	}
 
 	public function hasAnimation(name:String):Bool
-		return loaded && anim != null && anim.existsByName(name);
+		return loaded && loadedAnimations.exists(name);
 
 	public function getCurrentAnimation():String
 		return currentAnimation;
