@@ -53,6 +53,101 @@ class PauseSubState extends MusicBeatSubstate
 
 	public static var songName:String = null;
 
+	#if TOUCH_CONTROLS_ALLOWED
+	/** The gameplay pause button, hidden while its press plays out here. */
+	var borrowedPauseButton:mobile.objects.TouchButton = null;
+
+	/**
+	 * The pause button again, mid-press, drawn by the menu itself.
+	 *
+	 * PlayState stops updating the moment this substate opens, so its own button can't
+	 * animate - which is why V-Slice hides that one and has `PauseSubState.transitionIn`
+	 * draw a copy here playing the press through. The disc behind it pops out to 1.4 and
+	 * shrinks back past its resting size, both fading out, and the button follows a beat
+	 * later. Those numbers are all theirs.
+	 *
+	 * The art is not: rather than bring V-Slice's own button sheet in to clash with the
+	 * touch pad's style, this copies whatever graphic the pad is already showing, so the
+	 * thing that animates away is the button the player actually tapped.
+	 */
+	function addPauseButtonPress():Void
+	{
+		var pad = PlayState.instance?.touchPad;
+		var button = pad?.buttonP;
+		if (button == null || !button.visible || !pad.visible || button.graphic == null) return;
+
+		// Where the real button sits on screen, which is data-driven per device, so it is
+		// read off the button rather than worked out again here.
+		final bx:Float = button.x;
+		final by:Float = button.y;
+		final bw:Float = button.width;
+		final bh:Float = button.height;
+
+		var disc:FlxSprite = new FlxSprite(bx, by);
+		disc.frames = button.frames;
+		disc.scale.copyFrom(button.scale);
+		disc.updateHitbox();
+		disc.setPosition(bx, by);
+		disc.color = button.color;
+		disc.antialiasing = button.antialiasing;
+		disc.scrollFactor.set();
+
+		// Scaled about its own centre, so it has to be re-centred on the button's box
+		// before it grows.
+		final restX:Float = disc.scale.x;
+		final restY:Float = disc.scale.y;
+		disc.scale.set(restX * 1.4, restY * 1.4);
+		disc.updateHitbox();
+		disc.setPosition(bx + (bw - disc.width) * 0.5, by + (bh - disc.height) * 0.5);
+		disc.alpha = 0.4;
+		add(disc);
+
+		FlxTween.tween(disc.scale, {x: restX * 0.8, y: restY * 0.8}, 0.4, {ease: FlxEase.backInOut});
+		FlxTween.tween(disc, {alpha: 0}, 0.6, {ease: FlxEase.quartOut});
+
+		var copy:FlxSprite = new FlxSprite(bx, by);
+		copy.frames = button.frames;
+		copy.scale.copyFrom(button.scale);
+		copy.updateHitbox();
+		copy.setPosition(bx, by);
+		copy.color = button.color;
+		copy.antialiasing = button.antialiasing;
+		copy.scrollFactor.set();
+		add(copy);
+
+		var glyph:FlxSprite = null;
+		if (button.label != null && button.label.graphic != null)
+		{
+			glyph = new FlxSprite();
+			glyph.frames = button.label.frames;
+			glyph.scale.copyFrom(button.label.scale);
+			glyph.updateHitbox();
+			// The pad centres its label inside the button's box; same here.
+			glyph.setPosition(bx + (bw - glyph.width) * 0.5, by + (bh - glyph.height) * 0.5);
+			glyph.antialiasing = button.label.antialiasing;
+			glyph.scrollFactor.set();
+			add(glyph);
+		}
+
+		// The real one bows out so there is never a double image of it.
+		borrowedPauseButton = button;
+		button.visible = false;
+
+		FlxTween.tween(copy, {alpha: 0}, 0.6, {ease: FlxEase.quartOut, startDelay: 0.3});
+		if (glyph != null) FlxTween.tween(glyph, {alpha: 0}, 0.6, {ease: FlxEase.quartOut, startDelay: 0.3});
+	}
+
+	/** Hands the gameplay pause button back, whether the song resumes or ends here. */
+	function restorePauseButton():Void
+	{
+		if (borrowedPauseButton != null)
+		{
+			borrowedPauseButton.visible = true;
+			borrowedPauseButton = null;
+		}
+	}
+	#end
+
 	public function new(inCutscene:Bool = false, type:PauseType = PauseType.CUTSCENE)
 	{
 		super();
@@ -127,6 +222,10 @@ class PauseSubState extends MusicBeatSubstate
 		bg.alpha = 0;
 		bg.scrollFactor.set();
 		add(bg);
+
+		#if TOUCH_CONTROLS_ALLOWED
+		addPauseButtonPress();
+		#end
 
 		var levelInfo:FlxText = new FlxText(20, 15, 0, PlayState.SONG.song, 32);
 		levelInfo.scrollFactor.set();
@@ -499,6 +598,9 @@ class PauseSubState extends MusicBeatSubstate
 
 	override function destroy()
 	{
+		#if TOUCH_CONTROLS_ALLOWED
+		restorePauseButton();
+		#end
 		controls.isInSubstate = false;
 		pauseMusic.destroy();
 		super.destroy();

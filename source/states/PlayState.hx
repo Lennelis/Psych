@@ -2215,6 +2215,9 @@ function openPauseMenu()
 				note.playAnim('static');
 				note.resetAnim = 0;
 			}
+		// The strums were just reset, so the hold bookkeeping has to go with them -
+		// otherwise resuming mid-hold would light a glow for a hold already gone by.
+		clearStrumHoldState();
 	}
 	openSubState(new PauseSubState());
 
@@ -3359,7 +3362,12 @@ private function keyPressed(key:Int)
 	Conductor.songPosition = lastTime;
 
 	var spr:StrumNote = playerStrums.members[key];
-	if (strumsBlocked[key] != true && spr != null && spr.animation.curAnim.name != 'confirm')
+	// 'confirm-hold' is the frame a hold's glow freezes on, so it counts as lit too -
+	// without it, tapping another lane mid-hold would drop this one back to the ghost tap.
+	if (strumsBlocked[key] != true
+		&& spr != null
+		&& spr.animation.curAnim.name != 'confirm'
+		&& spr.animation.curAnim.name != 'confirm-hold')
 	{
 		spr.playAnim('pressed');
 		spr.resetAnim = 0;
@@ -3445,12 +3453,22 @@ private function keysCheck():Void
 	var holdArray:Array<Bool> = [];
 	var pressArray:Array<Bool> = [];
 	var releaseArray:Array<Bool> = [];
+	var sustainArray:Array<Bool> = [];
+	var holdPending:Array<Bool> = [];
 	for (key in keysArray)
 	{
 		holdArray.push(controls.pressed(key));
 		pressArray.push(controls.justPressed(key));
 		releaseArray.push(controls.justReleased(key));
+		sustainArray.push(false);
+		holdPending.push(false);
 	}
+	while (wasHoldingSustain.length < holdPending.length)
+		wasHoldingSustain.push(false);
+	while (holdEndTime.length < holdPending.length)
+		holdEndTime.push(-1);
+	while (holdHead.length < holdPending.length)
+		holdHead.push(null);
 
 	// TO DO: Find a better way to handle controller inputs, this should work for now
 	if (controls.controllerMode && pressArray.contains(true))
@@ -3466,6 +3484,27 @@ private function keysCheck():Void
 			{ // I can't do a filter here, that's kinda awesome
 				var canHit:Bool = (n != null && !strumsBlocked[n.noteData] && n.canBeHit && n.mustPress && !n.tooLate && !n.wasGoodHit && !n.blockHit);
 
+				// Still inside a hold: it has pieces left to give, and they belong to the
+				// hold being played. Checking for remaining pieces rather than "did one land
+				// this frame" is what stops the strum flickering between them.
+				//
+				// Both halves of that ownership test matter. parent.wasGoodHit covers the
+				// normal case; matching holdHead covers Guitar Hero sustains being switched
+				// off, where a tail can be hit without its head so wasGoodHit stays false for
+				// the whole hold. It has to be tied to this hold's head and not just "this
+				// lane was holding", because the next hold in the same lane is already
+				// spawned - counting its pieces left the hold looking endless and the ghost
+				// tap never arrived.
+				if (n != null
+					&& n.isSustainNote
+					&& n.mustPress
+					&& !n.wasGoodHit
+					&& !n.tooLate
+					&& n.noteData >= 0
+					&& n.noteData < holdPending.length
+					&& (n.parent == null || n.parent.wasGoodHit || n.parent == holdHead[n.noteData]))
+					holdPending[n.noteData] = true;
+
 				if (guitarHeroSustains)
 					canHit = canHit && n.parent != null && n.parent.wasGoodHit;
 
@@ -3474,7 +3513,17 @@ private function keysCheck():Void
 					var released:Bool = !holdArray[n.noteData];
 
 					if (!released)
+					{
 						goodNoteHit(n);
+						sustainArray[n.noteData] = true;
+
+						final head:Note = (n.parent != null) ? n.parent : n;
+						if (n.noteData >= 0 && n.noteData < holdEndTime.length)
+						{
+							holdEndTime[n.noteData] = head.strumTime + head.sustainLength;
+							holdHead[n.noteData] = n.parent;
+						}
+					}
 				}
 			}
 		}
@@ -3493,6 +3542,84 @@ private function keysCheck():Void
 		for (i in 0...releaseArray.length)
 			if (releaseArray[i] || strumsBlocked[i] == true)
 				keyReleased(i);
+
+	updateStrumHoldState(holdArray, sustainArray, holdPending);
+}
+
+/** Lanes that were inside a hold last frame, so a strum can drop the moment one ends. */
+var wasHoldingSustain:Array<Bool> = [];
+
+/**
+ * When the hold in each lane actually finishes, per the chart.
+ *
+ * Sustain pieces are laid out at 0, step, 2*step ... (roundSus - 1) * step, so the last
+ * one sits a whole step short of `strumTime + sustainLength`. Going by the last piece
+ * alone dropped the strum early by that step - a tenth of a second or so - leaving the
+ * end of the sustain still on screen.
+ */
+var holdEndTime:Array<Float> = [];
+
+/**
+ * The head note of the hold running in each lane.
+ *
+ * Needed to tell "more pieces of the hold I'm in" apart from "pieces of the next hold in
+ * this lane", which Psych has already spawned a couple of seconds ahead.
+ */
+var holdHead:Array<Note> = [];
+
+/**
+ * Keeps the player's strums in step with what's actually held down.
+ *
+ * Mirrors how V-Slice's Strumline behaves. A tapped note lets the confirm animation play
+ * out and then waits `StrumNote.CONFIRM_HOLD_TIME` before falling back to the ghost tap,
+ * while a sustain drops the instant it runs out - that difference in timing is the whole
+ * point of it.
+ */
+function updateStrumHoldState(holdArray:Array<Bool>, sustainArray:Array<Bool>, holdPending:Array<Bool>):Void
+{
+	for (i in 0...sustainArray.length)
+	{
+		if (i >= playerStrums.length)
+			break;
+
+		var spr:StrumNote = playerStrums.members[i];
+		if (spr == null)
+			continue;
+
+		// A piece landing this frame, or pieces still to come, both mean the hold is live.
+		// The last clause carries it through the final stretch after the last piece has
+		// been taken, up to where the sustain really ends. It only extends a hold that was
+		// already running, so it can't revive one that was dropped.
+		var holding:Bool = holdArray[i]
+			&& (sustainArray[i]
+				|| holdPending[i]
+				|| (wasHoldingSustain[i] && i < holdEndTime.length && Conductor.songPosition < holdEndTime[i]));
+
+		spr.keyHeld = holdArray[i];
+		spr.holdingSustain = holding;
+
+		if (wasHoldingSustain[i] && !holding)
+		{
+			spr.finishConfirm();
+			holdHead[i] = null;
+		}
+		wasHoldingSustain[i] = holding;
+	}
+}
+
+/** Forgets every hold in progress, so resuming can't pick a finished one back up. */
+function clearStrumHoldState():Void
+{
+	for (i in 0...wasHoldingSustain.length)
+		wasHoldingSustain[i] = false;
+	for (i in 0...holdHead.length)
+		holdHead[i] = null;
+	for (i in 0...holdEndTime.length)
+		holdEndTime[i] = -1;
+
+	for (spr in playerStrums)
+		if (spr != null)
+			spr.resetHoldState();
 }
 
 function noteMiss(daNote:Note):Void
@@ -3685,7 +3812,7 @@ function opponentNoteHit(note:Note):Void
 
 	if (opponentVocals.length <= 0)
 		vocals.volume = 1;
-	strumPlayAnim(true, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate);
+	strumPlayAnim(true, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate, note.isSustainNote);
 	note.hitByOpponent = true;
 
 	stagesFunc(function(stage:BaseStage) stage.opponentNoteHit(note));
@@ -3778,10 +3905,15 @@ public function goodNoteHit(note:Note):Void
 		{
 			var spr = playerStrums.members[note.noteData];
 			if (spr != null)
-				spr.playAnim('confirm', true);
+			{
+				if (isSus)
+					spr.holdConfirm();
+				else
+					spr.tapConfirm();
+			}
 		}
 		else
-			strumPlayAnim(false, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate);
+			strumPlayAnim(false, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate, isSus);
 		vocals.volume = 1;
 
 		if (!note.isSustainNote)
@@ -4248,7 +4380,13 @@ public function setOnHScript(variable:String, arg:Dynamic, exclusions:Array<Stri
 	#end
 }
 
-function strumPlayAnim(isDad:Bool, id:Int, time:Float)
+/**
+ * Lights a strum for a note that just landed.
+ *
+ * `isSustain` keeps a hold from restarting the glow on every piece; the timer is still
+ * refreshed, so the strum stays lit for as long as pieces keep arriving.
+ */
+function strumPlayAnim(isDad:Bool, id:Int, time:Float, ?isSustain:Bool = false)
 {
 	var spr:StrumNote = null;
 	if (isDad)
@@ -4262,7 +4400,10 @@ function strumPlayAnim(isDad:Bool, id:Int, time:Float)
 
 	if (spr != null)
 	{
-		spr.playAnim('confirm', true);
+		if (isSustain)
+			spr.holdConfirm();
+		else
+			spr.tapConfirm();
 		spr.resetAnim = time;
 	}
 }
