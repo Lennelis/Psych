@@ -67,6 +67,56 @@ class PsychFlxAnimate extends OriginalFlxAnimate
 		origin = anim.curInstance.symbol.transformationPoint;
 	}
 
+	/**
+	 * Swaps the artwork inside a symbol for a different graphic.
+	 *
+	 * V-Slice's album roll is an Animate atlas whose album cover is a placeholder symbol,
+	 * white with a blue smear, replaced at runtime with whichever album the song belongs
+	 * to. Its `FunkinSprite.replaceSymbolGraphic` does that through its own fork of
+	 * flxanimate; the version Psych carries has no such call, so this is it.
+	 *
+	 * A limb in an atlas is drawn by looking its `bitmap` name up in the sprite's frame
+	 * collection, so all this does is put a frame for the new graphic into that
+	 * collection and point every limb inside the symbol at it. The art has to be the size
+	 * the placeholder was drawn at - which the album covers are, 262 square - since
+	 * nothing here rescales it.
+	 */
+	public function replaceSymbolGraphic(symbolName:String, graphic:flixel.graphics.FlxGraphic):Void
+	{
+		if (anim == null || anim.symbolDictionary == null || frames == null) return;
+
+		var symbol = anim.symbolDictionary.get(symbolName);
+		if (symbol == null)
+		{
+			trace('PsychFlxAnimate: no symbol called "$symbolName" to replace');
+			return;
+		}
+
+		var frameName:String = 'psychReplaced::$symbolName';
+
+		if (graphic != null && !frames.exists(frameName))
+		{
+			var frame = graphic.imageFrame.frame.copyTo();
+			frame.name = frameName;
+			frames.pushFrame(frame);
+		}
+
+		for (layer in symbol.timeline.getList())
+		{
+			@:privateAccess
+			var keyFrames = layer._keyframes;
+			if (keyFrames == null) continue;
+
+			for (keyFrame in keyFrames)
+			{
+				if (keyFrame == null) continue;
+
+				for (element in keyFrame.getList())
+					if (element != null && element.bitmap != null) element.bitmap = frameName;
+			}
+		}
+	}
+
 	override function draw()
 	{
 		if(anim.curInstance == null || anim.curSymbol == null) return;

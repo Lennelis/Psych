@@ -119,7 +119,9 @@ class VSliceFreeplayState extends MusicBeatState
 		return grpCapsules.members[curSelected];
 
 	var grpCapsules:FlxTypedGroup<SongMenuItem>;
+	var dj:FreeplayDJ = null;
 	var ostName:FlxText;
+	var albumRoll:AlbumRoll;
 	var exitMovers:ExitMoverData = new Map();
 	var diffSelLeft:DifficultySelector;
 	var diffSelRight:DifficultySelector;
@@ -189,11 +191,12 @@ class VSliceFreeplayState extends MusicBeatState
 
 		// Everything below is built in V-Slice's order, because that order is what the
 		// menu's layering is: the card, then the art, then the capsules, then the bars.
+		albumRoll = new AlbumRoll();
 		fpScoreDisplay = new FreeplayScore(FlxG.width - 353, 60, 7, 0);
 		grpCapsules = new FlxTypedGroup<SongMenuItem>();
 		grpDifficulties = new FlxTypedSpriteGroup<DifficultySprite>(-300, 80);
 		txtCompletion = new FlxText(FlxG.width - 95, 82, 0, '0', 32);
-		ostName = new FlxText(8, 8, FlxG.width - 16, "Friday Night Funkin'", 48);
+		ostName = new FlxText(8, 8, FlxG.width - 16, albumRoll.getOSTNameOverride(), 48);
 
 		backingCard = new BackingCard(CUTOUT_WIDTH);
 		backingImage = new FlxSprite(backingCard.pinkBack.width * 0.74, 0).loadGraphic(Paths.image('freeplay/freeplayBGweek1-bf'));
@@ -204,6 +207,17 @@ class VSliceFreeplayState extends MusicBeatState
 		add(backingCard);
 		backingCard.build();
 		backingCard.applyExitMovers(exitMovers);
+
+		// The DJ is an Adobe Animate atlas authored at the full 1280x720, so he is
+		// positioned by moving the whole stage rather than by placing a sprite - which is
+		// what V-Slice's `useAnimatePosition` means for boyfriend.
+		dj = new FreeplayDJ(CUTOUT_WIDTH * DJ_POS_MULTI, 0);
+
+		if (dj.loaded)
+		{
+			exitMovers.set([dj], {x: -dj.width * 1.6, speed: 0.5});
+			add(dj);
+		}
 
 		backingImage.antialiasing = ClientPrefs.data.antialiasing;
 		backingImage.shader = angleMaskShader;
@@ -235,6 +249,11 @@ class VSliceFreeplayState extends MusicBeatState
 			diffSprite.visible = (diffId == currentDifficulty);
 			grpDifficulties.add(diffSprite);
 		}
+
+		albumRoll.albumId = null;
+		albumRoll.visible = false;
+		albumRoll.applyExitMovers(exitMovers);
+		add(albumRoll);
 
 		overhangStuff = new FlxSprite().makeGraphic(FlxG.width, 164, FlxColor.BLACK);
 		overhangStuff.y -= overhangStuff.height;
@@ -311,9 +330,12 @@ class VSliceFreeplayState extends MusicBeatState
 		addVirtualPadCamera();
 		#end
 
-		// V-Slice waits on the DJ's intro here. Without a DJ yet, the card sliding in
-		// takes the same beat, so the menu still arrives rather than appearing at once.
-		new FlxTimer().start(0.9, function(_) onDJIntroDone());
+		// The menu opens when the DJ finishes his intro, which is V-Slice's own cue. If he
+		// couldn't be loaded there is nothing to wait for, so the card sliding in takes
+		// the same beat instead and the menu still arrives rather than appearing at once.
+		if (dj != null && dj.loaded) dj.onIntroDone.add(onDJIntroDone);
+		else
+			new FlxTimer().start(0.9, function(_) onDJIntroDone());
 	}
 
 	/** Everything that lands once the intro is over and the menu becomes usable. */
@@ -363,8 +385,25 @@ class VSliceFreeplayState extends MusicBeatState
 			});
 		});
 
+		albumRoll.playIntro();
+		albumRoll.albumId = albumIdFor(currentCapsule.freeplayData);
+
 		backingImage.visible = true;
 		backingCard.introDone();
+	}
+
+	/**
+	 * Which album cover a song gets.
+	 *
+	 * V-Slice has an album per song in its metadata and a registry to look it up in.
+	 * Psych has neither, and every cover that ships is a base game one, so everything is
+	 * Volume 1 until a week has somewhere to say otherwise.
+	 */
+	function albumIdFor(song:FreeplaySongData):String
+	{
+		if (song == null) return null;
+
+		return 'volume1';
 	}
 
 	function sillyStrokeWidth(value:Float):Void
@@ -536,6 +575,7 @@ class VSliceFreeplayState extends MusicBeatState
 				changeSelection(upP ? -1 : 1);
 
 			spamTimer += elapsed;
+			if (dj != null) dj.onPlayerAction();
 		}
 		else
 		{
@@ -585,6 +625,14 @@ class VSliceFreeplayState extends MusicBeatState
 
 			if (slot < curSelected) capsule.targetPos.y -= 100; // another 100 for good measure
 		}
+
+		if (daSong != null)
+		{
+			albumRoll.albumId = albumIdFor(daSong);
+			albumRoll.setDifficultyStars(daSong.getDifficultyRating(currentDifficulty));
+		}
+		else
+			albumRoll.albumId = null;
 
 		if (grpCapsules.countLiving() > 0 && canInteract())
 		{
@@ -804,6 +852,8 @@ class VSliceFreeplayState extends MusicBeatState
 		clearPreviews();
 
 		FlxG.sound.play(Paths.sound('confirmMenu'));
+
+		if (dj != null) dj.onConfirm();
 
 		currentCapsule.forcePosition();
 		currentCapsule.confirm();
