@@ -162,6 +162,21 @@ class FreeplayDJ extends PsychFlxAnimate
 	var labelFrames:Map<String, Array<Int>> = [];
 
 	/**
+	 * The translation the atlas's stage sits at, which an added animation has to carry.
+	 *
+	 * This is what made him vanish once the animations started working. The atlas draws
+	 * its stage through an instance holding a matrix - boyfriend's is a move of 640 by
+	 * 360, half the screen he was authored on - and an animation added with
+	 * `addBySymbolIndices` gets a fresh instance with an identity matrix instead, so
+	 * playing one dropped that move and drew him 640 left and 360 up, off the screen.
+	 * V-Slice has the same problem and answers it with its `applyStageMatrix` flag; the
+	 * matrix goes straight into the animation here instead.
+	 */
+	var stageOffsetX:Float = 0;
+
+	var stageOffsetY:Float = 0;
+
+	/**
 	 * Works out which frames each of the atlas's labels covers, by reading the atlas.
 	 *
 	 * `anim.addByFrameLabel` would do this, and it is what V-Slice uses, but it is doing
@@ -190,6 +205,8 @@ class FreeplayDJ extends PsychFlxAnimate
 
 			stageSymbol = field(animation, 'SN', 'SYMBOL_name');
 
+			readStageMatrix(animation);
+
 			var timeline:Dynamic = field(animation, 'TL', 'TIMELINE');
 			if (timeline == null) return;
 
@@ -215,6 +232,33 @@ class FreeplayDJ extends PsychFlxAnimate
 		}
 		catch (e:Dynamic)
 			trace('FreeplayDJ: could not read the labels out of the atlas ($e)');
+	}
+
+	/** Pulls the stage instance's move out of its matrix, whichever shape it was written in. */
+	function readStageMatrix(animation:Dynamic):Void
+	{
+		var stageInstance:Dynamic = field(animation, 'STI', 'StageInstance');
+		if (stageInstance == null) return;
+
+		var symbol:Dynamic = field(stageInstance, 'SI', 'SYMBOL_Instance');
+		if (symbol == null) return;
+
+		var matrix:Array<Dynamic> = cast field(symbol, 'MX', 'Matrix3D');
+		if (matrix == null) matrix = cast Reflect.field(symbol, 'M3D');
+		if (matrix == null) return;
+
+		// Two shapes turn up: a flat 2D matrix, where the move is the last two numbers,
+		// and a 4x4 one, where it is the thirteenth and fourteenth.
+		if (matrix.length >= 16)
+		{
+			stageOffsetX = numberOr(matrix[12], 0);
+			stageOffsetY = numberOr(matrix[13], 0);
+		}
+		else if (matrix.length >= 6)
+		{
+			stageOffsetX = numberOr(matrix[4], 0);
+			stageOffsetY = numberOr(matrix[5], 0);
+		}
 	}
 
 	static function field(source:Dynamic, short:String, long:String):Dynamic
@@ -245,7 +289,7 @@ class FreeplayDJ extends PsychFlxAnimate
 
 		try
 		{
-			anim.addBySymbolIndices(name, stageSymbol, labelFrames.get(frameLabel), 24, looped);
+			anim.addBySymbolIndices(name, stageSymbol, labelFrames.get(frameLabel), 24, looped, stageOffsetX, stageOffsetY);
 			loadedAnimations.set(name, true);
 		}
 		catch (e:Dynamic)

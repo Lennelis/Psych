@@ -38,6 +38,11 @@ class AlbumRoll extends FlxSpriteGroup
 
 	final ALBUM_ART_SYMBOL:String = 'album art placeholder';
 
+	/** Where the cover sits inside its own atlas, read off the symbol's matrix. */
+	static inline var ART_OFFSET_X:Float = 692.45;
+
+	static inline var ART_OFFSET_Y:Float = 269;
+
 	var newAlbumArt:PsychFlxAnimate;
 	var albumTitle:FlxSprite = null;
 	var difficultyStars:DifficultyStars;
@@ -47,7 +52,11 @@ class AlbumRoll extends FlxSpriteGroup
 	{
 		super();
 
-		newAlbumArt = new PsychFlxAnimate(FlxG.width - 360, 220);
+		// V-Slice wants the cover at (width - 360, 220), and the atlas draws it 692 right
+		// and 269 down of wherever the sprite is - that is where the artist put it inside
+		// the symbol, and it is in the matrices in Animation.json. Taking that back off
+		// is what stops the cover being drawn off the right of the screen.
+		newAlbumArt = new PsychFlxAnimate(FlxG.width - 360 - ART_OFFSET_X, 220 - ART_OFFSET_Y);
 		try
 		{
 			Paths.loadAnimateAtlas(newAlbumArt, 'freeplay/albumRoll/freeplayAlbum');

@@ -65,7 +65,9 @@ class SongMenuItem extends FlxSpriteGroup
 
 	var grpHide:FlxGroup;
 
-	public function new(x:Float, y:Float)
+	// Defaulted because the capsules are recycled, and recycling builds one with no
+	// arguments when the pool has nothing dead to hand back.
+	public function new(x:Float = 0, y:Float = 0)
 	{
 		super(x, y);
 

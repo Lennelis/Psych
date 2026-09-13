@@ -505,31 +505,30 @@ class VSliceFreeplayState extends MusicBeatState
 		currentFilteredSongs = tempSongs;
 		curSelected = 0;
 
-		for (capsule in grpCapsules.members)
-			capsule.kill();
-
-		grpCapsules.clear();
+		// Killed, not destroyed: every capsule is a dozen sprites and half a dozen
+		// atlases, and building a fresh set on every difficulty press is what made that
+		// press take a visible age. V-Slice recycles them and so does this.
+		grpCapsules.killMembers();
 
 		// One shader for the lot, like V-Slice: it is how a character's freeplay gets
 		// tinted as a whole, so every capsule has to be looking at the same one.
 		var hsvShader:HSVShader = new HSVShader();
 
 		// The RANDOM capsule, which is why everything below counts from one.
-		var randomCapsule:SongMenuItem = new SongMenuItem(0, 0);
+		var randomCapsule:SongMenuItem = grpCapsules.recycle(SongMenuItem);
 		randomCapsule.initRandom();
 		randomCapsule.onConfirm = function() capsuleOnOpenRandom(randomCapsule);
 		randomCapsule.hsvShader = hsvShader;
 		randomCapsule.xOffset = CUTOUT_WIDTH * SONGS_POS_MULTI;
 		if (force) randomCapsule.initJumpIn(0, force);
 		else randomCapsule.forcePosition();
-		grpCapsules.add(randomCapsule);
 
 		for (i in 1...currentFilteredSongs.length)
 		{
 			var tempSong:FreeplaySongData = currentFilteredSongs[i];
 			if (tempSong == null) continue;
 
-			var funnyMenu:SongMenuItem = new SongMenuItem(0, 0);
+			var funnyMenu:SongMenuItem = grpCapsules.recycle(SongMenuItem);
 			funnyMenu.initPosition(FlxG.width, 0);
 			funnyMenu.initData(tempSong, i, currentDifficulty);
 			funnyMenu.onConfirm = function() capsuleOnConfirmDefault(funnyMenu);
@@ -545,8 +544,6 @@ class VSliceFreeplayState extends MusicBeatState
 
 			if (force) funnyMenu.initJumpIn(0, force);
 			else funnyMenu.forcePosition();
-
-			grpCapsules.add(funnyMenu);
 		}
 
 		if (funnyCam != null) forEach(function(basic) basic.cameras = [funnyCam]);
