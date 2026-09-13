@@ -92,16 +92,9 @@ shader would have been porting dead code.
 
 ## Not here yet
 
-The DJ, the album roll, the letter sort, the flames and the rank-up animation. The menu
-works without them and they hang off the same points V-Slice hangs them off:
-`introDone()`, `changeSelection()` and `confirmSelection()`. The art for all of them is
-already in `assets/shared/images/freeplay/`, including the DJ, album and sorted letters,
-which are Animate atlases — `flxanimate` ships with Psych, so they can be played as they
-are.
+The rank-up animation that plays when you come back from a song with a better grade,
+character select and its cards, and the per-character freeplay styles.
 
-Also missing: touch swiping (the pad works), per-week backing art, and favourites, which
-are stored and drawn but not yet bound to a button.
-
-The RANDOM capsule is here, though: it sits above the songs the way it does in V-Slice —
-which is where the counting-from-one comes from — and picking it plays a random song at a
-difficulty that song actually has.
+Also missing: swiping and dragging the capsule list (the pad, the arrows and taps on the
+letters all work), per-week backing art, and favourites, which are stored, drawn and
+filterable but not yet bound to a button.
