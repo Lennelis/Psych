@@ -18,7 +18,7 @@ class Alphabet extends FlxSpriteGroup
 	public var letters:Array<AlphaCharacter> = [];
 
 	public var isMenuItem:Bool = false;
-	public var targetY:Int = 0;
+	public var targetY:Float = 0;
 	public var changeX:Bool = true;
 	public var changeY:Bool = true;
 
@@ -27,8 +27,8 @@ class Alphabet extends FlxSpriteGroup
 	public var scaleY(default, set):Float = 1;
 	public var rows:Int = 0;
 
-	public var distancePerItem:FlxPoint = new FlxPoint(20, 120);
-	public var startPosition:FlxPoint = new FlxPoint(0, 0); //for the calculations
+	public var distancePerItem:FlxPoint = FlxPoint.get(20, 120);
+	public var startPosition:FlxPoint = FlxPoint.get(0, 0); //for the calculations
 
 	public function new(x:Float, y:Float, text:String = "", ?bold:Bool = true)
 	{
@@ -38,6 +38,9 @@ class Alphabet extends FlxSpriteGroup
 		this.startPosition.y = y;
 		this.bold = bold;
 		this.text = text;
+
+		moves = false;
+		immovable = true;
 	}
 
 	public function setAlignmentFromString(align:String)
@@ -250,6 +253,14 @@ class Alphabet extends FlxSpriteGroup
 
 		if(letters.length > 0) rows++;
 	}
+
+	override function destroy(){
+		distancePerItem.put();
+		startPosition.put();
+		letters = FlxDestroyUtil.destroyArray(letters);
+		active = false;
+		super.destroy();
+	}
 }
 
 
@@ -282,13 +293,14 @@ class AlphaCharacter extends FlxSprite
 	public static function loadAlphabetData(request:String = 'alphabet')
 	{
 		var path:String = Paths.getPath('images/$request.json');
-		if(!Paths.pathExists(path))
+		if(!NativeFileSystem.exists(path))
 			path = Paths.getPath('images/alphabet.json');
 
 		allLetters = new Map<String, Null<Letter>>();
 		try
 		{
-			var data:Dynamic = Json.parse(Paths.getFileContent(path));
+
+			var data:Dynamic = Json.parse(NativeFileSystem.getContent(path));
 
 			if(data.allowed != null && data.allowed.length > 0)
 			{
@@ -335,6 +347,9 @@ class AlphaCharacter extends FlxSprite
 		super(x, y);
 		image = 'alphabet';
 		antialiasing = ClientPrefs.data.antialiasing;
+
+		moves = false;
+		immovable = true;
 	}
 	
 	public var curLetter:Letter = null;
@@ -377,7 +392,11 @@ class AlphaCharacter extends FlxSprite
 			if(curLetter != null && curLetter.anim != null) alphaAnim = curLetter.anim;
 
 			var anim:String = alphaAnim + postfix;
+			#if debug //! This only exists to prevent annoying beeps!
+			animation.addByPrefix(anim, anim+" instance ", 24);
+			#else
 			animation.addByPrefix(anim, anim, 24);
+			#end
 			animation.play(anim, true);
 			if(animation.curAnim == null)
 			{
@@ -392,7 +411,7 @@ class AlphaCharacter extends FlxSprite
 
 	public static function isTypeAlphabet(c:String) // thanks kade
 	{
-		var ascii = StringTools.fastCodeAt(c, 0);
+		var ascii = c.fastCodeAt(0);
 		return (ascii >= 65 && ascii <= 90)
 			|| (ascii >= 97 && ascii <= 122)
 			|| (ascii >= 192 && ascii <= 214)
@@ -465,5 +484,10 @@ class AlphaCharacter extends FlxSprite
 	{
 		super.updateHitbox();
 		updateLetterOffset();
+	}
+
+	override function destroy(){
+		active = false;
+		super.destroy();
 	}
 }

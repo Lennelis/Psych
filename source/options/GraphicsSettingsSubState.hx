@@ -1,6 +1,9 @@
 package options;
 
+import flixel.system.scaleModes.RatioScaleMode;
+import mikolka.funkin.custom.mobile.MobileScaleMode;
 import objects.Character;
+import options.Option;
 
 class GraphicsSettingsSubState extends BaseOptionsMenu
 {
@@ -34,7 +37,7 @@ class GraphicsSettingsSubState extends BaseOptionsMenu
 		antialiasingOption = optionsArray.length-1;
 
 		var option:Option = new Option('Shaders', //Name
-			"If unchecked, disables shaders.\nIt's used for some visual effects, and also CPU intensive for weaker PCs.", //Description
+			"If unchecked, disables shaders.\nIt's used for some visual effects, and also CPU intensive for weaker " + Main.platform + ").", //Description
 			'shaders',
 			BOOL);
 		addOption(option);
@@ -45,6 +48,12 @@ class GraphicsSettingsSubState extends BaseOptionsMenu
 			BOOL);
 		addOption(option);
 
+		option = new Option('Wide Screen Mode',
+			'If checked, The game will stetch to fill your whole screen. (WARNING: Can result in bad visuals & break some mods that resizes the game/cameras)',
+			'wideScreen', BOOL);
+		option.onChange = () -> MobileScaleMode.enabled = ClientPrefs.data.wideScreen;
+		addOption(option);
+
 		#if !html5 //Apparently other framerates isn't correctly supported on Browser? Probably it has some V-Sync shit enabled by default, idk
 		var option:Option = new Option('Framerate',
 			"Pretty self explanatory, isn't it?",
@@ -53,7 +62,7 @@ class GraphicsSettingsSubState extends BaseOptionsMenu
 		addOption(option);
 
 		final refreshRate:Int = FlxG.stage.application.window.displayMode.refreshRate;
-		option.minValue = 60;
+		option.minValue = 30;
 		option.maxValue = 240;
 		option.defaultValue = Std.int(FlxMath.bound(refreshRate, option.minValue, option.maxValue));
 		option.displayFormat = '%v FPS';
@@ -89,9 +98,9 @@ class GraphicsSettingsSubState extends BaseOptionsMenu
 		}
 	}
 
-	override function changeSelection(change:Int = 0)
+	override function changeSelection(change:Float,usePrecision:Bool = false) 
 	{
-		super.changeSelection(change);
+		super.changeSelection(change,usePrecision);
 		boyfriend.visible = (antialiasingOption == curSelected);
 	}
 }

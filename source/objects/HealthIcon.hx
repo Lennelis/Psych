@@ -30,16 +30,6 @@ class HealthIcon extends FlxSprite
 			if(!Paths.fileExists('images/' + name + '.png', IMAGE)) name = 'icons/icon-face'; //Prevents crash from missing icon
 			
 			var graphic = Paths.image(name, allowGPU);
-			// A file that exists isn't always a file that loads - a truncated or
-			// mislabelled png in a mod gets this far and then comes back null, and
-			// reading a width off that took the whole game down.
-			if(graphic == null && name != 'icons/icon-face') graphic = Paths.image('icons/icon-face', allowGPU);
-			if(graphic == null)
-			{
-				trace('HealthIcon: no icon for "$char", not even the fallback');
-				return;
-			}
-
 			var iSize:Float = Math.round(graphic.width / graphic.height);
 			loadGraphic(graphic, true, Math.floor(graphic.width / iSize), Math.floor(graphic.height));
 			iconOffsets[0] = (width - 150) / iSize;

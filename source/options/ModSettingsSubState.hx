@@ -1,11 +1,14 @@
 package options;
 
+import states.ModsMenuState;
 import flixel.input.keyboard.FlxKey;
 import flixel.input.gamepad.FlxGamepadInputID;
 
 import objects.Character;
+import haxe.Json;
 
 import options.Option.OptionType;
+import options.Option;
 
 class ModSettingsSubState extends BaseOptionsMenu
 {
@@ -52,12 +55,12 @@ class ModSettingsSubState extends BaseOptionsMenu
 
 						newOption.defaultKeys.keyboard = keyboardStr;
 						newOption.defaultKeys.gamepad = gamepadStr;
-						if(save.get(option.save) == null)
-						{
+
+						if(save.exists(option.save)) save.remove(option.save);
+
 							newOption.keys.keyboard = newOption.defaultKeys.keyboard;
 							newOption.keys.gamepad = newOption.defaultKeys.gamepad;
 							save.set(option.save, newOption.keys);
-						}
 
 						// getting inputs and checking
 						var keyboardKey:FlxKey = cast FlxKey.fromString(keyboardStr);
@@ -77,7 +80,8 @@ class ModSettingsSubState extends BaseOptionsMenu
 
 								if(!controls.controllerMode) data.keyboard = value;
 								else data.gamepad = value;
-								save.set(newOption.variable, data);
+								if(save.exists(newOption.variable)) save.remove(newOption.variable);
+									save.set(newOption.variable, data);
 							};
 						}
 
@@ -88,7 +92,10 @@ class ModSettingsSubState extends BaseOptionsMenu
 						@:privateAccess
 						{
 							newOption.getValue = function() return save.get(newOption.variable);
-							newOption.setValue = function(value:Dynamic) save.set(newOption.variable, value);
+							newOption.setValue = function(value:Dynamic) { 
+								if(save.exists(newOption.variable)) save.remove(newOption.variable);
+									save.set(newOption.variable, value);
+							}
 						}
 				}
 
@@ -123,7 +130,7 @@ class ModSettingsSubState extends BaseOptionsMenu
 
 						default:
 					}
-	
+					if(save.exists(option.save)) save.remove(option.save);
 					save.set(option.save, myValue);
 				}
 				addOption(newOption);
@@ -134,11 +141,7 @@ class ModSettingsSubState extends BaseOptionsMenu
 		{
 			var errorTitle = 'Mod name: ' + folder;
 			var errorMsg = 'An error occurred: $e';
-			#if windows
-			lime.app.Application.current.window.alert(errorMsg, errorTitle);
-			#end
-			trace('$errorTitle - $errorMsg');
-
+			CoolUtil.showPopUp(errorMsg, errorTitle);
 			_crashed = true;
 			close();
 			return;
@@ -174,6 +177,7 @@ class ModSettingsSubState extends BaseOptionsMenu
 
 	override public function update(elapsed:Float)
 	{
+		controls.isInSubstate = true;
 		if(_crashed)
 		{
 			close();
@@ -184,8 +188,22 @@ class ModSettingsSubState extends BaseOptionsMenu
 
 	override public function close()
 	{
+		try {
+			var modPath:String = ModsMenuState.modsGroup.members[ModsMenuState.curSelectedMod].folder;
+			var settingsPath:String = Paths.mods('$modPath/data/settings.json');
+			var settingsJson:Array<Dynamic> = Json.parse(NativeFileSystem.getContent(settingsPath));
+			for(option in settingsJson)
+				option.value = save.get(option.save);
+
+			if(NativeFileSystem.exists(settingsPath))
+				NativeFileSystem.deleteFile(settingsPath);
+
+			File.saveContent(settingsPath, Json.stringify(settingsJson, '\t'));
+		} catch(e:Dynamic) trace('exploded: $e');
+
 		FlxG.save.data.modSettings.set(folder, save);
 		FlxG.save.flush();
+		controls.isInSubstate = false;
 		super.close();
 	}
 }

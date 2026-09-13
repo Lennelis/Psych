@@ -5,10 +5,6 @@ import flixel.input.gamepad.FlxGamepadInputID;
 import flixel.input.gamepad.mappings.FlxGamepadMapping;
 import flixel.input.keyboard.FlxKey;
 
-#if TOUCH_CONTROLS_ALLOWED
-import mobile.objects.TouchButton;
-#end
-
 class Controls
 {
 	//Keeping same use cases on stuff for it to be easier to understand/use
@@ -78,47 +74,52 @@ class Controls
 
 	// Pressed buttons (others)
 	public var ACCEPT(get, never):Bool;
+	public var FAVORITE(get, never):Bool;
+	public var BAR_LEFT(get, never):Bool;
+	public var BAR_RIGHT(get, never):Bool;
 	public var BACK(get, never):Bool;
 	public var PAUSE(get, never):Bool;
+	public var SCREENSHOT(get, never):Bool;
 	public var RESET(get, never):Bool;
+	public var CHAR_SELECT(get, never):Bool;
 	private function get_ACCEPT() return justPressed('accept');
+	private function get_FAVORITE() return justPressed('favorite');
+	private function get_BAR_LEFT() return justPressed('bar_left');
+	private function get_BAR_RIGHT() return justPressed('bar_right');
 	private function get_BACK() return justPressed('back');
 	private function get_PAUSE() return justPressed('pause');
+	private function get_SCREENSHOT() return justPressed('screenshot');
 	private function get_RESET() return justPressed('reset');
+	private function get_CHAR_SELECT() return justPressed('char_select');
 
-	//Gamepad & Keyboard stuff
+	//Gamepad, Keyboard & Mobile stuff
 	public var keyboardBinds:Map<String, Array<FlxKey>>;
 	public var gamepadBinds:Map<String, Array<FlxGamepadInputID>>;
+	#if TOUCH_CONTROLS_ALLOWED
+	public var mobileBinds:Map<String, Array<MobileInputID>>;
+	#end
 	public function justPressed(key:String)
 	{
 		var result:Bool = (FlxG.keys.anyJustPressed(keyboardBinds[key]) == true);
 		if(result) controllerMode = false;
 
-		#if TOUCH_CONTROLS_ALLOWED
-		if(!result && touchCheck(key, JUST_PRESSED))
-		{
-			controllerMode = false;
-			return true;
-		}
-		#end
-
-		return result || _myGamepadJustPressed(gamepadBinds[key]) == true;
+		return result
+			|| _myGamepadJustPressed(gamepadBinds[key]) == true
+			#if TOUCH_CONTROLS_ALLOWED
+			|| hitboxJustPressed(mobileBinds[key]) == true
+			|| touchPadJustPressed(mobileBinds[key]) == true #end;
 	}
 
 	public function pressed(key:String)
 	{
 		var result:Bool = (FlxG.keys.anyPressed(keyboardBinds[key]) == true);
-		if(result) controllerMode = false;
+		if(result) controllerMode = false; 
 
-		#if TOUCH_CONTROLS_ALLOWED
-		if(!result && touchCheck(key, PRESSED))
-		{
-			controllerMode = false;
-			return true;
-		}
-		#end
-
-		return result || _myGamepadPressed(gamepadBinds[key]) == true;
+		return result
+			|| _myGamepadPressed(gamepadBinds[key]) == true
+			#if TOUCH_CONTROLS_ALLOWED
+			|| hitboxPressed(mobileBinds[key]) == true
+			|| touchPadPressed(mobileBinds[key]) == true #end;
 	}
 
 	public function justReleased(key:String)
@@ -126,43 +127,12 @@ class Controls
 		var result:Bool = (FlxG.keys.anyJustReleased(keyboardBinds[key]) == true);
 		if(result) controllerMode = false;
 
-		#if TOUCH_CONTROLS_ALLOWED
-		if(!result && touchCheck(key, JUST_RELEASED))
-		{
-			controllerMode = false;
-			return true;
-		}
-		#end
-
-		return result || _myGamepadJustReleased(gamepadBinds[key]) == true;
+		return result
+			|| _myGamepadJustReleased(gamepadBinds[key]) == true
+			#if TOUCH_CONTROLS_ALLOWED
+			|| hitboxJustReleased(mobileBinds[key]) == true
+			|| touchPadJustReleased(mobileBinds[key]) == true #end;
 	}
-
-	#if TOUCH_CONTROLS_ALLOWED
-	/**
-	 * Looks for an on-screen button standing in for `key`.
-	 *
-	 * Touch buttons add themselves to `TouchButton.list` when they're created, so
-	 * nothing has to tell Controls which pad is on screen right now - which is why
-	 * every menu that already asked `controls.ACCEPT` works on a phone unchanged.
-	 * Buttons that stopped updating (a state handed over to a substate, say) report
-	 * `isAwake == false` and are skipped, so a press can't get stuck on.
-	 */
-	private function touchCheck(key:String, state:TouchState):Bool
-	{
-		for (button in TouchButton.list)
-		{
-			if (button == null || !button.isAwake || !button.hasAction(key)) continue;
-
-			switch(state)
-			{
-				case JUST_PRESSED: if(button.justPressed) return true;
-				case PRESSED: if(button.pressed) return true;
-				case JUST_RELEASED: if(button.justReleased) return true;
-			}
-		}
-		return false;
-	}
-	#end
 
 	public var controllerMode:Bool = false;
 	private function _myGamepadJustPressed(keys:Array<FlxGamepadInputID>):Bool
@@ -211,20 +181,122 @@ class Controls
 		return false;
 	}
 
-	// IGNORE THESE
+	public var mobileC(get, never):Bool;
+	public var isInSubstate:Bool = false; // don't worry about this it becomes true and false on it's own in MusicBeatSubstate
+	public var requestedInstance(get, default):Dynamic; // is set to MusicBeatState or MusicBeatSubstate when the constructor is called
+	#if TOUCH_CONTROLS_ALLOWED
+	public var requestedHitbox(get, default):Hitbox; // for PlayState and EditorPlayState
+	
+	private function touchPadPressed(keys:Array<MobileInputID>):Bool
+	{
+		if (keys != null && requestedInstance.touchPad != null)
+		{
+			if (requestedInstance.touchPad.anyPressed(keys) == true)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private function touchPadJustPressed(keys:Array<MobileInputID>):Bool
+	{
+		if (keys != null && requestedInstance.touchPad != null)
+		{
+			if (requestedInstance.touchPad.anyJustPressed(keys) == true)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private function touchPadJustReleased(keys:Array<MobileInputID>):Bool
+	{
+		if (keys != null && requestedInstance.touchPad != null)
+		{
+			if (requestedInstance.touchPad.anyJustReleased(keys) == true)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private function hitboxPressed(keys:Array<MobileInputID>):Bool
+	{
+		if (keys != null && requestedHitbox != null)
+		{
+			if (requestedHitbox.anyPressed(keys))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private function hitboxJustPressed(keys:Array<MobileInputID>):Bool
+	{
+		if (keys != null && requestedHitbox != null)
+		{
+			if (requestedHitbox.anyJustPressed(keys))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private function hitboxJustReleased(keys:Array<MobileInputID>):Bool
+	{
+		if (keys != null && requestedHitbox != null)
+		{
+			if (requestedHitbox.anyJustReleased(keys))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	@:noCompletion
+	private function get_requestedHitbox():Hitbox
+	{
+		return requestedInstance.hitbox;
+	}
+
+	#end
+
+	@:noCompletion
+	private function get_requestedInstance():Dynamic
+	{
+		if (isInSubstate)
+			return MusicBeatSubstate.instance;
+		else
+			return MusicBeatState.getState();
+	}
+
+	@:noCompletion
+	private function get_mobileC():Bool
+	{
+		#if TOUCH_CONTROLS_ALLOWED
+		if (ClientPrefs.data.controlsAlpha >= 0.1)
+			return true;
+		else
+			return false;
+		#else
+		return false;
+		#end
+	}
+
+	// IGNORE THESE/ karim: no.
 	public static var instance:Controls;
 	public function new()
 	{
 		keyboardBinds = ClientPrefs.keyBinds;
 		gamepadBinds = ClientPrefs.gamepadBinds;
+		#if TOUCH_CONTROLS_ALLOWED
+		mobileBinds = ClientPrefs.mobileBinds;
+		#end
 	}
 }
-
-#if TOUCH_CONTROLS_ALLOWED
-private enum TouchState
-{
-	JUST_PRESSED;
-	PRESSED;
-	JUST_RELEASED;
-}
-#end

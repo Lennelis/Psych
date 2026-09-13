@@ -1,7 +1,7 @@
 package backend;
 
+import mikolka.vslice.components.crash.CrashServer;
 import openfl.utils.Assets;
-
 import haxe.Json;
 
 typedef ModsList = {
@@ -12,11 +12,12 @@ typedef ModsList = {
 
 class Mods
 {
-	static public var currentModDirectory:String = '';
+	static public var currentModDirectory(default,set):String = '';
 	public static final ignoreModFolders:Array<String> = [
 		'characters',
 		'custom_events',
 		'custom_notetypes',
+		'registry',
 		'data',
 		'songs',
 		'music',
@@ -44,6 +45,7 @@ class Mods
 			var pack:Dynamic = getPack(mod);
 			if(pack != null && pack.runsGlobally) globalMods.push(mod);
 		}
+		CrashServer.updateGlobalMods(globalMods);
 		return globalMods;
 	}
 
@@ -52,11 +54,11 @@ class Mods
 		var list:Array<String> = [];
 		#if MODS_ALLOWED
 		var modsFolder:String = Paths.mods();
-		if(FileSystem.exists(modsFolder)) {
-			for (folder in FileSystem.readDirectory(modsFolder))
+		if(NativeFileSystem.exists(modsFolder)) {
+			for (folder in NativeFileSystem.readDirectory(modsFolder))
 			{
 				var path = haxe.io.Path.join([modsFolder, folder]);
-				if (FileSystem.isDirectory(path) && !ignoreModFolders.contains(folder.toLowerCase()) && !list.contains(folder))
+				if (NativeFileSystem.isDirectory(path) && !ignoreModFolders.contains(folder.toLowerCase()) && !list.contains(folder))
 					list.push(folder);
 			}
 		}
@@ -94,17 +96,14 @@ class Mods
 	inline public static function directoriesWithFile(path:String, fileToFind:String, mods:Bool = true)
 	{
 		var foldersToCheck:Array<String> = [];
-		// Main folder. Checked with Paths.pathExists rather than the filesystem alone
-		// because the game's own copy of these lives inside the build on a phone, and
-		// leaving it out is what left every merged list with nothing but mods in it.
-		if(Paths.pathExists(path + fileToFind))
+		if(NativeFileSystem.exists(path + fileToFind))
 			foldersToCheck.push(path + fileToFind);
 
 		// Week folder
 		if(Paths.currentLevel != null && Paths.currentLevel != path)
 		{
 			var pth:String = Paths.getFolderPath(fileToFind, Paths.currentLevel);
-			if(!foldersToCheck.contains(pth) && Paths.pathExists(pth))
+			if(NativeFileSystem.exists(pth))
 				foldersToCheck.push(pth);
 		}
 
@@ -115,18 +114,19 @@ class Mods
 			for(mod in Mods.getGlobalMods())
 			{
 				var folder:String = Paths.mods(mod + '/' + fileToFind);
-				if(FileSystem.exists(folder) && !foldersToCheck.contains(folder)) foldersToCheck.push(folder);
+				if(NativeFileSystem.exists(folder) && !foldersToCheck.contains(folder)) foldersToCheck.push(folder);
 			}
 
 			// Then "PsychEngine/mods/" main folder
 			var folder:String = Paths.mods(fileToFind);
-			if(FileSystem.exists(folder) && !foldersToCheck.contains(folder)) foldersToCheck.push(Paths.mods(fileToFind));
+			if(NativeFileSystem.exists(folder) && !foldersToCheck.contains(folder)) foldersToCheck.push(Paths.mods(fileToFind));
 
 			// And lastly, the loaded mod's folder
 			if(Mods.currentModDirectory != null && Mods.currentModDirectory.length > 0)
 			{
 				var folder:String = Paths.mods(Mods.currentModDirectory + '/' + fileToFind);
-				if(FileSystem.exists(folder) && !foldersToCheck.contains(folder)) foldersToCheck.push(folder);
+				if(NativeFileSystem.exists(folder) && !foldersToCheck.contains(folder)) foldersToCheck.push(folder);
+
 			}
 		}
 		#end
@@ -139,13 +139,9 @@ class Mods
 		if(folder == null) folder = Mods.currentModDirectory;
 
 		var path = Paths.mods(folder + '/pack.json');
-		if(FileSystem.exists(path)) {
+		if(NativeFileSystem.exists(path)) {
 			try {
-				#if sys
-				var rawJson:String = File.getContent(path);
-				#else
-				var rawJson:String = Assets.getText(path);
-				#end
+				var rawJson:String = NativeFileSystem.getContent(path);
 				if(rawJson != null && rawJson.length > 0) return tjson.TJSON.parse(rawJson);
 			} catch(e:Dynamic) {
 				trace(e);
@@ -192,7 +188,7 @@ class Mods
 			{
 				var dat:Array<String> = mod.split("|");
 				var folder:String = dat[0];
-				if(folder.trim().length > 0 && FileSystem.exists(Paths.mods(folder)) && FileSystem.isDirectory(Paths.mods(folder)) && !added.contains(folder))
+				if(folder.trim().length > 0 && NativeFileSystem.exists(Paths.mods(folder)) && NativeFileSystem.isDirectory(Paths.mods(folder)) && !added.contains(folder))
 				{
 					added.push(folder);
 					list.push([folder, (dat[1] == "1")]);
@@ -205,7 +201,7 @@ class Mods
 		// Scan for folders that aren't on modsList.txt yet
 		for (folder in getModDirectories())
 		{
-			if(folder.trim().length > 0 && FileSystem.exists(Paths.mods(folder)) && FileSystem.isDirectory(Paths.mods(folder)) &&
+			if(folder.trim().length > 0 && NativeFileSystem.exists(Paths.mods(folder)) && NativeFileSystem.isDirectory(Paths.mods(folder)) &&
 			!ignoreModFolders.contains(folder.toLowerCase()) && !added.contains(folder))
 			{
 				added.push(folder);
@@ -221,8 +217,10 @@ class Mods
 			if(fileStr.length > 0) fileStr += '\n';
 			fileStr += values[0] + '|' + (values[1] ? '1' : '0');
 		}
-
-		File.saveContent('modsList.txt', fileStr);
+		try{
+			File.saveContent( StorageUtil.getStorageDirectory() + 'modsList.txt', fileStr);
+		}
+		catch(x:Exception){} // In case you don't move it from AppTranslocation
 		updatedOnState = true;
 		//trace('Saved modsList.txt');
 		#end
@@ -237,5 +235,10 @@ class Mods
 		if(list != null && list[0] != null)
 			Mods.currentModDirectory = list[0];
 		#end
+	}
+
+	static function set_currentModDirectory(value:String):String {
+		CrashServer.updateModDir(value);
+		return currentModDirectory = value;
 	}
 }

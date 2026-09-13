@@ -3,8 +3,8 @@
 	"defaultZoom": 0.9,
 	"stageUI": "",
 
-	"boyfriend": [1030, -120],
-	"girlfriend": [400, 130],
+	"boyfriend": [1050, -160],
+	"girlfriend": [400, 150],
 	"opponent": [100, 100],
 	"hide_girlfriend": false,
 
@@ -17,6 +17,9 @@
 		"images/limo/limoDancer": 2,
 		"images/limo/limoDrive": 2,
 		"images/gore/": 2,
+		"sounds/dancerdeath": 2,
+		"sounds/carPass0": 3,
+		"sounds/carPass1": 3,
 		"images/limo/fastCarLol": 3,
 		"images/limo/limoSunset": 3,
 		"images/limo/bgLimo": 3

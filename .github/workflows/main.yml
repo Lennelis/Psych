@@ -1,108 +1,104 @@
-# This is a basic workflow to help you get started with Actions
+name: Build the game
 
-name: Build
-
-
-# Controls when the action will run.
 on:
-  # Triggers the workflow on push or pull request events but only for the master branch
   push:
-    branches: [ main, experimental ]
-  pull_request:
-    branches: [ main, experimental ]
-
-  # Allows you to run this workflow manually from the Actions tab
+    branches: [master-dev]
   workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  buildLinux:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+  
+  BuildMobileCache:
+    name: Build Caches
+    permissions: write-all
+    uses: ./.github/workflows/dependencies.yml
+    with:
+      os: macos-15
+      CACHE_NAME: P-Slice.1.0.mobile-cache
+      setupScript: sh ./setup/mobile.sh
+  BuildDesktopCache:
+    name: Build Caches
+    permissions: write-all
+    uses: ./.github/workflows/dependencies.yml
+    with:
+      os: ubuntu-24.04
+      setupScript: sh ./setup/unix.sh
+      CACHE_NAME: P-Slice.1.0.desktop-cache
+  BuildMacos:
+    name: macos
+    needs: BuildMobileCache
+    permissions: write-all
+    uses: ./.github/workflows/mac-universal.yml
+    with:
+      exportPath: macos
+      cachePath: P-Slice.1.0.build-macos
+      cacheLibrariesPath: P-Slice.1.0.mobile-cache
+      artifactName: P-Slice.1.0.macos
+      artifactPath: export/release/macos/bin/*
+  BuildDesktop:
+    name: Build Desktop
+    needs: BuildDesktopCache
+    permissions: write-all
+    strategy:
+      matrix:
+        include:
+          - name: Windows
+            os: windows-2022
+            buildArgs: "windows -final"
+            exportPath: windows
+            artifactName: P-Slice.1.0.windows
+            cacheLibrariesPath: P-Slice.1.0.desktop-cache
+            cachePath: P-Slice.1.0.build-windows
+            artifactPath: export\release\windows\bin\*
+          - name: Linux
+            os: ubuntu-22.04
+            buildArgs: "linux -final"
+            exportPath: linux
+            artifactName: P-Slice.1.0.linux
+            cachePath: P-Slice.1.0.build-linux
+            cacheLibrariesPath: P-Slice.1.0.desktop-cache
+            artifactPath: export/release/linux/bin/*
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4.1.7
+    uses: ./.github/workflows/build.yml
+    with:
+      name: ${{ matrix.name }}
+      os: ${{ matrix.os }}
+      buildArgs: ${{ matrix.buildArgs }}
+      cacheLibrariesPath: ${{ matrix.cacheLibrariesPath }}
+      exportPath: ${{ matrix.exportPath }}
+      artifactName: ${{ matrix.artifactName }}
+      artifactPath: ${{ matrix.artifactPath }}
+      cachePath: ${{matrix.cachePath}}
 
-      - uses: krdlab/setup-haxe@master
-        with:
-          haxe-version: 4.3.4
-      # Runs a set of commands using the runners shell
-      - name: Install Haxelib
-        run: |
-          sudo apt-get install libvlc-dev
-          sudo apt-get install libvlccore-dev
-          haxelib setup ~/haxelib
-          haxelib install hxcpp > /dev/null --quiet
-          chmod +x ./setup/unix.sh
-          sh ./setup/unix.sh
-      - name: Skip SScript setup mode
-        run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> ~/settings.cocoa
-      - name: Create Version Tag
-        run: echo "${{github.run_id}}" > VERSION
-      - name: Compile
-        run: haxelib run lime build Project.xml linux --app-version="4.0.0-${{ github.run_id}}" -D officialBuild
-      - name: Publish Artifact
-        uses: actions/upload-artifact@v4.3.4
-        with:
-          name: linuxBuild
-          path: 'export/release/linux/bin'
-  buildWindows:
-    runs-on: windows-latest
-
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4.1.7
-
-      - uses: krdlab/setup-haxe@master
-        with:
-          haxe-version: 4.3.4
-      # Runs a set of commands using the runners shell
-      - name: Install Haxelib
-        run: |
-          haxelib setup C:/haxelib
-          haxelib install hxcpp > /dev/null --quiet
-          .\"setup/windows.bat"
-        shell: cmd
-      - name: Skip SScript setup mode
-        run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> %USERPROFILE%/settings.cocoa
-        shell: cmd
-      - name: Create Version Tag
-        run: echo "${{github.run_id}}" > VERSION
-      - name: Compile
-        run: haxelib run lime build windows --app-version="4.0.0-${{ github.run_id}}"  -D officialBuild
-      - name: Publish Artifact
-        uses: actions/upload-artifact@v4.3.4
-        with:
-          name: windowsBuild
-          path: export/release/windows/bin
-  buildMac:
-    runs-on: macos-15
-
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4.1.7
-
-      - uses: krdlab/setup-haxe@master
-        with:
-          haxe-version: 4.3.4
-      # Runs a set of commands using the runners shell
-      - name: Install Haxelib
-        run: |
-          haxelib setup ~/haxelib
-          haxelib install hxcpp > /dev/null --quiet
-          chmod +x ./setup/unix.sh
-          sh ./setup/unix.sh
-      - name: Skip SScript setup mode
-        run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> ~/settings.cocoa
-      - name: Create Version Tag
-        run: echo "${{github.run_id}}" > VERSION
-      - name: Compile
-        run: haxelib run lime build mac --app-version="4.0.0-${{ github.run_id}}"  -D officialBuild
-      - name: Publish Artifact
-        uses: actions/upload-artifact@v4.3.4
-        with:
-          name: macBuild
-          path: export/release/macos/bin
+  BuildMobile:
+    permissions: write-all
+    needs: BuildMobileCache
+    name: Build mobile
+    strategy:
+      matrix:
+        include:
+          - name: Android
+            os: ubuntu-24.04
+            exportPath: android
+            buildArgs: "android"
+            cacheLibrariesPath: P-Slice.1.0.mobile-cache
+            artifactName: P-Slice.1.0.android
+            cachePath: P-Slice.1.0.build-android
+            artifactPath: "export/release/android/bin/app/build/outputs/apk/release/*.apk"
+          - name: iOS
+            os: macos-15
+            buildArgs: "ios -nosign -final"
+            exportPath: ios/PSliceEngine/haxe/build/Release-iphoneos-64/
+            cacheLibrariesPath: P-Slice.1.0.mobile-cache
+            artifactName: P-Slice.1.0.ios
+            artifactPath: "export/release/ios/build/Release-iphoneos/*.ipa"
+            cachePath: P-Slice.1.0.build-ios
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      name: ${{ matrix.name }}
+      os: ${{ matrix.os }}
+      buildArgs: ${{ matrix.buildArgs }}
+      exportPath: ${{ matrix.exportPath }}
+      artifactName: ${{ matrix.artifactName }}
+      cacheLibrariesPath: ${{ matrix.cacheLibrariesPath }}
+      artifactPath: ${{ matrix.artifactPath }}
+      cachePath: ${{matrix.cachePath}}

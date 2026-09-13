@@ -64,7 +64,7 @@ class StageData {
 	public static var forceNextDirectory:String = null;
 	public static function loadDirectory(SONG:SwagSong) {
 		var stage:String = '';
-		if(SONG.stage != null)
+		if(SONG?.stage != null)
 			stage = SONG.stage;
 		else if(Song.loadedSongName != null)
 			stage = vanillaSongStage(Paths.formatToSongPath(Song.loadedSongName));
@@ -79,8 +79,8 @@ class StageData {
 		try
 		{
 			var path:String = Paths.getPath('stages/' + stage + '.json', TEXT, null, true);
-			if(Paths.pathExists(path))
-				return cast tjson.TJSON.parse(Paths.getFileContent(path));
+			if(NativeFileSystem.exists(path))
+				return cast tjson.TJSON.parse(NativeFileSystem.getContent(path));
 		}
 		return dummy();
 	}

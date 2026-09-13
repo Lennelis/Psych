@@ -24,9 +24,7 @@ typedef NoteSplashConfig = {
 	scale:Float,
 	allowRGB:Bool,
 	allowPixel:Bool,
-	rgb:Array<Null<RGB>>,
-	/** 'add', 'screen', 'multiply' or 'subtract'. Anything else, or absent, draws normally. */
-	?blend:String
+	rgb:Array<Null<RGB>>
 }
 
 class NoteSplash extends FlxSprite
@@ -47,30 +45,6 @@ class NoteSplash extends FlxSprite
 	public static var defaultNoteSplash(default, never):String = "noteSplashes/noteSplashes";
 	public static var configs:Map<String, NoteSplashConfig> = new Map();
 
-	/** Which sheets have a `-pixel` twin, so spawning a splash is not a file lookup. */
-	public static var pixelVariants:Map<String, String> = new Map();
-
-	/**
-	 * The pixel version of a splash sheet, on the stages that call for one.
-	 *
-	 * Without a sheet of its own a pixel stage gets the ordinary splash put through the
-	 * pixelate shader, which is an impression of pixel art rather than the thing itself.
-	 * Any skin can bring its own by sitting a `-pixel` sheet beside it.
-	 */
-	public static function pixelVariantOf(splash:String):String
-	{
-		if (!PlayState.isPixelStage || splash == null || splash.length < 1 || splash.endsWith('-pixel')) return splash;
-
-		var found:String = pixelVariants.get(splash);
-		if (found == null)
-		{
-			var pixelName:String = '$splash-pixel';
-			found = Paths.fileExists('images/$pixelName.png', IMAGE) ? pixelName : splash;
-			pixelVariants.set(splash, found);
-		}
-		return found;
-	}
-
 	public function new(?x:Float = 0, ?y:Float = 0, ?splash:String)
 	{
 		super(x, y);
@@ -89,12 +63,11 @@ class NoteSplash extends FlxSprite
 		config = null;
 		maxAnims = 0;
 
-		if(splash == null)
+		if(splash == null || splash.length < 1)
 		{
 			splash = defaultNoteSplash + getSplashSkinPostfix();
 			if (PlayState.SONG != null && PlayState.SONG.splashSkin != null && PlayState.SONG.splashSkin.length > 0) splash = PlayState.SONG.splashSkin;
 		}
-		splash = pixelVariantOf(splash);
 
 		texture = splash;
 		frames = Paths.getSparrowAtlas(texture);
@@ -130,8 +103,7 @@ class NoteSplash extends FlxSprite
 					scale: config.scale,
 					allowRGB: config.allowRGB,
 					allowPixel: config.allowPixel,
-					rgb: config.rgb,
-					blend: config.blend
+					rgb: config.rgb
 				}
 
 				for (i in Reflect.fields(config.animations))
@@ -228,7 +200,6 @@ class NoteSplash extends FlxSprite
 			var loadedTexture:String = defaultNoteSplash + getSplashSkinPostfix();
 			if (note != null && note.noteSplashData.texture != null) loadedTexture = note.noteSplashData.texture;
 			else if (PlayState.SONG != null && PlayState.SONG.splashSkin != null && PlayState.SONG.splashSkin.length > 0) loadedTexture = PlayState.SONG.splashSkin;
-			loadedTexture = pixelVariantOf(loadedTexture);
 
 			if (texture != loadedTexture) loadSplash(loadedTexture);
 		}
@@ -403,30 +374,7 @@ class NoteSplash extends FlxSprite
 			scale: 1,
 			allowRGB: true,
 			allowPixel: true,
-			rgb: null,
-			blend: null
-		}
-	}
-
-	/**
-	 * How a splash skin's json asks to be blended.
-	 *
-	 * V-Slice's pixel splashes are drawn with 'screen', which is what turns their black
-	 * outlines into light instead of leaving them sitting there as black blobs. Only the
-	 * four modes the hardware renderer actually implements are honoured; anything else
-	 * draws normally rather than quietly falling back to something slower.
-	 */
-	public static function blendOf(name:String):openfl.display.BlendMode
-	{
-		if (name == null) return null;
-
-		return switch (name.trim().toLowerCase())
-		{
-			case 'add': ADD;
-			case 'screen': SCREEN;
-			case 'multiply': MULTIPLY;
-			case 'subtract': SUBTRACT;
-			default: null;
+			rgb: null
 		}
 	}
 
@@ -461,7 +409,6 @@ class NoteSplash extends FlxSprite
 			}
 		}
 
-		blend = blendOf(value.blend);
 		scale.set(value.scale, value.scale);
 		return config = value;
 	}

@@ -3,14 +3,13 @@ package objects;
 import backend.animation.PsychAnimationController;
 
 import flixel.util.FlxSort;
-import flixel.util.FlxDestroyUtil;
 
 import openfl.utils.AssetType;
 import openfl.utils.Assets;
 import haxe.Json;
 
 import backend.Song;
-import states.stages.objects.TankmenBG;
+import mikolka.stages.objects.TankmenBG;
 
 typedef CharacterFile = {
 	var animations:Array<AnimArray>;
@@ -55,7 +54,6 @@ class Character extends FlxSprite
 	public var holdTimer:Float = 0;
 	public var heyTimer:Float = 0;
 	public var specialAnim:Bool = false;
-	public var animationNotes:Array<Dynamic> = [];
 	public var stunned:Bool = false;
 	public var singDuration:Float = 4; //Multiplier of how long a character holds the sing pose
 	public var idleSuffix:String = '';
@@ -93,10 +91,6 @@ class Character extends FlxSprite
 		
 		switch(curCharacter)
 		{
-			case 'pico-speaker':
-				skipDance = true;
-				loadMappedAnims();
-				playAnim("shoot1");
 			case 'pico-blazin', 'darnell-blazin':
 				skipDance = true;
 		}
@@ -110,7 +104,7 @@ class Character extends FlxSprite
 		var characterPath:String = 'characters/$character.json';
 
 		var path:String = Paths.getPath(characterPath, TEXT);
-		if (!Paths.pathExists(path))
+		if (!NativeFileSystem.exists(path))
 		{
 			path = Paths.getSharedPath('characters/' + DEFAULT_CHARACTER + '.json'); //If a character couldn't be found, change him to BF just to prevent a crash
 			missingCharacter = true;
@@ -120,7 +114,7 @@ class Character extends FlxSprite
 
 		try
 		{
-			loadCharacterFile(Json.parse(Paths.getFileContent(path)));
+			loadCharacterFile(Json.parse(NativeFileSystem.getContent(path)));
 		}
 		catch(e:Dynamic)
 		{
@@ -139,7 +133,7 @@ class Character extends FlxSprite
 
 		#if flxanimate
 		var animToFind:String = Paths.getPath('images/' + json.image + '/Animation.json', TEXT);
-		if (#if MODS_ALLOWED FileSystem.exists(animToFind) || #end Assets.exists(animToFind))
+		if (NativeFileSystem.exists(animToFind))
 			isAnimateAtlas = true;
 		#end
 
@@ -213,8 +207,10 @@ class Character extends FlxSprite
 				{
 					if(animIndices != null && animIndices.length > 0)
 						atlas.anim.addBySymbolIndices(animAnim, animName, animIndices, animFps, animLoop);
-					else
+					else if (atlas.anim.symbolDictionary.exists(animName)) //? Allow us to use labels please
 						atlas.anim.addBySymbol(animAnim, animName, animFps, animLoop);
+					else //? Allow us to use labels please
+						atlas.anim.addByFrameLabel(animAnim, animName, animFps, animLoop);
 				}
 				#end
 
@@ -262,21 +258,6 @@ class Character extends FlxSprite
 		{
 			dance();
 			finishAnimation();
-		}
-
-		switch(curCharacter)
-		{
-			case 'pico-speaker':
-				if(animationNotes.length > 0 && Conductor.songPosition > animationNotes[0][0])
-				{
-					var noteData:Int = 1;
-					if(animationNotes[0][1] > 2) noteData = 3;
-
-					noteData += FlxG.random.int(0, 1);
-					playAnim('shoot' + noteData, true);
-					animationNotes.shift();
-				}
-				if(isAnimationFinished()) playAnim(getAnimationName(), false, false, animation.curAnim.frames.length - 3);
 		}
 
 		if (getAnimationName().startsWith('sing')) holdTimer += elapsed;
@@ -372,12 +353,12 @@ class Character extends FlxSprite
 		specialAnim = false;
 		if(!isAnimateAtlas)
 		{
-			animation.play(AnimName, Force, Reversed, Frame);
+			animation?.play(AnimName, Force, Reversed, Frame);
 		}
 		else
 		{
-			atlas.anim.play(AnimName, Force, Reversed, Frame);
-			atlas.update(0);
+			atlas?.anim?.play(AnimName, Force, Reversed, Frame);
+			atlas?.update(0);
 		}
 		_lastPlayedAnimation = AnimName;
 
@@ -399,22 +380,6 @@ class Character extends FlxSprite
 			if (AnimName == 'singUP' || AnimName == 'singDOWN')
 				danced = !danced;
 		}
-	}
-
-	function loadMappedAnims():Void
-	{
-		try
-		{
-			var songData:SwagSong = Song.getChart('picospeaker', Paths.formatToSongPath(Song.loadedSongName));
-			if(songData != null)
-				for (section in songData.notes)
-					for (songNotes in section.sectionNotes)
-						animationNotes.push(songNotes);
-
-			TankmenBG.animationNotes = animationNotes;
-			animationNotes.sort(sortAnims);
-		}
-		catch(e:Dynamic) {}
 	}
 
 	function sortAnims(Obj1:Array<Dynamic>, Obj2:Array<Dynamic>):Int

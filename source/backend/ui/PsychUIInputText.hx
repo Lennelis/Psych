@@ -376,7 +376,10 @@ class PsychUIInputText extends FlxSpriteGroup
 	}
 
 	public dynamic function onPressEnter(e:KeyboardEvent)
+	{
+		FlxG.stage.window.textInputEnabled = false;
 		focusOn = null;
+	}
 
 	public var unfocus:Void->Void;
 	public static function set_focusOn(v:PsychUIInputText)
@@ -400,6 +403,7 @@ class PsychUIInputText extends FlxSpriteGroup
 				if(!FlxG.keys.pressed.SHIFT) selectIndex = -1;
 				else if(selectIndex == -1) selectIndex = caretIndex;
 				focusOn = this;
+				FlxG.stage.window.textInputEnabled = true;
 				caretIndex = 0;
 				var lastBound:Float = 0;
 				var textObjX:Float = textObj.getScreenPosition(camera).x;
@@ -508,7 +512,7 @@ class PsychUIInputText extends FlxSpriteGroup
 
 			selection.updateHitbox();
 
-			if(text.length > 0)
+			if((text?.length ?? 0) > 0)
 			{
 				textObj.removeFormat(selectedFormat);
 				if(selectIndex != -1 && selectIndex != caretIndex)
@@ -517,7 +521,7 @@ class PsychUIInputText extends FlxSpriteGroup
 				}
 			}
 		}
-		else if(text.length > 0) textObj.removeFormat(selectedFormat);
+		else if((text?.length ?? 0) > 0) textObj.removeFormat(selectedFormat);
 	}
 
 	function deleteSelection()
