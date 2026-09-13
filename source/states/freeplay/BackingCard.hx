@@ -19,6 +19,9 @@ import openfl.display.BlendMode;
  */
 class BackingCard extends FlxSpriteGroup
 {
+	/** Share of the extra width the things near the DJ move right by. V-Slice's number. */
+	public static final DJ_POS_MULTI:Float = 0.44;
+
 	public var pinkBack:FlxSprite;
 	public var orangeBackShit:FlxSprite;
 	public var alsoOrangeLOL:FlxSprite;
@@ -28,9 +31,20 @@ class BackingCard extends FlxSpriteGroup
 	public var cardGlow:FlxSprite;
 	public var backingTextYeah:BGScrollingText;
 
-	public function new()
+	/**
+	 * How much wider than 16:9 the screen is, divided by 1.5 - V-Slice's `CUTOUT_WIDTH`.
+	 *
+	 * The menu is built for 1280 and everything on the left of it moves right by a share
+	 * of this on a wider screen, so the card, the songs and the difficulty don't stay
+	 * huddled against the left edge with the art stranded in the middle.
+	 */
+	public var cutout(default, null):Float;
+
+	public function new(cutout:Float = 0)
 	{
 		super();
+
+		this.cutout = cutout;
 
 		cardGlow = new FlxSprite(-30, -30).loadGraphic(Paths.image('freeplay/cardGlow'));
 		cardGlow.blend = BlendMode.ADD;
@@ -49,12 +63,28 @@ class BackingCard extends FlxSpriteGroup
 
 		pinkBack = new FlxSprite().loadGraphic(Paths.image('freeplay/pinkBack'));
 		pinkBack.color = 0xFFFFD4E9; // sets it to pink!
+
+		// Stretched to cover the extra width, like V-Slice does. The diagonal on its
+		// right gets shallower, which nothing can see: the art on the right is drawn
+		// over that part of it.
+		if (cutout > 0)
+		{
+			pinkBack.scale.x = (pinkBack.frameWidth + cutout) / pinkBack.frameWidth;
+			pinkBack.updateHitbox();
+		}
+
 		pinkBack.x -= pinkBack.width; // starts off to the left, and slides in
 
-		orangeBackShit = new FlxSprite(84, 440).makeGraphic(Std.int(pinkBack.width), 75, 0xFFFEDA00);
+		// Built at the card's own width rather than its stretched one, so it lines up
+		// with the mask below - which is the card's pixels, and those never stretched.
+		orangeBackShit = new FlxSprite(84, 440).makeGraphic(pinkBack.frameWidth, 75, 0xFFFEDA00);
 		alsoOrangeLOL = new FlxSprite(0, orangeBackShit.y).makeGraphic(100, Std.int(orangeBackShit.height), 0xFFFFD400);
 
-		backingTextYeah = new BGScrollingText(-320, 120, 'RIGHT HERE, RIGHT NOW, YEAH!', FlxG.width, true, 60);
+		confirmGlow.x += cutout * DJ_POS_MULTI;
+		confirmGlow2.x += cutout * DJ_POS_MULTI;
+		confirmTextGlow.x += cutout * DJ_POS_MULTI;
+
+		backingTextYeah = new BGScrollingText((cutout * DJ_POS_MULTI) - 320, 120, 'RIGHT HERE, RIGHT NOW, YEAH!', FlxG.width, true, 60);
 		backingTextYeah.speed = 2.4;
 		// Darker than the card rather than brighter: V-Slice's is a drawn texture that
 		// reads as an inset shadow, and yellow on yellow simply disappeared.

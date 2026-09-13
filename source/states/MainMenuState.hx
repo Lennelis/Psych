@@ -163,6 +163,12 @@ class MainMenuState extends MusicBeatState
 				changeItem(1);
 
 			var allowMouse:Bool = allowMouse;
+
+			// Where the selection was before the pointer is allowed to move it, so a tap
+			// that moved it can be told apart from a tap on what was already picked.
+			final selectionWas:Int = curSelected;
+			final columnWas:MainMenuColumn = curColumn;
+
 			if (allowMouse && ((FlxG.mouse.deltaScreenX != 0 && FlxG.mouse.deltaScreenY != 0) || FlxG.mouse.justPressed)) //FlxG.mouse.deltaScreenX/Y checks is more accurate than FlxG.mouse.justMoved
 			{
 				allowMouse = false;
@@ -268,7 +274,17 @@ class MainMenuState extends MusicBeatState
 				MusicBeatState.switchState(new TitleState());
 			}
 
-			if (controls.ACCEPT || (FlxG.mouse.justPressed && allowMouse))
+			var tapped:Bool = FlxG.mouse.justPressed && allowMouse;
+
+			#if mobile
+			// A finger has no hover: the first thing that happens is the press, which
+			// both moves the selection and would confirm it in the same frame. So a tap
+			// that moved the selection only moves it, and it takes a second tap on the
+			// same item to go in.
+			if (tapped && (curSelected != selectionWas || curColumn != columnWas)) tapped = false;
+			#end
+
+			if (controls.ACCEPT || tapped)
 			{
 				FlxG.sound.play(Paths.sound('confirmMenu'));
 				selectedSomethin = true;

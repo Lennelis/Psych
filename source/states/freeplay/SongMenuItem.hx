@@ -56,6 +56,9 @@ class SongMenuItem extends FlxSpriteGroup
 	/** Where this capsule sits in the list, so it knows how far it is from the selection. */
 	public var index:Int = 0;
 
+	/** How far right the whole column has been pushed, on a screen wider than 16:9. */
+	public var xOffset:Float = 0;
+
 	public var curSelected:Int = 0;
 
 	public var realScaled:Float = 0.8;
@@ -477,7 +480,7 @@ class SongMenuItem extends FlxSpriteGroup
 				frameInTypeBeat += 1;
 
 				// Once it has flown far enough in, hand it over to the resting position.
-				if (targetPos.x <= 320) targetPos.x = intendedX(index + 1 - curSelected);
+				if (targetPos.x <= 320 + xOffset) targetPos.x = intendedX(index + 1 - curSelected) + xOffset;
 			}
 			else if (frameInTypeBeat == xFrames.length)
 				doJumpIn = false;
@@ -699,15 +702,9 @@ class FreeplayIcon extends FlxSprite
 	 */
 	public static inline var SIZE:Int = 100;
 
-	var boxX:Float;
-	var boxY:Float;
-
 	public function new(x:Float, y:Float)
 	{
 		super(x, y);
-
-		boxX = x;
-		boxY = y;
 
 		makeGraphic(SIZE, SIZE, 0x00000000);
 		active = false;
@@ -800,7 +797,12 @@ class FreeplayIcon extends FlxSprite
 		scale.set(scaleTo, scaleTo);
 		updateHitbox();
 
-		setPosition(boxX + (SIZE - width) * 0.5, boxY + (SIZE - height) * 0.5);
+		// Centred by shifting what it draws, not by moving the sprite. A sprite group
+		// owns its children's coordinates - it adds its own position to theirs as they
+		// go in, and moves them by deltas afterwards - so setting an absolute position
+		// here tore the icon out of the capsule and left it sitting behind the card.
+		offset.x -= (SIZE - width) * 0.5;
+		offset.y -= (SIZE - height) * 0.5;
 	}
 }
 

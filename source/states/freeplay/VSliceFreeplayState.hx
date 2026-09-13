@@ -26,6 +26,14 @@ import states.MainMenuState;
  */
 class VSliceFreeplayState extends MusicBeatState
 {
+	/**
+	 * Shares of the extra width that the songs and the difficulty move right by on a
+	 * screen wider than 16:9. V-Slice's `SONGS_POS_MULTI` and `DJ_POS_MULTI`.
+	 */
+	public static final SONGS_POS_MULTI:Float = 0.75;
+
+	public static final DJ_POS_MULTI:Float = 0.44;
+
 	/** How long the preview takes to fade in, and to fade back out. V-Slice's numbers. */
 	public static final FADE_IN_DURATION:Float = 0.5;
 	public static final FADE_IN_DELAY:Float = 0.25;
@@ -65,6 +73,15 @@ class VSliceFreeplayState extends MusicBeatState
 	/** Blocks input while the menu is arriving or leaving. */
 	var busy:Bool = true;
 
+	/**
+	 * V-Slice's `CUTOUT_WIDTH`: how much wider than 16:9 the screen is, over 1.5.
+	 *
+	 * Everything laid out from the left - the card, the songs, the difficulty - moves
+	 * right by a share of it, so a wide screen spreads the menu out instead of leaving
+	 * it piled against the left edge. Zero at 1280, so nothing moves on a desktop.
+	 */
+	var cutout:Float = 0;
+
 	var previewTimer:FlxTimer;
 
 	override function create():Void
@@ -91,7 +108,9 @@ class VSliceFreeplayState extends MusicBeatState
 
 		persistentUpdate = true;
 
-		backingCard = new BackingCard();
+		cutout = Math.max(0, FlxG.width - FlxG.initialWidth) / 1.5;
+
+		backingCard = new BackingCard(cutout);
 		add(backingCard);
 		backingCard.build();
 
@@ -147,8 +166,8 @@ class VSliceFreeplayState extends MusicBeatState
 		txtCompletion.visible = false;
 		add(txtCompletion);
 
-		diffSelLeft = new DifficultySelector(20, grpDifficulties.y - 10, false);
-		diffSelRight = new DifficultySelector(325, grpDifficulties.y - 10, true);
+		diffSelLeft = new DifficultySelector((cutout * DJ_POS_MULTI) + 20, grpDifficulties.y - 10, false);
+		diffSelRight = new DifficultySelector((cutout * DJ_POS_MULTI) + 325, grpDifficulties.y - 10, true);
 		diffSelLeft.visible = false;
 		diffSelRight.visible = false;
 		add(diffSelLeft);
@@ -201,7 +220,7 @@ class VSliceFreeplayState extends MusicBeatState
 			onComplete: function(_) blackOverlay.visible = false
 		});
 
-		FlxTween.tween(grpDifficulties, {x: 90}, 0.6, {ease: FlxEase.quartOut});
+		FlxTween.tween(grpDifficulties, {x: (cutout * DJ_POS_MULTI) + 90}, 0.6, {ease: FlxEase.quartOut});
 
 		diffSelLeft.visible = true;
 		diffSelRight.visible = true;
@@ -231,6 +250,7 @@ class VSliceFreeplayState extends MusicBeatState
 			var capsule:SongMenuItem = new SongMenuItem(FlxG.width, 0);
 			capsule.initData(songs[i], i, curDifficulty);
 			capsule.hsvShader = hsvShader;
+			capsule.xOffset = cutout * SONGS_POS_MULTI;
 			capsule.y = capsule.intendedY(i + 1) + 10;
 			capsule.targetPos.x = capsule.x;
 
@@ -331,7 +351,7 @@ class VSliceFreeplayState extends MusicBeatState
 			else if (offsetIndex > 4) yOffset -= 10;
 
 			capsule.targetPos.y = capsule.intendedY(offsetIndex) - yOffset;
-			capsule.targetPos.x = capsule.intendedX(offsetIndex);
+			capsule.targetPos.x = capsule.intendedX(offsetIndex) + (cutout * SONGS_POS_MULTI);
 
 			if (slot < curSelected) capsule.targetPos.y -= 100; // another 100 for good measure
 		}

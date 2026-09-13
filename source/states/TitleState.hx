@@ -327,6 +327,18 @@ class TitleState extends MusicBeatState
 	}
 
 	var transitioning:Bool = false;
+
+	/** The second the title waits before handing over, and how long it has been waiting. */
+	var enterTimer:FlxTimer;
+
+	var enterHeldFor:Float = 0;
+
+	function openMainMenu():Void
+	{
+		enterTimer = null;
+		MusicBeatState.switchState(new MainMenuState());
+		closedState = true;
+	}
 	private static var playJingle:Bool = false;
 	
 	var newTitle:Bool = false;
@@ -349,6 +361,22 @@ class TitleState extends MusicBeatState
 			}
 		}
 		#end
+
+		// The wait between pressing enter and the main menu is a second of flash and
+		// music, and pressing again during it means "yes, I know, go" - so it goes. The
+		// tenth of a second is there because the press that started the wait is still
+		// being read on the frame it started.
+		if (enterTimer != null && !enterTimer.finished)
+		{
+			enterHeldFor += elapsed;
+
+			if (enterHeldFor > 0.1 && pressedEnter)
+			{
+				enterTimer.cancel();
+				openMainMenu();
+				return;
+			}
+		}
 
 		var gamepad:FlxGamepad = FlxG.gamepads.lastActive;
 
@@ -397,11 +425,7 @@ class TitleState extends MusicBeatState
 				transitioning = true;
 				// FlxG.sound.music.stop();
 
-				new FlxTimer().start(1, function(tmr:FlxTimer)
-				{
-					MusicBeatState.switchState(new MainMenuState());
-					closedState = true;
-				});
+				enterTimer = new FlxTimer().start(1, function(tmr:FlxTimer) openMainMenu());
 				// FlxG.sound.play(Paths.music('titleShoot'), 0.7);
 			}
 			#if TITLE_SCREEN_EASTER_EGG
