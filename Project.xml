@@ -376,6 +376,15 @@
 		<template path="setup/GoogleService-Info.plist" rename="../GoogleService-Info.plist" if="ios"/>
 	</section>
 
+	<!-- Without this, a NO_FIREBASE android build fails in gradle. lime's app
+	     build.gradle template puts the plugin and its dependencies behind
+	     PSLICE_FIREBASE_SDK but leaves the release buildType's
+	     firebaseCrashlytics {} block unconditional, so with the plugin gone
+	     gradle has no such method. templates/ holds that one file with the
+	     block guarded the same way; the project's own template paths take
+	     priority over lime's. -->
+	<template path="templates" if="NO_FIREBASE" />
+
 	<section if="PROFILE_BUILD">
 		<assets path='art/desktop/icon16.png' rename='icon.png' if="linux" />
 		<icon path="art/desktop/icon16.png" />

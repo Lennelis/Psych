@@ -57,6 +57,29 @@ and the Firebase gradle plugin fails on an empty one. Every use of the define
 in `source/` was already behind `#if`, so turning it off just drops the
 crash reporter.
 
+**`templates/android/template/app/build.gradle`**
+
+Turning Firebase off isn't enough on its own: lime's app `build.gradle`
+template guards the Crashlytics plugin and its dependencies behind
+`PSLICE_FIREBASE_SDK`, but leaves the release buildType's
+`firebaseCrashlytics {}` block unconditional. With the plugin gone, gradle has
+no such method, and the build dies *after* the whole C++ pass has succeeded:
+
+```
+build.gradle line 55: Could not find method firebaseCrashlytics()
+```
+
+So `templates/` carries that one file, identical to lime's apart from the same
+guard wrapped around that block — two added lines. `<template path="templates"
+if="NO_FIREBASE"/>` registers it, and a project's own template paths take
+priority over lime's (`HXProject.fromFile` appends them last precisely so they
+win, and `hxp`'s `findTemplateRecursive` reverses the list and takes the first
+match per file). Only that one file is overridden; every other android
+template still comes from lime.
+
+This is the one change here worth sending upstream — the unconditional block
+is a latent bug in P-Slice's lime fork for anyone building without Firebase.
+
 **`.github/workflows/android.yml`**
 
 Upstream's `main.yml` builds Windows, Linux, macOS, HTML5, Android and iOS, and
