@@ -366,17 +366,24 @@ class VSliceFreeplayState extends MusicBeatState
 		addVirtualPadCamera();
 		#end
 
-		// The menu opens when the DJ finishes his intro, which is V-Slice's own cue. If he
-		// couldn't be loaded there is nothing to wait for, so the card sliding in takes
-		// the same beat instead and the menu still arrives rather than appearing at once.
+		// The menu opens when the DJ finishes his intro, which is V-Slice's own cue.
 		if (dj != null && dj.loaded) dj.onIntroDone.add(onDJIntroDone);
-		else
-			new FlxTimer().start(0.9, function(_) onDJIntroDone());
+
+		// And it opens anyway if he hasn't managed it in time. V-Slice can take its DJ
+		// for granted; this cannot, and a DJ that never finishes his intro used to mean a
+		// menu stuck half built - no top bar, no letters, a card still on its way in.
+		new FlxTimer().start(1.5, function(_) onDJIntroDone());
 	}
+
+	/** Whether the menu has finished arriving, so the watchdog can't run this twice. */
+	var introDone:Bool = false;
 
 	/** Everything that lands once the intro is over and the menu becomes usable. */
 	function onDJIntroDone():Void
 	{
+		if (introDone) return;
+
+		introDone = true;
 		uiState = Idle;
 
 		FlxTween.color(backingImage, 0.6, 0xFF000000, 0xFFFFFFFF, {

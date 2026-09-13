@@ -2,6 +2,7 @@ package states.freeplay;
 
 import flixel.util.FlxSignal;
 import flxanimate.PsychFlxAnimate;
+import haxe.Json;
 
 /**
  * What the DJ is doing. V-Slice's `FreeplayDJState`, minus the states that belong to
@@ -126,6 +127,15 @@ class FreeplayDJ extends PsychFlxAnimate
 
 		loadAnimations();
 
+		// No animations means a DJ frozen on whatever frame the atlas opens at, which for
+		// boyfriend is him still below the screen. Better to have no DJ than that.
+		if (!loadedAnimations.exists('intro') && !loadedAnimations.exists('idle'))
+		{
+			trace('FreeplayDJ: no animations were loaded, leaving him out');
+			loaded = false;
+			return;
+		}
+
 		antialiasing = ClientPrefs.data.antialiasing;
 
 		// One signal for both: flxanimate fires this at the end of a run whether or not
@@ -135,6 +145,8 @@ class FreeplayDJ extends PsychFlxAnimate
 
 	function loadAnimations():Void
 	{
+		readStageLabels();
+
 		// Everything but the idle plays once. The idle loops, and every time round it
 		// gets a chance to decide it has been idling long enough to do something else.
 		addAnimation('intro', data.intro, false);
@@ -144,17 +156,100 @@ class FreeplayDJ extends PsychFlxAnimate
 		addAnimation('cartoon', data.cartoon, false);
 	}
 
-	function addAnimation(name:String, frameLabel:String, looped:Bool):Void
+	/** The name of the atlas's own stage symbol, and where each label sits on it. */
+	var stageSymbol:String = null;
+
+	var labelFrames:Map<String, Array<Int>> = [];
+
+	/**
+	 * Works out which frames each of the atlas's labels covers, by reading the atlas.
+	 *
+	 * `anim.addByFrameLabel` would do this, and it is what V-Slice uses, but it is doing
+	 * the lookup through `curSymbol` and coming back with nothing here - so the DJ sat
+	 * frozen on the first frame of his drop-in, which is him below the screen with only
+	 * his decks showing. The animation data is a JSON file in the atlas folder either
+	 * way, so this reads it and hands flxanimate the frame numbers directly.
+	 *
+	 * Adobe's exporter writes the same structure under two sets of key names depending
+	 * on its version - `AN.TL.L[].FR[]` or `ANIMATION.TIMELINE.LAYERS[].Frames[]` - and
+	 * both turn up among these assets, so both are read.
+	 */
+	function readStageLabels():Void
 	{
-		if (frameLabel == null || frameLabel.length < 1) return;
+		var raw:String = Paths.getTextFromFile('images/${data.assetPath}/Animation.json');
+		if (raw == null || raw.length < 1) return;
 
 		try
 		{
-			anim.addByFrameLabel(name, frameLabel, 24, looped);
+			// The exporter writes a byte order mark, which the JSON parser won't have.
+			if (raw.charCodeAt(0) == 0xFEFF) raw = raw.substr(1);
+
+			var parsed:Dynamic = Json.parse(raw);
+			var animation:Dynamic = field(parsed, 'AN', 'ANIMATION');
+			if (animation == null) return;
+
+			stageSymbol = field(animation, 'SN', 'SYMBOL_name');
+
+			var timeline:Dynamic = field(animation, 'TL', 'TIMELINE');
+			if (timeline == null) return;
+
+			var layers:Array<Dynamic> = cast field(timeline, 'L', 'LAYERS');
+			if (layers == null) return;
+
+			for (layer in layers)
+			{
+				var frames:Array<Dynamic> = cast field(layer, 'FR', 'Frames');
+				if (frames == null) continue;
+
+				for (frame in frames)
+				{
+					var name:String = field(frame, 'N', 'name');
+					if (name == null || name.length < 1) continue;
+
+					var index:Int = Std.int(numberOr(field(frame, 'I', 'index'), 0));
+					var duration:Int = Std.int(numberOr(field(frame, 'DU', 'duration'), 1));
+
+					labelFrames.set(name, [for (i in index...(index + Std.int(Math.max(1, duration)))) i]);
+				}
+			}
+		}
+		catch (e:Dynamic)
+			trace('FreeplayDJ: could not read the labels out of the atlas ($e)');
+	}
+
+	static function field(source:Dynamic, short:String, long:String):Dynamic
+	{
+		if (source == null) return null;
+
+		var value:Dynamic = Reflect.field(source, short);
+		if (value == null) value = Reflect.field(source, long);
+
+		return value;
+	}
+
+	static function numberOr(value:Dynamic, fallback:Float):Float
+	{
+		if (value == null || !(Std.isOfType(value, Float) || Std.isOfType(value, Int))) return fallback;
+
+		return cast value;
+	}
+
+	function addAnimation(name:String, frameLabel:String, looped:Bool):Void
+	{
+		if (frameLabel == null || frameLabel.length < 1) return;
+		if (stageSymbol == null || !labelFrames.exists(frameLabel))
+		{
+			trace('FreeplayDJ: the atlas has no label called "$frameLabel"');
+			return;
+		}
+
+		try
+		{
+			anim.addBySymbolIndices(name, stageSymbol, labelFrames.get(frameLabel), 24, looped);
 			loadedAnimations.set(name, true);
 		}
 		catch (e:Dynamic)
-			trace('FreeplayDJ: no frame label "$frameLabel" for "$name" ($e)');
+			trace('FreeplayDJ: could not add "$name" from "$frameLabel" ($e)');
 	}
 
 	public function hasAnimation(name:String):Bool

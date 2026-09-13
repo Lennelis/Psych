@@ -2919,15 +2919,12 @@ class PlayState extends MusicBeatState
 	/**
 	 * When a hold is over, as far as anything that lights up is concerned.
 	 *
-	 * A step before the chart says, and deliberately: Psych builds a sustain out of a
-	 * piece per step plus a tail cap, so the last piece is still coming down when the
-	 * hold is already over to the ear. V-Slice ends the glow and bursts the cover as the
-	 * hold finishes rather than as the last piece is eaten, which is snappier.
-	 *
-	 * The strum's glow and the cover both ask this, so they always end together.
+	 * The chart's own end. Ending a step earlier was tried, to make the burst and the
+	 * glow snap off sooner, and it was worse - so the strum's glow and the cover both
+	 * ask this and both end where the hold really does.
 	 */
 	inline function holdFinishTime(head:Note):Float
-		return head.strumTime + head.sustainLength - Conductor.stepCrochet;
+		return head.strumTime + head.sustainLength;
 
 	/**
 	 * Puts a cover over the strum a hold is being played on.
