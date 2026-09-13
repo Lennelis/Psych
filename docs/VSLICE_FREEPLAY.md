@@ -37,16 +37,45 @@ every note was hit at full rating: the same thing gold is asking for.
 time it is asked for and then kept. Opening every chart in the game up front to fill in a
 number would cost seconds on a phone.
 
+## How closely it follows the original
+
+Closely, and on purpose. `VSliceFreeplayState` keeps V-Slice's order of operations, its
+field names and its numbers, because the parts that are easy to paraphrase wrongly turn
+out to be exactly the parts that look wrong — which sprite leaves in which direction,
+when the capsules learn where they are going, how far the difficulty slides. Three bugs
+came out of paraphrasing before this was rewritten as a replica:
+
+- the capsules spent the intro sliding into a heap, because `changeSelection()` — which
+  is what sets their targets — was called a second later than V-Slice calls it
+- half the menu stayed on screen when leaving, because the list of what moves was four
+  hand-picked tweens instead of V-Slice's `exitMovers` map
+- the capsules wouldn't leave at all, because `doLerp` kept pulling them back; V-Slice
+  switches it off on the line above `doJumpOut`
+
+`exitMovers` is now what it is there: a map from a group of sprites to where they go,
+built as the menu is built, so a sprite that is added is a sprite that leaves.
+
+The deliberate departures are marked in the source. There are three. The card's
+scrolling text and glows leave with the card, because Psych's state switch is slower
+than V-Slice's and the text was left hanging on an empty screen. The RANDOM capsule
+arrives visible rather than at alpha zero, since V-Slice has the DJ's hand reveal it and
+there is no DJ yet. And the menu's own background is drawn behind the card, because
+V-Slice opens freeplay as a substate over the main menu, where Psych switches states and
+would otherwise show black.
+
 ## What Psych has that V-Slice doesn't
 
-Difficulties belong to a **week** in Psych, so the list of them changes as you scroll —
-one song offering easy/normal/hard and the next offering four of its own. V-Slice has one
-list for the whole game and never has to deal with this, so `applyDifficultyList()` swaps
-`Difficulty.list` on every selection change and keeps the chosen difficulty if the new
-week also has it. Difficulty sprites are made once per name and kept, since a mod week
-with its own names would otherwise reload art on every keypress. A difficulty with no art
-of its own — anything that isn't easy, normal, hard, erect or nightmare — is drawn as
-text in the same place.
+Difficulties belong to a **week** in Psych, so a difficulty *number* means nothing on its
+own: `1` is `hard` in one week and something else in the next. V-Slice keys everything by
+name, which turns out to be the right shape for this — the menu holds a name, and
+anything that needs Psych's number asks `FreeplaySongData.difficultyIndex()`, which
+points `Difficulty` at that song's week first so the number and the list agree.
+
+`allDifficulties` — every difficulty any song has, in the order they were first met —
+stands in for V-Slice's game-wide list. The arrows cycle through it, and when the song
+you are on hasn't got what you landed on, `findClosestDiff` moves to the nearest song
+that has, exactly as V-Slice does. A difficulty with no art of its own — anything that
+isn't easy, normal, hard, erect or nightmare — is drawn as text in the same place.
 
 ## Shaders
 
@@ -72,3 +101,7 @@ are.
 
 Also missing: touch swiping (the pad works), per-week backing art, and favourites, which
 are stored and drawn but not yet bound to a button.
+
+The RANDOM capsule is here, though: it sits above the songs the way it does in V-Slice —
+which is where the counting-from-one comes from — and picking it plays a random song at a
+difficulty that song actually has.

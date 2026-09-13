@@ -1,6 +1,6 @@
 package states.freeplay;
-import backend.Highscore;
 
+import backend.Highscore;
 import backend.WeekData;
 import haxe.Json;
 
@@ -14,6 +14,12 @@ import haxe.Json;
  * out of what Psych does have, and the rest is either derived or left at a default a
  * mod can override later.
  *
+ * Everything is keyed by a difficulty's name rather than its number, the way V-Slice
+ * does it, because in Psych a number means nothing on its own: difficulties belong to
+ * a week, so `1` is `hard` in one week and something else in the next. Anything that
+ * needs the number asks `Difficulty` for it after pointing it at this song's week,
+ * which is what the rest of the engine expects to be looking at anyway.
+ *
  * Everything expensive is worked out on demand. A chart is only opened when its BPM is
  * actually asked for, which is when the song becomes the selected one - reading every
  * chart in the game up front to fill in a number on a capsule would cost seconds.
@@ -23,10 +29,10 @@ class FreeplaySongData
 	/** As it appears in the week file, which is also how `Highscore` keys it. */
 	public var songName(default, null):String;
 
-	/** Index of the week this came out of, for the capsule's week label. */
+	/** Index of the week this came out of. */
 	public var week(default, null):Int;
 
-	/** Week name, which is what the capsule prints. */
+	/** Week name, which is what the capsule prints. V-Slice calls this the level id. */
 	public var levelName(default, null):String;
 
 	/** Icon character, used for the capsule's little pixel icon. */
@@ -43,7 +49,7 @@ class FreeplaySongData
 
 	public var isFav:Bool = false;
 
-	/** Songs Psych has no "new" flag for, so this stays false unless something sets it. */
+	/** Psych has no "new" flag for a song, so this stays false unless something sets it. */
 	public var isNew:Bool = false;
 
 	var bpmCache:Map<String, Int> = [];
@@ -60,15 +66,35 @@ class FreeplaySongData
 		this.isFav = FreeplayFavourites.has(songName);
 	}
 
+	public function hasDifficulty(difficulty:String):Bool
+		return difficulties.contains(difficulty);
+
+	/**
+	 * Points `Difficulty` at this song's week and gives back where a difficulty sits in it.
+	 *
+	 * Everything in Psych that takes a difficulty number - the score keys, the chart file
+	 * name, the story difficulty - reads that number against whatever `Difficulty.list`
+	 * happens to hold, so the two have to be set together or they mean different things.
+	 */
+	public function difficultyIndex(difficulty:String):Int
+	{
+		Difficulty.copyFrom(difficulties);
+
+		var index:Int = difficulties.indexOf(difficulty);
+		if (index < 0) index = Math.round(Math.max(0, difficulties.indexOf(Difficulty.getDefault())));
+
+		return index;
+	}
+
 	/** Highest score saved for a difficulty, 0 if it has never been finished. */
-	public function getScore(difficulty:Int):Int
-		return Highscore.getScore(formatted(), difficulty);
+	public function getScore(difficulty:String):Int
+		return Highscore.getScore(formatted(), difficultyIndex(difficulty));
 
 	/** Saved accuracy for a difficulty, 0 to 1. Negative when there is nothing saved. */
-	public function getAccuracy(difficulty:Int):Float
-		return Highscore.getRating(formatted(), difficulty);
+	public function getAccuracy(difficulty:String):Float
+		return Highscore.getRating(formatted(), difficultyIndex(difficulty));
 
-	public function getRank(difficulty:Int):FreeplayRankTier
+	public function getRank(difficulty:String):FreeplayRankTier
 		return FreeplayRankTier.fromAccuracy(getAccuracy(difficulty), getScore(difficulty));
 
 	/**
@@ -79,8 +105,8 @@ class FreeplaySongData
 	 * and counting every note of it, so this is the difficulty's place in the list -
 	 * which at least rises the way the rating would.
 	 */
-	public function getDifficultyRating(difficulty:Int):Int
-		return difficulty + 1;
+	public function getDifficultyRating(difficulty:String):Int
+		return difficultyIndex(difficulty) + 1;
 
 	/**
 	 * BPM the chart starts at, read from the chart itself the first time it is asked for.
@@ -89,19 +115,19 @@ class FreeplaySongData
 	 * parsed. That is why the answer is kept - flicking up and down a list would
 	 * otherwise re-read the same files over and over.
 	 */
-	public function getStartingBpm(difficulty:Int):Int
+	public function getStartingBpm(difficulty:String):Int
 	{
-		var key:String = Difficulty.getString(difficulty, false);
-		if (bpmCache.exists(key)) return bpmCache.get(key);
+		if (bpmCache.exists(difficulty)) return bpmCache.get(difficulty);
 
 		var bpm:Int = 0;
+		var index:Int = difficultyIndex(difficulty);
 
 		var previousMod:String = Mods.currentModDirectory;
 		Mods.currentModDirectory = folder;
 
 		try
 		{
-			var path:String = Paths.json(formatted() + '/' + Highscore.formatSong(formatted(), difficulty));
+			var path:String = Paths.json(formatted() + '/' + Highscore.formatSong(formatted(), index));
 			var raw:String = Paths.getFileContent(path);
 
 			if (raw != null && raw.length > 0)
@@ -120,7 +146,7 @@ class FreeplaySongData
 
 		Mods.currentModDirectory = previousMod;
 
-		bpmCache.set(key, bpm);
+		bpmCache.set(difficulty, bpm);
 		return bpm;
 	}
 
@@ -141,7 +167,8 @@ class FreeplaySongData
 
 			WeekData.setDirectoryFromWeek(week);
 
-			var difficulties:Array<String> = (week.difficulties != null && week.difficulties.trim().length > 0) ? CoolUtil.listFromString(week.difficulties.trim()) : Difficulty.defaultList.copy();
+			var difficulties:Array<String> = (week.difficulties != null
+				&& week.difficulties.trim().length > 0) ? CoolUtil.listFromString(week.difficulties.trim()) : Difficulty.defaultList.copy();
 
 			for (song in week.songs)
 			{
@@ -154,6 +181,31 @@ class FreeplaySongData
 		}
 
 		Mods.loadTopMod();
+		return result;
+	}
+
+	/**
+	 * Every difficulty any song has, in the order they were first met.
+	 *
+	 * V-Slice cycles the difficulty through one list belonging to the whole game, and
+	 * lands on the nearest song that has whatever you landed on. Psych has no such list -
+	 * each week brings its own - so this stands in for it, and a mod week's `insane`
+	 * takes its place in the cycle after everything that came before it.
+	 */
+	public static function listAllDifficulties(songs:Array<FreeplaySongData>):Array<String>
+	{
+		var result:Array<String> = [];
+
+		for (song in songs)
+		{
+			if (song == null) continue;
+
+			for (difficulty in song.difficulties)
+				if (!result.contains(difficulty)) result.push(difficulty);
+		}
+
+		if (result.length < 1) result = Difficulty.defaultList.copy();
+
 		return result;
 	}
 }

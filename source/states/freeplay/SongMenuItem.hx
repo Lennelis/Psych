@@ -365,7 +365,30 @@ class SongMenuItem extends FlxSpriteGroup
 		this.y = y;
 	}
 
-	public function initData(data:FreeplaySongData, ?index:Null<Int>, difficulty:Int = 0):Void
+	/**
+	 * The RANDOM capsule that sits above the songs.
+	 *
+	 * It carries no song, which `refreshDisplay` already knows how to draw - the title
+	 * reads Random and everything a song would have is hidden. Everything counts from
+	 * one because this is here.
+	 */
+	public function initRandom():Void
+	{
+		initPosition(FlxG.width, 0);
+		initData(null, 0);
+		y = intendedY(0) + 10;
+		targetPos.x = x;
+
+		// V-Slice starts this one invisible and has the DJ's hand reveal it as his intro
+		// finishes. There is no DJ here yet, and an alpha of zero with nothing to undo it
+		// is just a capsule that never arrives, so it comes in with the rest of them.
+		favIcon.visible = false;
+		favIconBlurred.visible = false;
+		ranking.visible = false;
+		blurredRanking.visible = false;
+	}
+
+	public function initData(data:FreeplaySongData, ?index:Null<Int>, difficulty:String = null):Void
 	{
 		this.freeplayData = data;
 		if (index != null) this.index = index;
@@ -378,7 +401,7 @@ class SongMenuItem extends FlxSpriteGroup
 	}
 
 	/** Re-reads everything the capsule shows for a difficulty: bpm, rating, rank, heart. */
-	public function refreshDisplay(difficulty:Int = 0):Void
+	public function refreshDisplay(difficulty:String = null):Void
 	{
 		if (freeplayData == null)
 		{
@@ -394,9 +417,13 @@ class SongMenuItem extends FlxSpriteGroup
 		{
 			songText.text = freeplayData.songName;
 			pixelIcon.setCharacter(freeplayData.songCharacter);
-			updateBPM(freeplayData.getStartingBpm(difficulty));
-			updateDifficultyRating(freeplayData.getDifficultyRating(difficulty));
-			updateScoringRank(freeplayData.getRank(difficulty));
+			// A difficulty the song hasn't got means the selection is passing over it on
+			// its way somewhere else, so show it at its own first one rather than blank.
+			var shown:String = (difficulty != null && freeplayData.hasDifficulty(difficulty)) ? difficulty : freeplayData.difficulties[0];
+
+			updateBPM(freeplayData.getStartingBpm(shown));
+			updateDifficultyRating(freeplayData.getDifficultyRating(shown));
+			updateScoringRank(freeplayData.getRank(shown));
 			newText.visible = freeplayData.isNew;
 			favIcon.visible = freeplayData.isFav;
 			favIconBlurred.visible = freeplayData.isFav;

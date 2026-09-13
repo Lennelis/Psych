@@ -113,6 +113,32 @@ class BackingCard extends FlxSpriteGroup
 		add(cardGlow);
 	}
 
+	/**
+	 * Says where the card's pieces go when the menu is left.
+	 *
+	 * V-Slice only lists the slab and the orange strip here, because its state switches
+	 * a fraction of a second later and nothing else has time to be noticed. Psych's
+	 * transition is slower, and the scrolling text left hanging on an empty screen was
+	 * very noticeable, so the whole card is listed.
+	 */
+	public function applyExitMovers(exitMovers:states.freeplay.VSliceFreeplayState.ExitMoverData):Void
+	{
+		exitMovers.set([
+			pinkBack,
+			orangeBackShit,
+			alsoOrangeLOL,
+			backingTextYeah,
+			confirmGlow,
+			confirmGlow2,
+			confirmTextGlow,
+			cardGlow
+		], {
+			x: -pinkBack.width,
+			speed: 0.4,
+			wait: 0
+		});
+	}
+
 	/** Snaps the card home, for when the menu is entered without its intro. */
 	public function skipIntroTween():Void
 	{
