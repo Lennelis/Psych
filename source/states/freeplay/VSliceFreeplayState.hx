@@ -122,6 +122,10 @@ class VSliceFreeplayState extends MusicBeatState
 	var dj:FreeplayDJ = null;
 	var ostName:FlxText;
 	var albumRoll:AlbumRoll;
+	var letterSort:LetterSort;
+
+	var currentFilter:SongFilter = null;
+	var currentFilteredSongs:Array<FreeplaySongData> = [];
 	var exitMovers:ExitMoverData = new Map();
 	var diffSelLeft:DifficultySelector;
 	var diffSelRight:DifficultySelector;
@@ -192,6 +196,7 @@ class VSliceFreeplayState extends MusicBeatState
 		// Everything below is built in V-Slice's order, because that order is what the
 		// menu's layering is: the card, then the art, then the capsules, then the bars.
 		albumRoll = new AlbumRoll();
+		letterSort = new LetterSort((CUTOUT_WIDTH * SONGS_POS_MULTI) + 400, 75);
 		fpScoreDisplay = new FreeplayScore(FlxG.width - 353, 60, 7, 0);
 		grpCapsules = new FlxTypedGroup<SongMenuItem>();
 		grpDifficulties = new FlxTypedSpriteGroup<DifficultySprite>(-300, 80);
@@ -304,6 +309,36 @@ class VSliceFreeplayState extends MusicBeatState
 		exitMovers.set([fpScoreDisplay, fnfHighscoreSpr, clearBoxSprite], {x: FlxG.width, speed: 0.3});
 		exitMovers.set([txtCompletion], {x: FlxG.width * 1.05, speed: 0.315});
 
+		add(letterSort);
+		letterSort.visible = false;
+
+		exitMovers.set([letterSort], {y: -100, speed: 0.3});
+
+		// Reminder, this is a callback function being set, rather than these being called here in create()
+		letterSort.changeSelectionCallback = function(str:String)
+		{
+			var curSong:FreeplaySongData = currentCapsule.freeplayData;
+			currentCapsule.selected = false;
+
+			switch (str)
+			{
+				case 'fav': generateSongList({filterType: FAVORITE}, true, false);
+				case 'ALL': generateSongList(null, true, false);
+				case '#': generateSongList({filterType: REGEXP, filterData: '0-9'}, true, false);
+				default: generateSongList({filterType: REGEXP, filterData: str}, true, false);
+			}
+
+			// If the current song is still in the list, or if it was random, we'll land on it
+			// Otherwise we want to land on the first song of the group, rather than random song
+			// when changing letter sorts - that is, only if there's more than one song in the group!
+			if (curSong == null || currentFilteredSongs.contains(curSong)) changeSelection();
+			else if (grpCapsules.members.length > 0)
+			{
+				curSelected = 1;
+				changeSelection();
+			}
+		};
+
 		diffSelLeft.visible = false;
 		diffSelRight.visible = false;
 		add(diffSelLeft);
@@ -315,7 +350,7 @@ class VSliceFreeplayState extends MusicBeatState
 		add(ostName);
 
 		// Generates the song list with the capsules jumping in.
-		generateSongList(true);
+		generateSongList(null, true);
 
 		// A camera of its own, so the fade when a song is picked doesn't touch anything
 		// the state doesn't own - the touch pad gets its own below.
@@ -324,6 +359,7 @@ class VSliceFreeplayState extends MusicBeatState
 		FlxG.cameras.add(funnyCam, false);
 
 		forEach(function(basic) basic.cameras = [funnyCam]);
+		letterSort.inputCamera = funnyCam;
 
 		#if TOUCH_CONTROLS_ALLOWED
 		addVirtualPad(FULL, A_B);
@@ -363,6 +399,7 @@ class VSliceFreeplayState extends MusicBeatState
 
 		diffSelLeft.visible = true;
 		diffSelRight.visible = true;
+		letterSort.visible = true;
 
 		exitMovers.set([diffSelLeft, diffSelRight], {x: -diffSelLeft.width * 2, speed: 0.26});
 
@@ -424,8 +461,41 @@ class VSliceFreeplayState extends MusicBeatState
 	 *
 	 * @param force Whether the capsules should jump back in using their animation.
 	 */
-	function generateSongList(force:Bool = false):Void
+	function generateSongList(?filterStuff:SongFilter, force:Bool = false, onlyIfChanged:Bool = true, noJumpIn:Bool = false):Void
 	{
+		var tempSongs:Array<FreeplaySongData> = songs.copy();
+
+		if (filterStuff != null) tempSongs = sortSongs(tempSongs, filterStuff);
+
+		// Only songs that have the difficulty being asked for, which is what makes the
+		// difficulty arrows a filter as well as a setting.
+		tempSongs = tempSongs.filter(function(song:FreeplaySongData)
+		{
+			if (song == null) return true; // Random
+
+			return song.hasDifficulty(currentDifficulty);
+		});
+
+		if (onlyIfChanged && sameSongs(tempSongs, currentFilteredSongs))
+		{
+			// If the song list is the same, we don't need to generate a new list.
+			// Instead, we just apply the jump-in animation to the existing capsules.
+			for (capsule in grpCapsules.members)
+			{
+				if (!noJumpIn)
+				{
+					capsule.initPosition(FlxG.width, 0);
+					capsule.initJumpIn(0, force);
+				}
+			}
+
+			// Stop processing.
+			return;
+		}
+
+		// Only now do we know that the filter is actually changing.
+		currentFilter = filterStuff;
+		currentFilteredSongs = tempSongs;
 		curSelected = 0;
 
 		for (capsule in grpCapsules.members)
@@ -447,9 +517,9 @@ class VSliceFreeplayState extends MusicBeatState
 		else randomCapsule.forcePosition();
 		grpCapsules.add(randomCapsule);
 
-		for (i in 1...songs.length)
+		for (i in 1...currentFilteredSongs.length)
 		{
-			var tempSong:FreeplaySongData = songs[i];
+			var tempSong:FreeplaySongData = currentFilteredSongs[i];
 			if (tempSong == null) continue;
 
 			var funnyMenu:SongMenuItem = new SongMenuItem(0, 0);
@@ -483,15 +553,85 @@ class VSliceFreeplayState extends MusicBeatState
 	{
 		if (rememberedSongName == null) return;
 
-		for (i in 1...songs.length)
+		for (i in 1...currentFilteredSongs.length)
 		{
-			if (songs[i] == null || songs[i].songName != rememberedSongName) continue;
+			if (currentFilteredSongs[i] == null || currentFilteredSongs[i].songName != rememberedSongName) continue;
 
 			curSelected = i;
 			return;
 		}
 
 		curSelected = 0;
+	}
+
+	/** Whether two song lists hold the same songs, whatever order they are in. */
+	static function sameSongs(a:Array<FreeplaySongData>, b:Array<FreeplaySongData>):Bool
+	{
+		if (a.length != b.length) return false;
+
+		for (song in a)
+			if (!b.contains(song)) return false;
+
+		return true;
+	}
+
+	/**
+	 * Narrows the song list down to whatever the letter sort is asking for.
+	 *
+	 * The regex is V-Slice's: a group like `A-C` becomes `^[A-C].*`, which is why the
+	 * letters are ranges rather than single letters - `^[OR]` would not match Pico, and
+	 * `^[O-R]` does.
+	 */
+	public function sortSongs(songsToFilter:Array<FreeplaySongData>, songFilter:SongFilter):Array<FreeplaySongData>
+	{
+		var filterAlphabetically = function(a:FreeplaySongData, b:FreeplaySongData):Int
+		{
+			var nameA:String = (a != null) ? a.songName.toLowerCase() : '';
+			var nameB:String = (b != null) ? b.songName.toLowerCase() : '';
+
+			if (nameA < nameB) return -1;
+			if (nameA > nameB) return 1;
+			return 0;
+		};
+
+		switch (songFilter.filterType)
+		{
+			case REGEXP:
+				// filterStuff.filterData has a string with the first letter of the sorting range, and the second one
+				// this creates a filter to return all the songs that start with a letter between those two
+				var filterRegexp:EReg = new EReg('^[' + songFilter.filterData + '].*', 'i');
+				songsToFilter = songsToFilter.filter(function(filteredSong:FreeplaySongData)
+				{
+					if (filteredSong == null) return true; // Random
+
+					return filterRegexp.match(filteredSong.songName);
+				});
+
+				songsToFilter.sort(filterAlphabetically);
+
+			case STARTSWITH:
+				// extra note: this is essentially a "search"
+				songsToFilter = songsToFilter.filter(function(filteredSong:FreeplaySongData)
+				{
+					if (filteredSong == null) return true; // Random
+
+					return filteredSong.songName.toLowerCase().startsWith(songFilter.filterData);
+				});
+
+			case FAVORITE:
+				// sort favorites by week, not alphabetically
+				songsToFilter = songsToFilter.filter(function(filteredSong:FreeplaySongData)
+				{
+					if (filteredSong == null) return true; // Random
+
+					return filteredSong.isFav;
+				});
+
+			case ALL:
+				// no filter!
+		}
+
+		return songsToFilter;
 	}
 
 	function refreshCapsuleDisplays():Void
@@ -712,12 +852,14 @@ class VSliceFreeplayState extends MusicBeatState
 		{
 			intendedScore = daSong.getScore(currentDifficulty);
 			intendedCompletion = Math.max(0, daSong.getAccuracy(currentDifficulty));
+			if (!capsuleAnim) generateSongList(currentFilter, false, true, true);
 			if (change != 0) currentCapsule.refreshDisplay(currentDifficulty);
 		}
 		else
 		{
 			intendedScore = 0;
 			intendedCompletion = 0;
+			if (!capsuleAnim) generateSongList(currentFilter, false, true, true);
 		}
 
 		if (!Math.isFinite(intendedCompletion) || Math.isNaN(intendedCompletion)) intendedCompletion = 0;
@@ -973,6 +1115,29 @@ class VSliceFreeplayState extends MusicBeatState
 		clearPreviews();
 		super.destroy();
 	}
+}
+
+/** What the letter sort is asking the song list for. V-Slice's `SongFilter`. */
+typedef SongFilter =
+{
+	var filterType:FilterType;
+	var ?filterData:String;
+}
+
+/** Possible types to use for the song filter. */
+enum abstract FilterType(String)
+{
+	/** Filter to songs which start with a string. */
+	var STARTSWITH;
+
+	/** Filter to songs which match a regular expression. */
+	var REGEXP;
+
+	/** Filter to songs which the player has starred. */
+	var FAVORITE;
+
+	/** Don't filter at all. */
+	var ALL;
 }
 
 /** Where a sprite goes when the menu is left, and how fast. V-Slice's `MoveData`. */
