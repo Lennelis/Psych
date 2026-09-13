@@ -4,6 +4,7 @@ import states.freeplay.FreeplaySongData.FreeplayRankTier;
 
 import backend.Song;
 import backend.WeekData;
+import flixel.FlxObject;
 import flixel.group.FlxSpriteGroup.FlxTypedSpriteGroup;
 import flixel.text.FlxText;
 import openfl.display.BlendMode;
@@ -110,6 +111,15 @@ class VSliceFreeplayState extends MusicBeatState
 
 		cutout = Math.max(0, FlxG.width - FlxG.initialWidth) / 1.5;
 
+		// V-Slice opens freeplay over the main menu, as a substate, so the menu shows
+		// through while the card slides in and the art is revealed. Psych switches
+		// states instead, and what showed through was black. The menu's own background
+		// stands in for it - nothing else is behind the card until the intro lands.
+		var backdrop:FlxSprite = new FlxSprite(-80).loadGraphic(Paths.image('menuBG'));
+		backdrop.antialiasing = ClientPrefs.data.antialiasing;
+		add(backdrop);
+		CoolUtil.fillScreen(backdrop);
+
 		backingCard = new BackingCard(cutout);
 		add(backingCard);
 		backingCard.build();
@@ -192,6 +202,12 @@ class VSliceFreeplayState extends MusicBeatState
 
 		buildCapsules();
 		restoreSelection();
+
+		// Before the first frame, not when the intro finishes. Capsules lerp towards
+		// their target, and until this has run that target is (0, 0) - so they spent the
+		// whole intro sliding into a heap in the top corner before sorting themselves
+		// out. V-Slice calls this at the end of building its list for the same reason.
+		changeSelection();
 
 		FlxTween.tween(overhangStuff, {y: -100}, 0.3, {ease: FlxEase.quartOut});
 		FlxTween.tween(blackOverlay, {x: backingImage.x}, 0.7, {ease: FlxEase.quintOut});
@@ -472,6 +488,14 @@ class VSliceFreeplayState extends MusicBeatState
 		Mods.currentModDirectory = previousMod;
 	}
 
+	/**
+	 * Sends every piece of the menu off its own edge, the way V-Slice's exit movers do.
+	 *
+	 * Each thing leaves towards wherever it came in from and at its own speed, and the
+	 * state waits for the slowest of them before switching. Leaving anything out of this
+	 * is very visible: the first version only moved the card and the art, and the
+	 * capsules, the score and the top bar just sat there while the rest left.
+	 */
 	function goBack():Void
 	{
 		busy = true;
@@ -481,15 +505,38 @@ class VSliceFreeplayState extends MusicBeatState
 		FlxG.sound.play(Paths.sound('cancelMenu'));
 		backingCard.disappear();
 
+		var longest:Float = 0;
+
+		inline function send(sprites:Array<FlxObject>, x:Null<Float>, y:Null<Float>, speed:Float)
+		{
+			for (sprite in sprites)
+			{
+				if (sprite == null) continue;
+
+				FlxTween.tween(sprite, {x: (x != null) ? x : sprite.x, y: (y != null) ? y : sprite.y}, speed, {ease: FlxEase.expoIn});
+			}
+
+			longest = Math.max(longest, speed);
+		}
+
+		// The card carries its glows and its scrolling text with it, being a group.
+		send([backingCard], -backingCard.pinkBack.width, null, 0.4);
+		send([blackOverlay, backingImage], FlxG.width * 1.5, null, 0.4);
+		send([grpDifficulties], -300, null, 0.25);
+		send([diffSelLeft, diffSelRight], -diffSelLeft.width * 2, null, 0.26);
+		send([overhangStuff, topLeftCornerText, ostName], 0, -overhangStuff.height, 0.2);
+		send([fpScoreDisplay, fnfHighscoreSpr, clearBoxSprite], FlxG.width, null, 0.3);
+		send([txtCompletion], FlxG.width * 1.05, null, 0.315);
+
 		for (capsule in grpCapsules.members)
+		{
+			// The lerp has to go, or it spends the jump out pulling them back into place.
+			capsule.doJumpIn = false;
+			capsule.doLerp = false;
 			capsule.doJumpOut = true;
+		}
 
-		FlxTween.tween(backingCard.pinkBack, {x: -backingCard.pinkBack.width}, 0.4, {ease: FlxEase.quartOut});
-		FlxTween.tween(overhangStuff, {y: -overhangStuff.height}, 0.2);
-		FlxTween.tween(backingImage, {x: FlxG.width * 1.5}, 0.4);
-		FlxTween.tween(grpDifficulties, {x: -300}, 0.25);
-
-		new FlxTimer().start(0.45, function(_)
+		new FlxTimer().start(longest, function(_)
 		{
 			persistentUpdate = false;
 			FlxG.sound.playMusic(Paths.music('freakyMenu'));

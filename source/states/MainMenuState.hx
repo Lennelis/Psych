@@ -172,7 +172,11 @@ class MainMenuState extends MusicBeatState
 			if (allowMouse && ((FlxG.mouse.deltaScreenX != 0 && FlxG.mouse.deltaScreenY != 0) || FlxG.mouse.justPressed)) //FlxG.mouse.deltaScreenX/Y checks is more accurate than FlxG.mouse.justMoved
 			{
 				allowMouse = false;
+				// No pointer on a phone: a tap moves it, and with the two-tap select
+				// above it would then sit there on screen waiting for the second one.
+				#if !mobile
 				FlxG.mouse.visible = true;
+				#end
 				timeNotMoving = 0;
 
 				var selectedItem:FlxSprite;

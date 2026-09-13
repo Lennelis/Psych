@@ -2940,7 +2940,12 @@ class PlayState extends MusicBeatState
 		if(data < 0 || data >= covers.length || covers[data] == null) return;
 
 		var ends:Array<Float> = player ? playerHoldCoverEnd : opponentHoldCoverEnd;
-		ends[data] = head.strumTime + head.sustainLength;
+
+		// A step early on purpose. Psych builds a sustain out of a piece per step plus a
+		// tail cap, so the last piece is still coming down when the hold is, to the ear,
+		// already over - and waiting for it made the burst land late next to V-Slice's,
+		// which fires as the hold finishes rather than as the last piece is consumed.
+		ends[data] = head.strumTime + head.sustainLength - Conductor.stepCrochet;
 		covers[data].playStart();
 	}
 
