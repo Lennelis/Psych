@@ -7,7 +7,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ claude/psych-engine-mobile-port-9sau2w ]
+    branches: [ claude/psych-engine-mobile-port-9sau2w, claude/vslice-freeplay ]
 
   # Run it by hand from the Actions tab, with these switches.
   workflow_dispatch:
