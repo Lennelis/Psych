@@ -96,6 +96,13 @@ class VisualsSettingsSubState extends BaseOptionsMenu
 		option.decimals = 1;
 		addOption(option);
 
+		var option:Option = new Option('Freeplay Menu:',
+			"Which freeplay menu to open.\nClassic is Psych's own list. V-Slice is the one from the base game,\nwith the capsules and the card - same songs, same mods, different menu.",
+			'freeplayStyle',
+			STRING,
+			['Classic', 'V-Slice']);
+		addOption(option);
+
 		var option:Option = new Option('Hide HUD',
 			'If checked, hides most HUD elements.',
 			'hideHud',
