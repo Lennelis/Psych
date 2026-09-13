@@ -24,6 +24,11 @@ jobs:
     name: Android
     needs: Libraries
     runs-on: ubuntu-24.04
+    permissions:
+      # Deleting the previous build cache needs actions: write. Without it the
+      # delete comes back 403 and takes a perfectly good APK down with it.
+      actions: write
+      contents: read
     env:
       HAXE_VERSION: 4.3.6
     steps:
@@ -73,7 +78,9 @@ jobs:
           path: "export/release/android/bin/app/build/outputs/apk/release/*.apk"
           if-no-files-found: error
 
+      # Housekeeping: never worth failing a build that already produced an APK.
       - name: Clear the old build cache
+        continue-on-error: true
         uses: actions/github-script@v6
         with:
           script: |
