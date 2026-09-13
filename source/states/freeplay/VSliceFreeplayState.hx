@@ -231,7 +231,7 @@ class VSliceFreeplayState extends MusicBeatState
 			var capsule:SongMenuItem = new SongMenuItem(FlxG.width, 0);
 			capsule.initData(songs[i], i, curDifficulty);
 			capsule.hsvShader = hsvShader;
-			capsule.y = capsule.intendedY(i) + 10;
+			capsule.y = capsule.intendedY(i + 1) + 10;
 			capsule.targetPos.x = capsule.x;
 
 			// Faded rather than hidden, and deliberately so: a sprite group passes its
@@ -311,11 +311,18 @@ class VSliceFreeplayState extends MusicBeatState
 
 		for (index => capsule in grpCapsules.members)
 		{
+			// V-Slice counts the capsules from one, not zero, because its first entry is
+			// the RANDOM capsule sitting above the songs. The list has no random entry
+			// yet, but the counting is worth keeping: it is what puts the selected song
+			// in the second slot with one song visible above it, rather than pinned to
+			// the top of the screen with nothing before it.
+			var slot:Int = index + 1;
+
 			capsule.selected = index == curSelected;
 			capsule.curSelected = curSelected;
 			capsule.index = index;
 
-			var offsetIndex:Int = index - curSelected;
+			var offsetIndex:Int = slot - curSelected;
 			var yOffset:Float = 0;
 
 			// Nudges the capsules past either end further off screen, so they aren't
@@ -326,7 +333,7 @@ class VSliceFreeplayState extends MusicBeatState
 			capsule.targetPos.y = capsule.intendedY(offsetIndex) - yOffset;
 			capsule.targetPos.x = capsule.intendedX(offsetIndex);
 
-			if (index < curSelected) capsule.targetPos.y -= 100; // another 100 for good measure
+			if (slot < curSelected) capsule.targetPos.y -= 100; // another 100 for good measure
 		}
 
 		refreshScore();

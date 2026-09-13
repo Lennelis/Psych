@@ -138,7 +138,7 @@ class SongMenuItem extends FlxSpriteGroup
 		// V-Slice puts this at (160, 35) and then scales it 2x about an origin 100 pixels
 		// off the side of the sprite, which is a roundabout way of moving it left and up.
 		// This is where that actually lands it, worked out once instead of per icon.
-		pixelIcon = new FreeplayIcon(60, 19);
+		pixelIcon = new FreeplayIcon(60, 10);
 		add(pixelIcon);
 		grpHide.add(pixelIcon);
 
@@ -477,7 +477,7 @@ class SongMenuItem extends FlxSpriteGroup
 				frameInTypeBeat += 1;
 
 				// Once it has flown far enough in, hand it over to the resting position.
-				if (targetPos.x <= 320) targetPos.x = intendedX(index - curSelected);
+				if (targetPos.x <= 320) targetPos.x = intendedX(index + 1 - curSelected);
 			}
 			else if (frameInTypeBeat == xFrames.length)
 				doJumpIn = false;
@@ -691,12 +691,23 @@ class FreeplayIcon extends FlxSprite
 {
 	public var char(default, null):String = '';
 
-	/** The box the icon is drawn in, whatever it was drawn at. */
-	public static inline var SIZE:Int = 64;
+	/**
+	 * The box the icon is drawn in, whatever size it was drawn at.
+	 *
+	 * V-Slice's pixel icons are 50x50 frames at 2x, so this is the 100 that lands them
+	 * where they sit - most of the height of a capsule, hanging over its top edge.
+	 */
+	public static inline var SIZE:Int = 100;
+
+	var boxX:Float;
+	var boxY:Float;
 
 	public function new(x:Float, y:Float)
 	{
 		super(x, y);
+
+		boxX = x;
+		boxY = y;
 
 		makeGraphic(SIZE, SIZE, 0x00000000);
 		active = false;
@@ -772,17 +783,24 @@ class FreeplayIcon extends FlxSprite
 	}
 
 	/**
-	 * Sizes the icon to its box and leaves it drawing from its own top left corner.
+	 * Fits the icon inside its box without distorting it, and centres it there.
 	 *
-	 * `updateHitbox` after a scale is what makes a sprite draw from `x, y` at the size
-	 * it now is; without it the graphic is scaled about the middle of the frame it came
-	 * from and lands somewhere else entirely. That is what dropped the icon on top of
-	 * the song title and the bpm.
+	 * The one thing that must not happen is `setGraphicSize(SIZE, SIZE)`: the frames
+	 * are not all square - dad's pixel icon is 50x40, girlfriend's is 50x50, a health
+	 * icon is 150x150 - and forcing them all into a square squashes whichever ones
+	 * aren't. Scaling by the longest side keeps every one of them in proportion.
+	 *
+	 * `updateHitbox` after the scale is what makes the sprite draw from `x, y` at the
+	 * size it now is, rather than scaling about the middle of the frame it came from.
 	 */
 	function fitToBox():Void
 	{
-		setGraphicSize(SIZE, SIZE);
+		var scaleTo:Float = SIZE / Math.max(frameWidth, frameHeight);
+
+		scale.set(scaleTo, scaleTo);
 		updateHitbox();
+
+		setPosition(boxX + (SIZE - width) * 0.5, boxY + (SIZE - height) * 0.5);
 	}
 }
 
