@@ -2917,6 +2917,19 @@ class PlayState extends MusicBeatState
 	var opponentHoldCoverEnd:Array<Float> = [];
 
 	/**
+	 * When a hold is over, as far as anything that lights up is concerned.
+	 *
+	 * A step before the chart says, and deliberately: Psych builds a sustain out of a
+	 * piece per step plus a tail cap, so the last piece is still coming down when the
+	 * hold is already over to the ear. V-Slice ends the glow and bursts the cover as the
+	 * hold finishes rather than as the last piece is eaten, which is snappier.
+	 *
+	 * The strum's glow and the cover both ask this, so they always end together.
+	 */
+	inline function holdFinishTime(head:Note):Float
+		return head.strumTime + head.sustainLength - Conductor.stepCrochet;
+
+	/**
 	 * Puts a cover over the strum a hold is being played on.
 	 *
 	 * Every note hit on either side comes through here, and it does nothing unless the
@@ -2941,11 +2954,7 @@ class PlayState extends MusicBeatState
 
 		var ends:Array<Float> = player ? playerHoldCoverEnd : opponentHoldCoverEnd;
 
-		// A step early on purpose. Psych builds a sustain out of a piece per step plus a
-		// tail cap, so the last piece is still coming down when the hold is, to the ear,
-		// already over - and waiting for it made the burst land late next to V-Slice's,
-		// which fires as the hold finishes rather than as the last piece is consumed.
-		ends[data] = head.strumTime + head.sustainLength - Conductor.stepCrochet;
+		ends[data] = holdFinishTime(head);
 		covers[data].playStart();
 	}
 
@@ -3048,7 +3057,7 @@ class PlayState extends MusicBeatState
 							final head:Note = (n.parent != null) ? n.parent : n;
 							if(n.noteData >= 0 && n.noteData < holdEndTime.length)
 							{
-								holdEndTime[n.noteData] = head.strumTime + head.sustainLength;
+								holdEndTime[n.noteData] = holdFinishTime(head);
 								holdHead[n.noteData] = n.parent;
 							}
 						}

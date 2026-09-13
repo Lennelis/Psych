@@ -138,10 +138,9 @@ class SongMenuItem extends FlxSpriteGroup
 		add(songText);
 		grpHide.add(songText);
 
-		// V-Slice puts this at (160, 35) and then scales it 2x about an origin 100 pixels
-		// off the side of the sprite, which is a roundabout way of moving it left and up.
-		// This is where that actually lands it, worked out once instead of per icon.
-		pixelIcon = new FreeplayIcon(60, 10);
+		// V-Slice's own position for it. Where it actually ends up being drawn is a
+		// hundred pixels to the left of that and some way above it - see FreeplayIcon.
+		pixelIcon = new FreeplayIcon(160, 35);
 		add(pixelIcon);
 		grpHide.add(pixelIcon);
 
@@ -695,18 +694,22 @@ class FreeplayIcon extends FlxSprite
 	public var char(default, null):String = '';
 
 	/**
-	 * The box the icon is drawn in, whatever size it was drawn at.
+	 * How far left of its own position the icon is drawn.
 	 *
-	 * V-Slice's pixel icons are 50x50 frames at 2x, so this is the 100 that lands them
-	 * where they sit - most of the height of a capsule, hanging over its top edge.
+	 * V-Slice gets this by scaling 2x about an origin 100 pixels off the side of the
+	 * sprite. Same number, arrived at by shifting what it draws instead, which is the
+	 * one thing a sprite group leaves alone.
 	 */
-	public static inline var SIZE:Int = 100;
+	static inline var LEFT_SHIFT:Float = 100;
+
+	/** The size V-Slice's own pixel icons are drawn at: a 50x50 frame at 2x. */
+	static inline var PIXEL_SIZE:Float = 50;
 
 	public function new(x:Float, y:Float)
 	{
 		super(x, y);
 
-		makeGraphic(SIZE, SIZE, 0x00000000);
+		makeGraphic(Std.int(PIXEL_SIZE), Std.int(PIXEL_SIZE), 0x00000000);
 		active = false;
 	}
 
@@ -753,7 +756,12 @@ class FreeplayIcon extends FlxSprite
 		else loadGraphic(Paths.image(key));
 
 		antialiasing = false;
-		fitToBox();
+
+		// Twice the size it was drawn at, and no more clever than that. Fitting them to
+		// a box instead was the mistake: these frames are 36x32 for pico and 40x28 for
+		// tankman against 50x50 for boyfriend, so a box blew the small ones up to sizes
+		// their art was never meant to be seen at.
+		place(2, frameHeight * 0.5);
 		return true;
 	}
 
@@ -775,34 +783,34 @@ class FreeplayIcon extends FlxSprite
 		animation.play('icon');
 
 		antialiasing = ClientPrefs.data.antialiasing;
-		fitToBox();
+
+		// Sized and placed to sit where boyfriend's pixel icon does, since a health icon
+		// is a 150px square and has no business being drawn at twice that.
+		place((PIXEL_SIZE * 2) / frameHeight, PIXEL_SIZE * 0.5);
 		return true;
 	}
 
 	/**
-	 * Fits the icon inside its box without distorting it, and centres it there.
+	 * Scales the icon and shifts where it draws, without touching where it is.
 	 *
-	 * The one thing that must not happen is `setGraphicSize(SIZE, SIZE)`: the frames
-	 * are not all square - dad's pixel icon is 50x40, girlfriend's is 50x50, a health
-	 * icon is 150x150 - and forcing them all into a square squashes whichever ones
-	 * aren't. Scaling by the longest side keeps every one of them in proportion.
+	 * Moving the sprite is what must not happen: a sprite group owns its children's
+	 * coordinates - it adds its own position to theirs as they go in, and moves them by
+	 * deltas afterwards - so an absolute position tears the icon out of the capsule.
+	 * The offset is the sprite's own, and the group never touches it.
 	 *
-	 * `updateHitbox` after the scale is what makes the sprite draw from `x, y` at the
-	 * size it now is, rather than scaling about the middle of the frame it came from.
+	 * `updateHitbox` after the scale is what makes a sprite draw from `x, y` at the size
+	 * it now is; the offsets then take it from there to where V-Slice puts it.
+	 *
+	 * @param up   How much bigger than its frame to draw it.
+	 * @param lift How far above its own position the top of it should sit.
 	 */
-	function fitToBox():Void
+	function place(up:Float, lift:Float):Void
 	{
-		var scaleTo:Float = SIZE / Math.max(frameWidth, frameHeight);
-
-		scale.set(scaleTo, scaleTo);
+		scale.set(up, up);
 		updateHitbox();
 
-		// Centred by shifting what it draws, not by moving the sprite. A sprite group
-		// owns its children's coordinates - it adds its own position to theirs as they
-		// go in, and moves them by deltas afterwards - so setting an absolute position
-		// here tore the icon out of the capsule and left it sitting behind the card.
-		offset.x -= (SIZE - width) * 0.5;
-		offset.y -= (SIZE - height) * 0.5;
+		offset.x += LEFT_SHIFT;
+		offset.y += lift;
 	}
 }
 

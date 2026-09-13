@@ -554,7 +554,6 @@ class VSliceFreeplayState extends MusicBeatState
 		currentCapsule().confirm();
 		backingCard.confirm();
 
-		FlxTween.tween(FlxG.camera, {zoom: 1.05}, 0.6, {ease: FlxEase.quadOut});
 		if (FlxG.sound.music != null) FlxTween.tween(FlxG.sound.music, {volume: 0}, 0.6);
 
 		new FlxTimer().start(1, function(_) loadSong());
@@ -583,7 +582,6 @@ class VSliceFreeplayState extends MusicBeatState
 			// Nothing to play, so hand the menu back rather than dying on a black screen.
 			busy = false;
 			FlxG.sound.play(Paths.sound('cancelMenu'));
-			FlxTween.tween(FlxG.camera, {zoom: 1}, 0.3);
 			return;
 		}
 
