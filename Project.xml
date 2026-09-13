@@ -72,7 +72,9 @@
 	<define name="ATSC_SUPPORT" unless="web"/>
 
 	<!-- Enables special crash handler in case you don't trust your players to report issues properly-->
-	<define name="FIREBASE_CRASH_HANDLER" if="mobile"/>
+	<!-- NO_FIREBASE lets a fork build without upstream's Firebase credentials.
+	     Pass -DNO_FIREBASE to lime; every use of the define is behind #if. -->
+	<define name="FIREBASE_CRASH_HANDLER" if="mobile" unless="NO_FIREBASE"/>
 
 	<!-- Displays a "Touch here to play" screen-->
 	<define name="TOUCH_HERE_TO_PLAY" if="TOUCH_CONTROLS_ALLOWED debug" />

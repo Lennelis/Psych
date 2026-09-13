@@ -11,6 +11,11 @@ class GridButtons extends FlxTypedSpriteGroup<GridTile>
 	public var selectedItem(get, never):Null<GridTile>;
 	public var selectedSomethin:Bool = false;
 
+	// Whether a selection has actually been shown to the player. The grid starts
+	// parked on tile (0, 0) without highlighting it, so until this is set a tap
+	// on that tile should still only move the selection there.
+	public var selectionShown(default, null):Bool = false;
+
 	
 	private var selectedXPosition:Int = 0;
 	private var selectedYPosition:Int = 0;
@@ -68,6 +73,7 @@ class GridButtons extends FlxTypedSpriteGroup<GridTile>
 
 		FlxG.sound.play(Paths.sound('scrollMenu'));
 		selectedItem?.playHoverAnim();
+		selectionShown = true;
 	}
     public function changeSelection(xDiff:Int,yDiff:Int) {
 		selectedItem?.playIdleAnim();

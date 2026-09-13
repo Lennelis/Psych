@@ -3670,6 +3670,11 @@ function opponentNoteHit(note:Note):Void
 					animToPlay = holdAnim;
 				if (char.getAnimationName() == holdAnim || char.getAnimationName() == holdAnim + '-loop')
 					canPlay = false;
+				// A character with no hold animation would otherwise restart its sing
+				// animation on every sustain piece, which jitters when several are held.
+				var playing:String = char.getAnimationName();
+				if (playing != null && playing.startsWith('sing') && !playing.endsWith('miss'))
+					canPlay = false;
 			}
 
 			if (canPlay)
@@ -3745,6 +3750,11 @@ public function goodNoteHit(note:Note):Void
 					if (char.animation.exists(holdAnim))
 						animToPlay = holdAnim;
 					if (char.getAnimationName() == holdAnim || char.getAnimationName() == holdAnim + '-loop')
+						canPlay = false;
+					// A character with no hold animation would otherwise restart its sing
+					// animation on every sustain piece, which jitters when several are held.
+					var playing:String = char.getAnimationName();
+					if (playing != null && playing.startsWith('sing') && !playing.endsWith('miss'))
 						canPlay = false;
 				}
 

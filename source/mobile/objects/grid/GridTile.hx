@@ -12,6 +12,10 @@ class GridTile extends TouchButton
 	final host:GridButtons;
 	final callback:() -> Void;
 
+	// A tile confirms on the second tap, not the first: the first tap only moves
+	// the selection here, so a stray thumb lands you on a tile instead of in it.
+	var wasSelected:Bool = false;
+
 	private function new(host:GridButtons, callback:() -> Void)
 	{
 		super();
@@ -20,12 +24,13 @@ class GridTile extends TouchButton
 		antialiasing = VsliceOptions.ANTIALIASING;
 		onDown.callback = () ->
 		{
+			wasSelected = host.selectionShown && host.selectedItem == this;
 			host.selectButton(gridXPos, gridYPos);
 		}
 	}
 
     override function update(elapsed:Float) {
-        if(justReleased && host.selectedItem == this) {
+        if(justReleased && host.selectedItem == this && wasSelected) {
 			host.confirmCurrentButton();
 		}
         super.update(elapsed);
