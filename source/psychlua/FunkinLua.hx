@@ -754,7 +754,7 @@ class FunkinLua {
 			if(PlayState.isStoryMode)
 				MusicBeatState.switchState(new StoryMenuState());
 			else
-				MusicBeatState.switchState(new FreeplayState());
+				MusicBeatState.switchState(states.freeplay.FreeplayHub.menu());
 
 			#if DISCORD_ALLOWED DiscordClient.resetClientID(); #end
 

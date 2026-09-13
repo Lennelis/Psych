@@ -56,7 +56,9 @@ class BackingCard extends FlxSpriteGroup
 
 		backingTextYeah = new BGScrollingText(-320, 120, 'RIGHT HERE, RIGHT NOW, YEAH!', FlxG.width, true, 60);
 		backingTextYeah.speed = 2.4;
-		backingTextYeah.color = 0xFFFFF700;
+		// Darker than the card rather than brighter: V-Slice's is a drawn texture that
+		// reads as an inset shadow, and yellow on yellow simply disappeared.
+		backingTextYeah.color = 0xFFE2B830;
 	}
 
 	/** Adds everything in the order it has to be drawn, and starts the card sliding in. */

@@ -135,7 +135,10 @@ class SongMenuItem extends FlxSpriteGroup
 		add(songText);
 		grpHide.add(songText);
 
-		pixelIcon = new FreeplayIcon(160, 35);
+		// V-Slice puts this at (160, 35) and then scales it 2x about an origin 100 pixels
+		// off the side of the sprite, which is a roundabout way of moving it left and up.
+		// This is where that actually lands it, worked out once instead of per icon.
+		pixelIcon = new FreeplayIcon(60, 19);
 		add(pixelIcon);
 		grpHide.add(pixelIcon);
 
@@ -688,11 +691,14 @@ class FreeplayIcon extends FlxSprite
 {
 	public var char(default, null):String = '';
 
+	/** The box the icon is drawn in, whatever it was drawn at. */
+	public static inline var SIZE:Int = 64;
+
 	public function new(x:Float, y:Float)
 	{
 		super(x, y);
 
-		makeGraphic(32, 32, 0x00000000);
+		makeGraphic(SIZE, SIZE, 0x00000000);
 		active = false;
 	}
 
@@ -739,8 +745,7 @@ class FreeplayIcon extends FlxSprite
 		else loadGraphic(Paths.image(key));
 
 		antialiasing = false;
-		scale.set(2, 2);
-		updateHitbox();
+		fitToBox();
 		return true;
 	}
 
@@ -762,9 +767,22 @@ class FreeplayIcon extends FlxSprite
 		animation.play('icon');
 
 		antialiasing = ClientPrefs.data.antialiasing;
-		setGraphicSize(64, 64);
-		updateHitbox();
+		fitToBox();
 		return true;
+	}
+
+	/**
+	 * Sizes the icon to its box and leaves it drawing from its own top left corner.
+	 *
+	 * `updateHitbox` after a scale is what makes a sprite draw from `x, y` at the size
+	 * it now is; without it the graphic is scaled about the middle of the frame it came
+	 * from and lands somewhere else entirely. That is what dropped the icon on top of
+	 * the song title and the bpm.
+	 */
+	function fitToBox():Void
+	{
+		setGraphicSize(SIZE, SIZE);
+		updateHitbox();
 	}
 }
 

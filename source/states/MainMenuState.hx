@@ -301,8 +301,7 @@ class MainMenuState extends MusicBeatState
 						case 'story_mode':
 							MusicBeatState.switchState(new StoryMenuState());
 						case 'freeplay':
-							if(ClientPrefs.data.freeplayStyle == 'V-Slice') MusicBeatState.switchState(new states.freeplay.VSliceFreeplayState());
-							else MusicBeatState.switchState(new FreeplayState());
+							MusicBeatState.switchState(states.freeplay.FreeplayHub.menu());
 
 						#if MODS_ALLOWED
 						case 'mods':

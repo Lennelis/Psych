@@ -165,7 +165,7 @@ class VSliceFreeplayState extends MusicBeatState
 		topLeftCornerText.visible = false;
 		add(topLeftCornerText);
 
-		ostName = new FlxText(8, 8, FlxG.width - 16, 'Freeplay', 48);
+		ostName = new FlxText(8, 8, FlxG.width - 16, "Friday Night Funkin'", 48);
 		ostName.setFormat(Paths.font('vcr.ttf'), 48, FlxColor.WHITE, RIGHT);
 		ostName.shader = new StrokeShader(0xFFFFFFFF, 2, 2);
 		ostName.visible = false;
@@ -231,8 +231,20 @@ class VSliceFreeplayState extends MusicBeatState
 			var capsule:SongMenuItem = new SongMenuItem(FlxG.width, 0);
 			capsule.initData(songs[i], i, curDifficulty);
 			capsule.hsvShader = hsvShader;
+			capsule.y = capsule.intendedY(i) + 10;
 			capsule.targetPos.x = capsule.x;
-			capsule.visible = false;
+
+			// Faded rather than hidden, and deliberately so: a sprite group passes its
+			// own visibility down to every child the moment it changes, so hiding the
+			// whole capsule and showing it again would turn the NEW tag, the heart and
+			// the title's glow back on regardless of what the song actually wants.
+			// V-Slice fades the capsule art and leaves visibility to the contents.
+			capsule.capsule.alpha = 0.5;
+
+			// Each capsule's NEW tag starts on a different frame, so a column of them
+			// doesn't pulse in lockstep.
+			if (capsule.newText.animation.curAnim != null) capsule.newText.animation.curAnim.curFrame = 45 - ((i * 4) % 45);
+
 			capsule.initJumpIn(Math.min(i, 4));
 			grpCapsules.add(capsule);
 		}
