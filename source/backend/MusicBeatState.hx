@@ -1,10 +1,16 @@
 package backend;
 
+import openfl.display.BitmapData;
 import flixel.FlxState;
 import backend.PsychCamera;
 
+@:bitmap("assets/embed/images/ui/cursor.png")
+private class FunkinCursor extends BitmapData {}
+
 class MusicBeatState extends FlxState
 {
+	private static var currentState:MusicBeatState;
+
 	private var curSection:Int = 0;
 	private var stepsToDo:Int = 0;
 
@@ -19,6 +25,83 @@ class MusicBeatState extends FlxState
 		return Controls.instance;
 	}
 
+	#if TOUCH_CONTROLS_ALLOWED
+	public var touchPad:TouchPad;
+	public var hitbox:Hitbox;
+	public var camControls:FlxCamera;
+	public var tpadCam:FlxCamera;
+
+	public function addTouchPad(DPad:String, Action:String)
+	{
+		touchPad = new TouchPad(DPad, Action);
+		add(touchPad);
+	}
+
+	public function removeTouchPad()
+	{
+		if (touchPad != null)
+		{
+			remove(touchPad);
+			touchPad = FlxDestroyUtil.destroy(touchPad);
+		}
+
+		if(tpadCam != null)
+		{
+			FlxG.cameras.remove(tpadCam);
+			tpadCam = FlxDestroyUtil.destroy(tpadCam);
+		}
+	}
+
+	public function addHitbox(defaultDrawTarget:Bool = false):Void
+	{
+		var extraMode = MobileData.extraActions.get(ClientPrefs.data.extraHints);
+
+		hitbox = new Hitbox(extraMode,MobileData.getButtonsColors());
+
+		camControls = new FlxCamera();
+		camControls.bgColor.alpha = 0;
+		FlxG.cameras.add(camControls, defaultDrawTarget);
+
+		hitbox.cameras = [camControls];
+		hitbox.visible = false;
+		add(hitbox);
+	}
+
+	public function removeHitbox()
+	{
+		if (hitbox != null)
+		{
+			remove(hitbox);
+			hitbox = FlxDestroyUtil.destroy(hitbox);
+			hitbox = null;
+		}
+
+		if(camControls != null)
+		{
+			FlxG.cameras.remove(camControls);
+			camControls = FlxDestroyUtil.destroy(camControls);
+		}
+	}
+
+	public function addTouchPadCamera(defaultDrawTarget:Bool = false):Void
+	{
+		if (touchPad != null)
+		{
+			tpadCam = new FlxCamera();
+			tpadCam.bgColor.alpha = 0;
+			FlxG.cameras.add(tpadCam, defaultDrawTarget);
+			touchPad.cameras = [tpadCam];
+		}
+	}
+
+	override function destroy()
+	{
+		removeTouchPad();
+		removeHitbox();
+		
+		super.destroy();
+	}
+	#end
 	var _psychCameraInitialized:Bool = false;
 
 	public var variables:Map<String, Dynamic> = new Map<String, Dynamic>();
@@ -26,7 +109,11 @@ class MusicBeatState extends FlxState
 		return getState().variables;
 
 	override function create() {
+		currentState = this;
 		var skip:Bool = FlxTransitionableState.skipNextTransOut;
+		// //? Should fix the funkin cursor for good
+		if(!(FlxG.mouse.cursor?.bitmapData is FunkinCursor)) FlxG.mouse.load(new FunkinCursor(0,0));
+		//nvm. too much lag
 		#if MODS_ALLOWED Mods.updatedOnState = false; #end
 
 		if(!_psychCameraInitialized) initPsychCamera();
@@ -164,7 +251,10 @@ class MusicBeatState extends FlxState
 	}
 
 	public static function getState():MusicBeatState {
-		return cast (FlxG.state, MusicBeatState);
+		if (Std.is(FlxG.state, MusicBeatState))
+			return cast(FlxG.state, MusicBeatState);
+		else
+			return currentState;
 	}
 
 	public function stepHit():Void
@@ -199,7 +289,7 @@ class MusicBeatState extends FlxState
 		});
 	}
 
-	function stagesFunc(func:BaseStage->Void)
+	public function stagesFunc(func:BaseStage->Void)
 	{
 		for (stage in stages)
 			if(stage != null && stage.exists && stage.active)

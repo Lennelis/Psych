@@ -4,26 +4,61 @@ import flixel.util.FlxSave;
 import flixel.input.keyboard.FlxKey;
 import flixel.input.gamepad.FlxGamepadInputID;
 
-import states.TitleState;
+import states.InitState;
 
 // Add a variable here and it will get automatically saved
 @:structInit class SaveVariables {
+	// Mobile and Mobile Controls Releated
+	public var extraHints:String = "NONE"; // hitbox extra hint option
+	public var hitbox2:Bool = true; // hitbox extra button position option
+	public var dynamicColors:Bool = true; // yes cause its cool -Karim
+	public var controlsAlpha:Float = 0.6;
+	public var screensaver:Bool = false;
+	public var wideScreen:Bool = false;
+	#if android
+	public var storageType:String = "EXTERNAL";
+	#end
+	public var hitboxType:String = "Gradient";
+	public var popUpRating:Bool = true;
+	public var vsync:Bool = false;
+	public var vibrating:Bool = false;
+
+	public var favSongIds:Array<String> = [];
+	public var lastFreeplayMod:String = '||bf';
+
 	public var downScroll:Bool = false;
 	public var middleScroll:Bool = false;
 	public var opponentStrums:Bool = true;
 	public var showFPS:Bool = true;
+	public var showFPSOpacity:Float = 0.6;
+	public var fpsRework:Bool = false;
 	public var flashing:Bool = true;
 	public var autoPause:Bool = true;
 	public var antialiasing:Bool = true;
 	public var noteSkin:String = 'Default';
 	public var splashSkin:String = 'Psych';
+	public var holdSkin:String = 'Vanilla';
 	public var splashAlpha:Float = 0.6;
+	public var holdSplashAlpha:Float = 0.6;
 	public var lowQuality:Bool = false;
 	public var shaders:Bool = true;
-	public var cacheOnGPU:Bool = #if !switch false #else true #end; // GPU Caching made by Raltyro
+	public var cacheOnGPU:Bool = #if !switch false #else true #end; //From Stilic (I think he hates us actually)
+	public var cacheOnCPU:Bool = #if android false #else true #end;
+	public var strictLoadingScreen:Bool = true;
 	public var framerate:Int = 60;
 	public var camZooms:Bool = true;
 	public var hideHud:Bool = false;
+
+	public var vsliceMobileControls:Bool = false;
+	public var vsliceFreeplayColors:Bool = true;
+	public var vsliceResults:Bool = true;
+	public var vsliceSpecialCards:Bool = true;
+	public var vsliceSmoothBar:Bool = true;
+	public var loggingType:String = "None";
+	public var vsliceLegacyBar:Bool = false;
+	public var vsliceNaughtyness:Bool = #if mobile false #else true #end;
+	public var vsliceForceNewTag:Bool = false;
+
 	public var noteOffset:Int = 0;
 	public var arrowRGB:Array<Array<FlxColor>> = [
 		[0xFFC24B99, 0xFFFFFFFF, 0xFF3C1F56],
@@ -96,9 +131,15 @@ class ClientPrefs {
 		'ui_down'		=> [S, DOWN],
 		'ui_right'		=> [D, RIGHT],
 		
+		'favorite'		=> [F],
+		'bar_left'		=> [Q],
+		'bar_right'		=> [E],
+		'char_select'	=> [TAB],
+
 		'accept'		=> [SPACE, ENTER],
 		'back'			=> [BACKSPACE, ESCAPE],
 		'pause'			=> [ENTER, ESCAPE],
+		'screenshot'    => [F3],
 		'reset'			=> [R],
 		
 		'volume_mute'	=> [ZERO],
@@ -119,11 +160,39 @@ class ClientPrefs {
 		'ui_down'		=> [DPAD_DOWN, LEFT_STICK_DIGITAL_DOWN],
 		'ui_right'		=> [DPAD_RIGHT, LEFT_STICK_DIGITAL_RIGHT],
 		
+		'favorite'		=> [],
+		'bar_left'		=> [],
+		'bar_right'		=> [],
+		'char_select'		=> [],
+
 		'accept'		=> [A, START],
 		'back'			=> [B],
 		'pause'			=> [START],
+		'screenshot'    => [],
 		'reset'			=> [BACK]
 	];
+	public static var mobileBinds:Map<String, Array<MobileInputID>> = [
+		'note_up'		=> [HITBOX_UP],
+		'note_left'		=> [HITBOX_LEFT],
+		'note_down'		=> [HITBOX_DOWN],
+		'note_right'	=> [HITBOX_RIGHT],
+
+		'ui_up'			=> [UP],
+		'ui_left'		=> [LEFT],
+		'ui_down'		=> [DOWN],
+		'ui_right'		=> [RIGHT],
+
+		'favorite'		=> [F],
+		'bar_left'		=> [NONE],
+		'bar_right'		=> [NONE],
+
+		'accept'		=> [A],
+		'back'			=> [B],
+		'pause'			=> [P],
+		'screenshot'    => [NONE],
+		'reset'			=> [NONE]
+	];
+	public static var defaultMobileBinds:Map<String, Array<MobileInputID>> = null;
 	public static var defaultKeys:Map<String, Array<FlxKey>> = null;
 	public static var defaultButtons:Map<String, Array<FlxGamepadInputID>> = null;
 
@@ -144,14 +213,17 @@ class ClientPrefs {
 	{
 		var keyBind:Array<FlxKey> = keyBinds.get(key);
 		var gamepadBind:Array<FlxGamepadInputID> = gamepadBinds.get(key);
+		var mobileBind:Array<MobileInputID> = mobileBinds.get(key);
 		while(keyBind != null && keyBind.contains(NONE)) keyBind.remove(NONE);
 		while(gamepadBind != null && gamepadBind.contains(NONE)) gamepadBind.remove(NONE);
+		while(mobileBind != null && mobileBind.contains(NONE)) mobileBind.remove(NONE);
 	}
 
 	public static function loadDefaultKeys()
 	{
 		defaultKeys = keyBinds.copy();
 		defaultButtons = gamepadBinds.copy();
+		defaultMobileBinds = mobileBinds.copy();
 	}
 
 	public static function saveSettings() {
@@ -166,6 +238,7 @@ class ClientPrefs {
 		save.bind('controls_v3', CoolUtil.getSavePath());
 		save.data.keyboard = keyBinds;
 		save.data.gamepad = gamepadBinds;
+		save.data.mobile = mobileBinds;
 		save.flush();
 		FlxG.log.add("Settings saved!");
 	}
@@ -177,8 +250,12 @@ class ClientPrefs {
 			if (key != 'gameplaySettings' && Reflect.hasField(FlxG.save.data, key))
 				Reflect.setField(data, key, Reflect.field(FlxG.save.data, key));
 		
-		if(Main.fpsVar != null)
-			Main.fpsVar.visible = data.showFPS;
+		if(Main.debugDisplay != null){
+			Main.debugDisplay.isAdvanced = data.fpsRework;
+			Main.debugDisplay.visible = data.showFPSOpacity != 0;
+			Main.debugDisplay.backgroundOpacity = data.showFPSOpacity;
+			
+		}
 
 		#if (!html5 && !switch)
 		FlxG.autoPause = ClientPrefs.data.autoPause;
@@ -217,7 +294,10 @@ class ClientPrefs {
 
 		// controls on a separate save file
 		var save:FlxSave = new FlxSave();
-		save.bind('controls_v3', CoolUtil.getSavePath());
+		save.bind('controls_v3', CoolUtil.getSavePath(),(rawSave,error) ->{
+			trace("Couldn't load controls. Discarding..");
+			return {};
+		});
 		if(save != null)
 		{
 			if(save.data.keyboard != null)
@@ -232,6 +312,11 @@ class ClientPrefs {
 				for (control => keys in loadedControls)
 					if(gamepadBinds.exists(control)) gamepadBinds.set(control, keys);
 			}
+			if(save.data.mobile != null) {
+					var loadedControls:Map<String, Array<MobileInputID>> = save.data.mobile;
+					for (control => keys in loadedControls)
+						if(mobileBinds.exists(control)) mobileBinds.set(control, keys);
+			}
 			reloadVolumeKeys();
 		}
 	}
@@ -244,16 +329,16 @@ class ClientPrefs {
 
 	public static function reloadVolumeKeys()
 	{
-		TitleState.muteKeys = keyBinds.get('volume_mute').copy();
-		TitleState.volumeDownKeys = keyBinds.get('volume_down').copy();
-		TitleState.volumeUpKeys = keyBinds.get('volume_up').copy();
+		InitState.muteKeys = keyBinds.get('volume_mute').copy();
+		InitState.volumeDownKeys = keyBinds.get('volume_down').copy();
+		InitState.volumeUpKeys = keyBinds.get('volume_up').copy();
 		toggleVolumeKeys(true);
 	}
 	public static function toggleVolumeKeys(?turnOn:Bool = true)
 	{
 		final emptyArray = [];
-		FlxG.sound.muteKeys = turnOn ? TitleState.muteKeys : emptyArray;
-		FlxG.sound.volumeDownKeys = turnOn ? TitleState.volumeDownKeys : emptyArray;
-		FlxG.sound.volumeUpKeys = turnOn ? TitleState.volumeUpKeys : emptyArray;
+		FlxG.sound.muteKeys = (!Controls.instance.mobileC && turnOn) ? InitState.muteKeys : emptyArray;
+		FlxG.sound.volumeDownKeys = (!Controls.instance.mobileC && turnOn) ? InitState.volumeDownKeys : emptyArray;
+		FlxG.sound.volumeUpKeys = (!Controls.instance.mobileC && turnOn) ? InitState.volumeUpKeys : emptyArray;
 	}
 }

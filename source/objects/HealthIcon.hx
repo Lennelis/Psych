@@ -30,6 +30,11 @@ class HealthIcon extends FlxSprite
 			if(!Paths.fileExists('images/' + name + '.png', IMAGE)) name = 'icons/icon-face'; //Prevents crash from missing icon
 			
 			var graphic = Paths.image(name, allowGPU);
+			if(graphic == null) //a path can resolve and still fail to decode, which used to crash freeplay
+			{
+				graphic = Paths.image('icons/icon-face', allowGPU);
+				if(graphic == null) return;
+			}
 			var iSize:Float = Math.round(graphic.width / graphic.height);
 			loadGraphic(graphic, true, Math.floor(graphic.width / iSize), Math.floor(graphic.height));
 			iconOffsets[0] = (width - 150) / iSize;
