@@ -76,6 +76,62 @@ whose length isn't a whole number of steps ends up to half a step off. Measured
 across the base-game charts, 3402 of 3493 holds are step-exact — 26 late, 65 early —
 so that rounding explains almost nothing.
 
+## Hold covers and splashes
+
+**The hold cover loop no longer changes speed with the song**
+(`source/objects/SustainSplash.hx`, `source/states/PlayState.hx`)
+
+`SustainSplash.frameRate` was `Math.floor(24 / 100 * SONG.bpm)`, so the looping cover
+played at the sheet's authored 24fps only at exactly 100BPM — 38fps at 160, 18fps at
+78. The *end* animation was already pinned to 24, so only the loop wandered. It is a
+fixed 24 now, still overridable through the same static.
+
+**Pixel stages get real pixel art rather than a pixelated filter**
+
+Upstream draws the ordinary sheets through `PixelSplashShaderRef` with
+`pixelAmount = 6` on a pixel stage, which is an impression of pixel art rather than
+the thing itself. Both now prefer a dedicated sheet where one exists:
+
+- **Splashes** — `NoteSplash.pixelVariantOf()` picks a `-pixel` twin of whatever skin
+  is in play (cached in a map, so spawning a splash is never a file lookup), and
+  `assets/shared/images/noteSplashes/noteSplashes-pixel.*` supplies it. Its json sets
+  `allowPixel: false` so the shader leaves it alone and `allowRGB: false` so its own
+  colours survive — upstream already honours both, and `RGBPalette.copyValues(null)`
+  correctly zeroes `mult` rather than throwing.
+- **Hold covers** — `SustainSplash` loads `holdCovers/pixelNoteHoldCover` on a pixel
+  stage, whose animations are named `loop` and `explode` rather than `holdCover0` /
+  `holdCoverEnd0`, since it is V-Slice's own art and not a recolour of the normal
+  sheet. It skips the `-210` clip fudge and the note's colour shader, both of which
+  exist only to make the stretched ordinary sheet presentable.
+
+**`blend` in a splash skin's json** (`'add'`, `'screen'`, `'multiply'`, `'subtract'`)
+
+V-Slice's pixel splashes are drawn with `screen`, which is what turns their black
+outlines into light instead of leaving them as black blobs on screen. Only the four
+modes the hardware renderer implements are honoured; anything else draws normally
+rather than quietly falling back to something slower.
+
+### Where the pixel cover's placement comes from
+
+Not guesswork: V-Slice's own `pixel` note style
+(`preload/data/notestyles/pixel.json`) gives `scale: 6.0`, `offsets: [29, -4]`,
+`isPixel: true`. Its `Strumline` centres the cover on the strum, adds
+`offsets × scale`, then two further nudges its own source comments call a "hardcoded
+adjustment, because we are evil" (−12 x, −96 y).
+
+Running that back through flixel's `drawn_left = x - offset + origin × (1 - scale)`
+cancels the scale out of everything but the offsets themselves, which is why the
+code reads
+
+```haxe
+offset.x = frameWidth * 0.5 - strum.width * 0.5 - PIXEL_OFFSET_X * scale.x - PIXEL_NUDGE_X
+```
+
+Upstream's tuned numbers could not be reused here: the two sheets are authored
+completely differently — the vanilla frame is 300×400, the pixel one 200×59 — so
+neither the offsets nor the clip fudge transfer. The five constants are named at the
+top of the class so a nudge is a one-line change.
+
 ## Pause
 
 **The pause button finishes its press while the menu is up**
@@ -166,8 +222,7 @@ ported:
 
 | Old port | P-Slice's own |
 | --- | --- |
-| `HoldCover.hx` plus per-colour hold cover art | `SustainSplash.hx` with a `holdSkin` pref and skinnable sheets; its end animation is already timed off the chart, not the last piece |
-| A `noteSplashes-pixel` sheet and `NoteSplash.pixelVariants` | `PixelSplashShaderRef`, which pixelates the one sheet instead |
+| `HoldCover.hx` plus per-colour hold cover art | `SustainSplash.hx` with a `holdSkin` pref and skinnable sheets; its end animation is already timed off the chart, not the last piece. The pixel sheet from that work *was* brought across — see above |
 | A V-Slice pause button built into `MobileControls` | a round `P` touch pad button, data-positioned per device — only its press animation was missing |
 | `CoolUtil.widescreenOffset()` / `fillBanner()` and the story menu offsets | `MobileScaleMode` (notch cutouts, logical size, game cutout), and a different V-Slice-style story menu |
 | Android BACK to pause | already wired in `PlayState` |

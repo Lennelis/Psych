@@ -681,7 +681,6 @@ class PlayState extends MusicBeatState
 		splash.alpha = 0.000001; // cant make it invisible or it won't allow precaching
 
 		SustainSplash.startCrochet = Conductor.stepCrochet;
-		SustainSplash.frameRate = Math.floor(24 / 100 * SONG.bpm);
 		var holdSplash:SustainSplash = new SustainSplash();
 		holdSplash.alpha = 0.0001;
 
