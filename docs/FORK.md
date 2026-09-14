@@ -58,6 +58,24 @@ look endless.
 `openPauseMenu` already resets the player's strums, so it clears this bookkeeping
 too — otherwise resuming mid-hold would light a glow for a hold long gone.
 
+The end of a hold is anchored to the trail rather than to a time.
+`Note.clipToStrumNote` eats a sustain from the strum's **centre** — half a note
+height below its top — and only upscroll gets the matching `correctionOffset` that
+cancels that out (`sustainNote.correctionOffset = swagNote.height / 2`, set to 0 on
+downscroll). So on downscroll the trail is gone half a note height *before*
+`strumTime + sustainLength`, and pinning the strum to that time left it lit with
+nothing left to hold — a delay that grows as scroll speed drops (~90ms at speed 2,
+~180ms at speed 1). `holdTailConsumed()` mirrors the condition that empties the clip
+rect instead, so the strum drops exactly when the last of the trail does, in either
+direction at any speed. The chart-time check stays as an upper bound, so this can
+only ever shorten the tail end of a hold, never revive one.
+
+Worth recording what this *wasn't*, since it was the obvious suspect: the sustain
+pieces are laid out at `step * i` for `i in 0...round(length / step)`, so a hold
+whose length isn't a whole number of steps ends up to half a step off. Measured
+across the base-game charts, 3402 of 3493 holds are step-exact — 26 late, 65 early —
+so that rounding explains almost nothing.
+
 ## Pause
 
 **The pause button finishes its press while the menu is up**

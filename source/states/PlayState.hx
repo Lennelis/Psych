@@ -3593,7 +3593,10 @@ function updateStrumHoldState(holdArray:Array<Bool>, sustainArray:Array<Bool>, h
 		var holding:Bool = holdArray[i]
 			&& (sustainArray[i]
 				|| holdPending[i]
-				|| (wasHoldingSustain[i] && i < holdEndTime.length && Conductor.songPosition < holdEndTime[i]));
+				|| (wasHoldingSustain[i]
+					&& i < holdEndTime.length
+					&& Conductor.songPosition < holdEndTime[i]
+					&& !holdTailConsumed(i)));
 
 		spr.keyHeld = holdArray[i];
 		spr.holdingSustain = holding;
@@ -3605,6 +3608,41 @@ function updateStrumHoldState(holdArray:Array<Bool>, sustainArray:Array<Bool>, h
 		}
 		wasHoldingSustain[i] = holding;
 	}
+}
+
+/**
+ * Whether the last of a hold's trail has been eaten by the strums.
+ *
+ * `Note.clipToStrumNote` eats a sustain from the strum's *centre*, half a note height
+ * below its top, and only upscroll gets the matching `correctionOffset` that cancels
+ * that out. So on downscroll the trail is gone half a note height before
+ * `strumTime + sustainLength`, and pinning the strum to that time left it lit after
+ * there was nothing left to hold - a small delay that grows as scroll speed drops.
+ *
+ * Asking the last piece where it actually is covers both directions at any speed, and
+ * mirrors the condition that empties the clip rect rather than guessing at a constant.
+ */
+function holdTailConsumed(lane:Int):Bool
+{
+	var head:Note = holdHead[lane];
+	if (head == null || head.tail.length < 1)
+		return false;
+
+	var tail:Note = head.tail[head.tail.length - 1];
+	if (tail == null)
+		return false;
+
+	// Nothing to judge before the last piece has reached the strums, and on a hold
+	// longer than the spawn window it may not even exist on screen yet.
+	if (Conductor.songPosition < tail.strumTime)
+		return false;
+
+	var strum:StrumNote = playerStrums.members[lane];
+	if (strum == null)
+		return false;
+
+	final center:Float = strum.y + tail.offsetY + Note.swagWidth / 2;
+	return strum.downScroll ? tail.y >= center : tail.y + tail.height <= center;
 }
 
 /** Forgets every hold in progress, so resuming can't pick a finished one back up. */
