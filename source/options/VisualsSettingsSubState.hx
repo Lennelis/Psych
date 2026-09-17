@@ -120,6 +120,12 @@ class VisualsSettingsSubState extends BaseOptionsMenu
 		option.changeValue = 0.1;
 		option.decimals = 1;
 		addOption(option);
+
+		var option:Option = new Option('Smooth Health Bar',
+			"If checked, the health bar slides to its new value\ninstead of snapping, the way it does in V-Slice.",
+			'smoothHealthBar',
+			BOOL);
+		addOption(option);
 		
 		#if !mobile
 		var option:Option = new Option('FPS Counter',
