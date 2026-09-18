@@ -1851,14 +1851,29 @@ class PlayState extends MusicBeatState
 				timeTxt.text = FlxStringUtil.formatTime(secondsTotal, false);
 		}
 
-		if (camZooming)
+		var zoomDecay:Float = Math.exp(-elapsed * 3.125 * camZoomingDecay * playbackRate);
+		if (camZoomTween != null)
 		{
-			FlxG.camera.zoom = FlxMath.lerp(defaultCamZoom, FlxG.camera.zoom, Math.exp(-elapsed * 3.125 * camZoomingDecay * playbackRate));
-			camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, Math.exp(-elapsed * 3.125 * camZoomingDecay * playbackRate));
+			// An authored zoom is a curve, and the branch below would drag that curve to the screen
+			// through a ~0.2s half-life: the ease arrives smeared and the move visibly runs several
+			// times longer than the duration it was given. So while the tween is live it drives the
+			// camera itself.
+			//
+			// Beat bops write straight into camera.zoom, so whatever the camera sits above the base
+			// right now IS the outstanding bop. Decay that on its own and put it back on top of the
+			// tweened base, rather than decaying the base along with it - which is how V-Slice keeps
+			// its bop multiplier and its authored zoom apart.
+			var bop:Float = FlxG.camera.zoom - camZoomLastApplied;
+			if(bop < 0) bop = 0;
+			FlxG.camera.zoom = camZoomLastApplied = defaultCamZoom + bop * zoomDecay;
+
+			if (camZooming) camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, zoomDecay);
 		}
-		// Nothing decays toward defaultCamZoom when bops are off, so an authored zoom would move a
-		// number nobody reads. Apply it straight while the tween runs.
-		else if (camZoomTween != null) FlxG.camera.zoom = defaultCamZoom;
+		else if (camZooming)
+		{
+			FlxG.camera.zoom = FlxMath.lerp(defaultCamZoom, FlxG.camera.zoom, zoomDecay);
+			camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, zoomDecay);
+		}
 
 		FlxG.watch.addQuick("secShit", curSection);
 		FlxG.watch.addQuick("beatShit", curBeat);
@@ -2559,6 +2574,8 @@ class PlayState extends MusicBeatState
 	 */
 	public var camFollowTween:FlxTween;
 	public var camZoomTween:FlxTween;
+	/** What the zoom tween last put on the camera, so a beat bop on top of it can be told apart. */
+	var camZoomLastApplied:Float = 0;
 
 	public function cancelCameraFollowTween()
 	{
@@ -2635,11 +2652,16 @@ class PlayState extends MusicBeatState
 		var target:Float = stageRelative ? zoom * stageDefaultZoom : zoom;
 		if(duration <= 0)
 		{
-			defaultCamZoom = target;
-			if(!camZooming) FlxG.camera.zoom = target;
+			// Snap, and mean it. Moving only the base would leave the decay to crawl the camera
+			// there over about a second, which is not what anyone writing "instant" is asking for.
+			defaultCamZoom = camZoomLastApplied = target;
+			FlxG.camera.zoom = target;
 			return;
 		}
 
+		// The base as it stands before the tween moves it, so the first frame of the loop above
+		// measures the bop that's actually outstanding rather than reading zero.
+		camZoomLastApplied = defaultCamZoom;
 		camZoomTween = FlxTween.tween(this, {defaultCamZoom: target}, duration / playbackRate, {
 			ease: ease,
 			onComplete: function(_) camZoomTween = null
@@ -3082,10 +3104,17 @@ class PlayState extends MusicBeatState
 		Conductor.songPosition = lastTime;
 
 		var spr:StrumNote = playerStrums.members[key];
-		if(strumsBlocked[key] != true && spr != null && spr.animation.curAnim.name != 'confirm')
+		if(spr != null)
 		{
-			spr.playAnim('pressed');
-			spr.resetAnim = 0;
+			// keysCheck() maintains this every frame, but it runs after the strums update, so
+			// leaving it to that alone means the strum spends a frame acting on the wrong
+			// answer. Set it where we already know it.
+			spr.keyHeld = true;
+			if(strumsBlocked[key] != true && spr.animation.curAnim.name != 'confirm')
+			{
+				spr.playAnim('pressed');
+				spr.resetAnim = 0;
+			}
 		}
 		callOnScripts('onKeyPress', [key]);
 	}
@@ -3117,6 +3146,7 @@ class PlayState extends MusicBeatState
 		var spr:StrumNote = playerStrums.members[key];
 		if(spr != null)
 		{
+			spr.keyHeld = false;
 			spr.playAnim('static');
 			spr.resetAnim = 0;
 		}

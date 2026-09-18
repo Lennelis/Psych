@@ -244,10 +244,21 @@ class StrumNote extends FlxSprite
 				playAnim(keyHeld ? 'pressed' : 'static');
 			}
 		}
-		else if(keyHeld && animation.curAnim != null && animation.curAnim.name == 'static')
+		else if(animation.curAnim != null)
 		{
-			// V-Slice re-checks this every frame: a held key never sits on 'static'.
-			playAnim('pressed');
+			// V-Slice re-checks this every frame: a held key never sits on 'static', and a
+			// released one never sits on the ghost tap.
+			//
+			// Both directions matter, and the second one is not decoration. `keyHeld` is
+			// written at the end of keysCheck(), which runs after this update, so what we
+			// read here is always a frame behind. On desktop the key-up arrives as a stage
+			// event *before* the update loop, so keyReleased() would set 'static' and then
+			// this would immediately put 'pressed' back from the stale flag - and with only
+			// the first rule there was no way out of it, so the strum stayed lit until the
+			// lane was hit again. Making the rule symmetric means a stale read costs one
+			// frame instead of sticking.
+			if(keyHeld && animation.curAnim.name == 'static') playAnim('pressed');
+			else if(!keyHeld && animation.curAnim.name == 'pressed') playAnim('static');
 		}
 
 		super.update(elapsed);

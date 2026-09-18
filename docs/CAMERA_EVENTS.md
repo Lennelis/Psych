@@ -46,8 +46,8 @@ Zoom Camera    1, stage      4, quadIn        # and back out again
 Zoom Camera    0.9           0, instant       # snap out, no tween
 ```
 
-Beat bops still land on top of an authored zoom — it moves the level the bops punch away
-from and decay back to, not the camera directly.
+Beat bops still land on top of an authored zoom; see below for how the two are kept
+apart.
 
 ### Focus Camera
 
@@ -120,12 +120,19 @@ Instant and classic moves draw nothing, because there's no curve to draw.
 Worth knowing if you're scripting against them, because Psych's camera doesn't work the
 way V-Slice's does.
 
-**Zoom** moves `defaultCamZoom`, not `FlxG.camera.zoom`. Psych bops the camera by adding
-to `FlxG.camera.zoom` each beat and lerping it back toward `defaultCamZoom` every frame —
-setting the zoom directly would just be undone on the next frame. Moving the resting value
-is the equivalent of V-Slice tweening its `currentCameraZoom`, and it keeps the bops
-working. The one wrinkle: that decay only runs when `camZooming` is on, so while a zoom
-tween is live and bops are off, the zoom is applied straight instead.
+**Zoom** tweens `defaultCamZoom`, the level Psych's beat bops punch away from and decay
+back toward — the equivalent of V-Slice tweening its `currentCameraZoom`.
+
+But it can't stop there, because that decay would drag the authored curve to the screen
+through a half-life of roughly 0.2s. A four-step move at 150 BPM is 0.4s of tween arriving
+over more than a second, with the ease shape washed out on the way — so it reads as though
+the duration is being ignored. While a zoom tween is live it therefore drives
+`FlxG.camera.zoom` itself, and the beat bop rides on top: whatever the camera sits above
+the base on a given frame *is* the outstanding bop, so that gets decayed on its own and
+re-applied over the tweened base. Bops keep working, the ease arrives intact, and the
+normal decay takes back over the moment the tween finishes.
+
+`instant` snaps the camera as well as the base, for the same reason.
 
 **Focus** tweens `FlxG.camera.scroll` directly and stops the camera following for the
 duration, restoring it on completion. Psych normally chases `camFollow` with a soft lerp,
