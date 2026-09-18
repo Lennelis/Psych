@@ -39,14 +39,17 @@ class SongMenuItem extends FlxSpriteGroup
 	{
 		if (nudges != null) return nudges;
 
+		// These are the numbers Leo measured against the real game, so an untouched build
+		// already looks right and position.json only exists for further tuning.
 		nudges = {
 			antialiasText: true,
 			songTextX: 0, songTextY: 0,
 			weekTextX: 0, weekTextY: 0, weekTextScale: 1,
-			bpmTextX: 0, bpmTextY: 0, bpmTextScale: 1,
+			weekTextEngrave: true, weekTextEngraveColor: 'FF6E6A82', weekTextEngraveX: 1, weekTextEngraveY: 1,
+			bpmTextX: 3, bpmTextY: 1, bpmTextScale: 1,
 			bpmDigitsX: 0, bpmDigitsY: 0, bpmDigitGap: 11,
-			difficultyTextX: 0, difficultyTextY: 0, difficultyTextScale: 1,
-			difficultyDigitsX: 0, difficultyDigitsY: 0, difficultyDigitGap: 30,
+			difficultyTextX: 5, difficultyTextY: 2, difficultyTextScale: 1,
+			difficultyDigitsX: 0, difficultyDigitsY: -1, difficultyDigitGap: 30,
 			newTextX: 0, newTextY: 0, newTextScale: 1,
 			rankX: 0, rankY: 0,
 			iconX: 0, iconY: 0
@@ -70,30 +73,39 @@ class SongMenuItem extends FlxSpriteGroup
 			var flag:Dynamic = Reflect.field(parsed, 'antialiasText');
 			if (flag != null) nudges.antialiasText = (flag == true);
 
-			nudges.songTextX = pick('songTextX', 0);
-			nudges.songTextY = pick('songTextY', 0);
-			nudges.weekTextX = pick('weekTextX', 0);
-			nudges.weekTextY = pick('weekTextY', 0);
-			nudges.weekTextScale = pick('weekTextScale', 1);
-			nudges.bpmTextX = pick('bpmTextX', 0);
-			nudges.bpmTextY = pick('bpmTextY', 0);
-			nudges.bpmTextScale = pick('bpmTextScale', 1);
-			nudges.bpmDigitsX = pick('bpmDigitsX', 0);
-			nudges.bpmDigitsY = pick('bpmDigitsY', 0);
-			nudges.bpmDigitGap = pick('bpmDigitGap', 11);
-			nudges.difficultyTextX = pick('difficultyTextX', 0);
-			nudges.difficultyTextY = pick('difficultyTextY', 0);
-			nudges.difficultyTextScale = pick('difficultyTextScale', 1);
-			nudges.difficultyDigitsX = pick('difficultyDigitsX', 0);
-			nudges.difficultyDigitsY = pick('difficultyDigitsY', 0);
-			nudges.difficultyDigitGap = pick('difficultyDigitGap', 30);
-			nudges.newTextX = pick('newTextX', 0);
-			nudges.newTextY = pick('newTextY', 0);
-			nudges.newTextScale = pick('newTextScale', 1);
-			nudges.rankX = pick('rankX', 0);
-			nudges.rankY = pick('rankY', 0);
-			nudges.iconX = pick('iconX', 0);
-			nudges.iconY = pick('iconY', 0);
+			nudges.songTextX = pick('songTextX', nudges.songTextX);
+			nudges.songTextY = pick('songTextY', nudges.songTextY);
+			nudges.weekTextX = pick('weekTextX', nudges.weekTextX);
+			nudges.weekTextY = pick('weekTextY', nudges.weekTextY);
+			nudges.weekTextScale = pick('weekTextScale', nudges.weekTextScale);
+
+			var engrave:Dynamic = Reflect.field(parsed, 'weekTextEngrave');
+			if (engrave != null) nudges.weekTextEngrave = (engrave == true);
+
+			var engraveColor:Dynamic = Reflect.field(parsed, 'weekTextEngraveColor');
+			if (engraveColor != null) nudges.weekTextEngraveColor = Std.string(engraveColor);
+
+			nudges.weekTextEngraveX = pick('weekTextEngraveX', nudges.weekTextEngraveX);
+			nudges.weekTextEngraveY = pick('weekTextEngraveY', nudges.weekTextEngraveY);
+			nudges.bpmTextX = pick('bpmTextX', nudges.bpmTextX);
+			nudges.bpmTextY = pick('bpmTextY', nudges.bpmTextY);
+			nudges.bpmTextScale = pick('bpmTextScale', nudges.bpmTextScale);
+			nudges.bpmDigitsX = pick('bpmDigitsX', nudges.bpmDigitsX);
+			nudges.bpmDigitsY = pick('bpmDigitsY', nudges.bpmDigitsY);
+			nudges.bpmDigitGap = pick('bpmDigitGap', nudges.bpmDigitGap);
+			nudges.difficultyTextX = pick('difficultyTextX', nudges.difficultyTextX);
+			nudges.difficultyTextY = pick('difficultyTextY', nudges.difficultyTextY);
+			nudges.difficultyTextScale = pick('difficultyTextScale', nudges.difficultyTextScale);
+			nudges.difficultyDigitsX = pick('difficultyDigitsX', nudges.difficultyDigitsX);
+			nudges.difficultyDigitsY = pick('difficultyDigitsY', nudges.difficultyDigitsY);
+			nudges.difficultyDigitGap = pick('difficultyDigitGap', nudges.difficultyDigitGap);
+			nudges.newTextX = pick('newTextX', nudges.newTextX);
+			nudges.newTextY = pick('newTextY', nudges.newTextY);
+			nudges.newTextScale = pick('newTextScale', nudges.newTextScale);
+			nudges.rankX = pick('rankX', nudges.rankX);
+			nudges.rankY = pick('rankY', nudges.rankY);
+			nudges.iconX = pick('iconX', nudges.iconX);
+			nudges.iconY = pick('iconY', nudges.iconY);
 		}
 		catch (e:Dynamic)
 			trace('SongMenuItem: could not read the capsule position.json ($e)');
@@ -288,8 +300,9 @@ class SongMenuItem extends FlxSpriteGroup
 		weekText.visible = true;
 
 		var clean:String = prettifyLevelName(freeplayData.levelName);
-		createWeekTextGraphic(clean);
-		weekText.loadGraphic(FlxG.bitmap.get(clean));
+		var key:String = weekTextKey(clean);
+		createWeekTextGraphic(clean, key);
+		weekText.loadGraphic(FlxG.bitmap.get(key));
 	}
 
 	static function prettifyLevelName(levelId:String):String
@@ -317,17 +330,57 @@ class SongMenuItem extends FlxSpriteGroup
 		return out;
 	}
 
-	static function createWeekTextGraphic(text:String):Void
+	/**
+	 * Cache key for a week name's rendered bitmap.
+	 *
+	 * The style is part of the key, not just the text. Otherwise editing the engraving in
+	 * position.json would change nothing until the game was restarted, because the old
+	 * bitmap would still be sitting in the cache under the same name.
+	 */
+	static function weekTextKey(text:String):String
 	{
-		if (FlxG.bitmap.checkCache(text)) return;
+		var n:CapsuleNudges = nudge();
+		return 'freeplayWeek:$text:${n.weekTextEngrave}:${n.weekTextEngraveColor}:${n.weekTextEngraveX}:${n.weekTextEngraveY}';
+	}
+
+	/**
+	 * Renders a week name to a bitmap.
+	 *
+	 * Every other label on a capsule comes off a sheet, drawn by hand with a groove and a
+	 * lit edge so it reads as stamped into the plastic. This one is set from a font at
+	 * runtime, and a font gives you a flat fill - which is why it was the one piece of text
+	 * that looked painted on rather than cut in.
+	 *
+	 * A shadow in a colour lighter than the capsule, offset down and right, is what puts the
+	 * lit edge back: the letter reads as a groove with light catching its lower lip. The
+	 * numbers are in position.json because the right ones depend on the capsule art.
+	 */
+	static function createWeekTextGraphic(text:String, key:String):Void
+	{
+		if (FlxG.bitmap.checkCache(key)) return;
+
+		var n:CapsuleNudges = nudge();
 
 		var weekTextBase:FlxText = new FlxText(0, 0, 0, text);
 		weekTextBase.setFormat(Paths.font('YoureGone-Regular.otf'), 20, 0xFF21242E);
 
+		if (n.weekTextEngrave)
+		{
+			// Through FlxColor rather than Std.parseInt: an AARRGGBB value with the alpha set
+			// is past what a signed 32-bit Int holds, and parseInt has no obligation to do
+			// anything sensible with that.
+			var engraveColor:Null<FlxColor> = FlxColor.fromString('0x' + n.weekTextEngraveColor);
+
+			weekTextBase.borderStyle = SHADOW;
+			weekTextBase.borderColor = (engraveColor != null) ? engraveColor : 0xFF6E6A82;
+			weekTextBase.borderSize = 1;
+			weekTextBase.shadowOffset.set(n.weekTextEngraveX, n.weekTextEngraveY);
+		}
+
 		@:privateAccess
 		weekTextBase.regenGraphic();
 
-		FlxG.bitmap.add(weekTextBase.pixels.clone(), false, text);
+		FlxG.bitmap.add(weekTextBase.pixels.clone(), false, key);
 		weekTextBase.destroy();
 	}
 
@@ -984,6 +1037,10 @@ typedef CapsuleNudges =
 	var weekTextX:Float;
 	var weekTextY:Float;
 	var weekTextScale:Float;
+	var weekTextEngrave:Bool;
+	var weekTextEngraveColor:String;
+	var weekTextEngraveX:Float;
+	var weekTextEngraveY:Float;
 	var bpmTextX:Float;
 	var bpmTextY:Float;
 	var bpmTextScale:Float;

@@ -1,14 +1,17 @@
 {
 	"_readme": [
-		"Nudges for everything drawn on a freeplay capsule, so it can be placed without",
-		"rebuilding the game. Edit, back out of freeplay and go back in - it is read fresh",
-		"each time the menu is built.",
+		"Everything drawn on a freeplay capsule. These are already the built-in defaults - the",
+		"file is here so they can be changed without rebuilding the game. Edit, back out of",
+		"freeplay and go back in; it is read fresh each time the menu is built.",
 		"",
-		"Positive x moves right, positive y moves down. Every number here is an offset from",
-		"where the code already puts things, so all zeroes is the built-in placement.",
-		"The *Scale entries multiply a sprite's size; 1 leaves it alone.",
-		"bpmDigitGap and difficultyDigitGap are the spacing between digits.",
-		"antialiasText smooths the small labels and the generated week name."
+		"Positive x moves right, positive y moves down. The *Scale entries multiply a sprite's",
+		"size. bpmDigitGap and difficultyDigitGap are the spacing between digits.",
+		"antialiasText smooths the small labels and the generated week name.",
+		"",
+		"The week name is the one label set from a font rather than drawn by hand, so it has",
+		"no groove of its own. weekTextEngrave puts one back: a shadow in a colour lighter",
+		"than the capsule, offset down and right, so the letter reads as cut in with light",
+		"catching its lower lip. The colour is AARRGGBB."
 	],
 
 	"antialiasText": true,
@@ -19,21 +22,25 @@
 	"weekTextX": 0,
 	"weekTextY": 0,
 	"weekTextScale": 1,
+	"weekTextEngrave": true,
+	"weekTextEngraveColor": "FF6E6A82",
+	"weekTextEngraveX": 1,
+	"weekTextEngraveY": 1,
 
-	"bpmTextX": 0,
-	"bpmTextY": 0,
+	"bpmTextX": 3,
+	"bpmTextY": 1,
 	"bpmTextScale": 1,
 
 	"bpmDigitsX": 0,
 	"bpmDigitsY": 0,
 	"bpmDigitGap": 11,
 
-	"difficultyTextX": 0,
-	"difficultyTextY": 0,
+	"difficultyTextX": 5,
+	"difficultyTextY": 2,
 	"difficultyTextScale": 1,
 
 	"difficultyDigitsX": 0,
-	"difficultyDigitsY": 0,
+	"difficultyDigitsY": -1,
 	"difficultyDigitGap": 30,
 
 	"newTextX": 0,

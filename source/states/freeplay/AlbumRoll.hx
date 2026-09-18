@@ -58,7 +58,8 @@ class AlbumRoll extends FlxSpriteGroup
 
 	function readNudges():AlbumNudges
 	{
-		var loaded:AlbumNudges = {artX: 0, artY: 0, artScale: 1, starsX: 0, starsY: 0, titleX: 0, titleY: 0};
+		// Leo's measurements against the real game, so an untouched build already looks right.
+		var loaded:AlbumNudges = {artX: 415, artY: 140, artScale: 1, starsX: 0, starsY: 0, titleX: 0, titleY: 0};
 
 		try
 		{
@@ -75,13 +76,13 @@ class AlbumRoll extends FlxSpriteGroup
 				return Math.isNaN(asFloat) ? fallback : asFloat;
 			}
 
-			loaded.artX = pick('artX', 0);
-			loaded.artY = pick('artY', 0);
-			loaded.artScale = pick('artScale', 1);
-			loaded.starsX = pick('starsX', 0);
-			loaded.starsY = pick('starsY', 0);
-			loaded.titleX = pick('titleX', 0);
-			loaded.titleY = pick('titleY', 0);
+			loaded.artX = pick('artX', loaded.artX);
+			loaded.artY = pick('artY', loaded.artY);
+			loaded.artScale = pick('artScale', loaded.artScale);
+			loaded.starsX = pick('starsX', loaded.starsX);
+			loaded.starsY = pick('starsY', loaded.starsY);
+			loaded.titleX = pick('titleX', loaded.titleX);
+			loaded.titleY = pick('titleY', loaded.titleY);
 		}
 		catch (e:Dynamic)
 			trace('AlbumRoll: could not read position.json ($e)');
