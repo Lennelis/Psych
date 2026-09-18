@@ -178,6 +178,19 @@ class PlayState extends MusicBeatState
 	public var combo:Int = 0;
 
 	public var healthBar:Bar;
+
+	/**
+	 * Half-life of the health bar's catch-up, in seconds.
+	 *
+	 * V-Slice moves its bar 15% of the remaining distance per frame, which is a half-life
+	 * of about 71ms at 60fps. A per-frame lerp smooths faster the higher the framerate
+	 * though, and Psych lets the player pick one - so the same feel is expressed as a
+	 * half-life here, which behaves identically at 60, 144 or uncapped.
+	 */
+	public static var HEALTH_HALF_LIFE:Float = 0.071;
+
+	/** What the health bar is showing. Trails `health` while smoothing is switched on. */
+	public var healthLerp:Float = 1;
 	public var timeBar:Bar;
 	var songPercent:Float = 0;
 
@@ -532,7 +545,8 @@ class PlayState extends MusicBeatState
 		FlxG.worldBounds.set(0, 0, FlxG.width, FlxG.height);
 		moveCameraSection();
 
-		healthBar = new Bar(0, FlxG.height * (!ClientPrefs.data.downScroll ? 0.89 : 0.11), 'healthBar', function() return health, 0, 2);
+		healthLerp = health;
+		healthBar = new Bar(0, FlxG.height * (!ClientPrefs.data.downScroll ? 0.89 : 0.11), 'healthBar', function() return ClientPrefs.data.smoothHealthBar ? healthLerp : health, 0, 2);
 		healthBar.screenCenter(X);
 		healthBar.leftToRight = false;
 		healthBar.scrollFactor.set();
@@ -1781,6 +1795,7 @@ class PlayState extends MusicBeatState
 		if (healthBar.bounds.max != null && health > healthBar.bounds.max)
 			health = healthBar.bounds.max;
 
+		updateHealthLerp(elapsed);
 		updateIconsScale(elapsed);
 		updateIconsPosition();
 
@@ -1946,6 +1961,41 @@ class PlayState extends MusicBeatState
 		var mult:Float = FlxMath.lerp(1, iconP2.scale.x, Math.exp(-elapsed * 9 * playbackRate));
 		iconP2.scale.set(mult, mult);
 		iconP2.updateHitbox();
+	}
+
+	/**
+	 * Slides the displayed health toward the real value.
+	 *
+	 * Only what the bar *shows* is smoothed - `health` itself is untouched, so dying,
+	 * scoring and every script that reads it behave exactly as before. The bar merely
+	 * catches up.
+	 */
+	function updateHealthLerp(elapsed:Float)
+	{
+		if(!ClientPrefs.data.smoothHealthBar)
+		{
+			healthLerp = health;
+			return;
+		}
+
+		// Exponential decay: the remaining distance halves every HEALTH_HALF_LIFE seconds
+		// however often this runs, which is what makes it framerate-independent. Same
+		// shape as V-Slice's MathUtil.smoothLerpDecay.
+		if(healthLerp != health)
+		{
+			healthLerp = health + (healthLerp - health) * Math.pow(2, -elapsed / HEALTH_HALF_LIFE);
+			if(Math.abs(healthLerp - health) < 0.001) healthLerp = health; // don't crawl forever
+		}
+
+		// The bar's percent now moves without `health` changing, so the icon faces have to
+		// be refreshed here as well as in set_health, or they would sit on a stale frame.
+		if(iconsAnimations && healthBar != null && healthBar.enabled
+			&& iconP1 != null && iconP1.animation.curAnim != null
+			&& iconP2 != null && iconP2.animation.curAnim != null)
+		{
+			iconP1.animation.curAnim.curFrame = (healthBar.percent < 20) ? 1 : 0;
+			iconP2.animation.curAnim.curFrame = (healthBar.percent > 80) ? 1 : 0;
+		}
 	}
 
 	public dynamic function updateIconsPosition()
@@ -2962,6 +3012,13 @@ class PlayState extends MusicBeatState
 	 * side: V-Slice makes the opponent's covers vanish at the end instead of playing it,
 	 * so they do here too.
 	 */
+	/** Whether this lane's key is still down, which is what dropping a cover really means. */
+	inline function laneKeyHeld(lane:Int):Bool
+	{
+		var spr:StrumNote = (lane >= 0 && lane < playerStrums.length) ? playerStrums.members[lane] : null;
+		return spr != null && spr.keyHeld;
+	}
+
 	function updateHoldCovers():Void
 	{
 		for (i in 0...playerHoldCovers.length)
@@ -2975,10 +3032,13 @@ class PlayState extends MusicBeatState
 			// animation away from every hold that earned one.
 			//
 			// Below that, the bot never lets go, so dropping only means anything in a lane
-			// the player is playing. wasHoldingSustain is the same signal the strums run
-			// on, so a cover can never outlast the confirm glow underneath it.
+			// the player is playing. This asks whether the key is still down rather than
+			// reading wasHoldingSustain: since holdTailConsumed the glow ends when the
+			// trail is gone, which on downscroll is up to a tenth of a second before the
+			// cover's own end time - and reading that signal here would have cut every
+			// downscroll cover short instead of letting it pop.
 			if(Conductor.songPosition >= playerHoldCoverEnd[i]) cover.playEnd();
-			else if(!cpuControlled && (i >= wasHoldingSustain.length || !wasHoldingSustain[i])) cover.stopCover();
+			else if(!cpuControlled && !laneKeyHeld(i)) cover.stopCover();
 		}
 
 		for (i in 0...opponentHoldCovers.length)
@@ -3101,7 +3161,8 @@ class PlayState extends MusicBeatState
 			// piece has been taken, up to where the sustain really ends. It only extends
 			// a hold that was already running, so it can't revive one that was dropped.
 			var holding:Bool = holdArray[i] && (sustainArray[i] || holdPending[i]
-				|| (wasHoldingSustain[i] && i < holdEndTime.length && Conductor.songPosition < holdEndTime[i]));
+				|| (wasHoldingSustain[i] && i < holdEndTime.length
+					&& Conductor.songPosition < holdEndTime[i] && !holdTailConsumed(i)));
 
 			spr.keyHeld = holdArray[i];
 			spr.holdingSustain = holding;
@@ -3113,6 +3174,37 @@ class PlayState extends MusicBeatState
 			}
 			wasHoldingSustain[i] = holding;
 		}
+	}
+
+	/**
+	 * Whether the last of a hold's trail has been eaten by the strums.
+	 *
+	 * `Note.clipToStrumNote` eats a sustain from the strum's *centre*, half a note height
+	 * below its top, and only upscroll gets the matching `correctionOffset` that cancels
+	 * that out. So on downscroll the trail is gone half a note height before
+	 * `strumTime + sustainLength`, and pinning the strum to that time leaves it lit after
+	 * there is nothing left to hold - a small delay that grows as scroll speed drops.
+	 *
+	 * Asking the last piece where it actually is covers both directions at any speed, and
+	 * mirrors the condition that empties the clip rect rather than guessing at a constant.
+	 */
+	function holdTailConsumed(lane:Int):Bool
+	{
+		var head:Note = holdHead[lane];
+		if(head == null || head.tail.length < 1) return false;
+
+		var tail:Note = head.tail[head.tail.length - 1];
+		if(tail == null) return false;
+
+		// Nothing to judge before the last piece has reached the strums, and on a hold
+		// longer than the spawn window it may not even exist on screen yet.
+		if(Conductor.songPosition < tail.strumTime) return false;
+
+		var strum:StrumNote = playerStrums.members[lane];
+		if(strum == null) return false;
+
+		final center:Float = strum.y + tail.offsetY + Note.swagWidth / 2;
+		return strum.downScroll ? tail.y >= center : tail.y + tail.height <= center;
 	}
 
 	function noteMiss(daNote:Note):Void { //You didn't hit the key and let it go offscreen, also used by Hurt Notes
