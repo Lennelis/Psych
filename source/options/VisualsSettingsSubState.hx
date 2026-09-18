@@ -146,9 +146,14 @@ class VisualsSettingsSubState extends BaseOptionsMenu
 		addOption(option);
 
 		var option:Option = new Option('HUD Camera Bop', //Name
-			"If unchecked, the HUD holds still on the beat while the stage keeps bopping.\nThe HUD zooms about its own centre, so anything far from the middle of the\nscreen - the strums most of all - travels a little on every bop.", //Description
-			'hudBop',
-			BOOL);
+			"How far the HUD moves on the beat. The HUD zooms about its own centre, so\nanything far from the middle of the screen - the strums most of all - travels\nfurthest. At 0% the HUD holds still while the stage keeps bopping.", //Description
+			'hudBopStrength',
+			PERCENT);
+		option.scrollSpeed = 1.6;
+		option.minValue = 0.0;
+		option.maxValue = 1;
+		option.changeValue = 0.1;
+		option.decimals = 1;
 		addOption(option);
 
 		var option:Option = new Option('Smooth Health Bar',

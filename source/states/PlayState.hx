@@ -2630,12 +2630,17 @@ class PlayState extends MusicBeatState
 	 */
 	var camZoomBop:Float = 0;
 
-	/** How long a HUD bop takes to fall all the way back, in seconds at 1x. */
-	static inline var HUD_BOP_TIME:Float = 1;
+	/**
+	 * How long a HUD bop takes to rise to its peak and then fall all the way back, in seconds at 1x.
+	 * The rise is a handful of frames - long enough that the HUD arrives instead of appearing there.
+	 */
+	static inline var HUD_BOP_RISE:Float = 0.08;
+	static inline var HUD_BOP_FALL:Float = 0.92;
 
-	/** The offset the live HUD bop started from, and how far into its fall it is. */
-	var hudBopAmount:Float = 0;
-	var hudBopTime:Float = 0;
+	/** The live HUD bop: where it set off from, what it climbs to, and how far into it we are. */
+	var hudBopStart:Float = 0;
+	var hudBopPeak:Float = 0;
+	var hudBopTime:Float = -1;
 
 	/**
 	 * The HUD bop used to be an exponential decay toward 1, the same shape the stage camera uses.
@@ -2648,31 +2653,46 @@ class PlayState extends MusicBeatState
 	 * So the fall is a curve with an end instead of an asymptote. Cubed, it keeps the shape of the
 	 * old decay over the part anyone can see - the half-life lands within a couple of hundredths
 	 * of a second of where it was - and then it reaches exactly 1 and stops.
+	 *
+	 * The rise is eased for the same reason the fall has an end. Going straight to the peak puts
+	 * the whole HUD somewhere else between one frame and the next, and a jump the eye cannot
+	 * follow reads as a shake rather than as a bop. Half a dozen frames is enough for it to read
+	 * as one movement out and back.
 	 */
 	function updateHudBop(elapsed:Float)
 	{
-		if(hudBopAmount == 0) return;
+		if(hudBopTime < 0) return;
 
 		hudBopTime += elapsed * camZoomingDecay * playbackRate;
-		if(hudBopTime >= HUD_BOP_TIME)
+
+		if(hudBopTime < HUD_BOP_RISE)
 		{
-			hudBopAmount = 0;
-			hudBopTime = 0;
+			camHUD.zoom = 1 + FlxMath.lerp(hudBopStart, hudBopPeak, FlxEase.sineOut(hudBopTime / HUD_BOP_RISE));
+			return;
+		}
+
+		var fall:Float = 1 - (hudBopTime - HUD_BOP_RISE) / HUD_BOP_FALL;
+		if(fall <= 0)
+		{
+			hudBopStart = hudBopPeak = 0;
+			hudBopTime = -1;
 			camHUD.zoom = 1;
 			return;
 		}
 
-		var fall:Float = 1 - hudBopTime / HUD_BOP_TIME;
-		camHUD.zoom = 1 + hudBopAmount * fall * fall * fall;
+		camHUD.zoom = 1 + hudBopPeak * fall * fall * fall;
 	}
 
 	/**
-	 * Starts the HUD bop over, carrying whatever the last one had left so bops landing on top of
-	 * each other stack the way they used to rather than cutting one another off.
+	 * Starts the HUD bop over, setting off from wherever the HUD is rather than from rest, so bops
+	 * landing on top of each other stack instead of cutting one another off.
 	 */
 	public function bopHUD(amount:Float)
 	{
-		hudBopAmount = (camHUD.zoom - 1) + amount;
+		if(amount == 0) return;
+
+		hudBopStart = camHUD.zoom - 1;
+		hudBopPeak = hudBopStart + amount;
 		hudBopTime = 0;
 	}
 
@@ -3962,7 +3982,7 @@ class PlayState extends MusicBeatState
 		FlxG.camera.zoom += amount;
 		camZoomBop += amount;
 
-		if (ClientPrefs.data.hudBop) bopHUD(0.03 * camZoomingMult);
+		bopHUD(0.03 * camZoomingMult * ClientPrefs.data.hudBopStrength);
 	}
 
 	/** A step tick waiting to be turned into a bop, and whether it began a section. */
