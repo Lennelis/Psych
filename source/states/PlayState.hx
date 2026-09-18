@@ -2638,6 +2638,16 @@ class PlayState extends MusicBeatState
 	static inline var HUD_BOP_RISE:Float = 0.08;
 	static inline var HUD_BOP_FALL:Float = 0.92;
 
+	/**
+	 * How much of the fall's tail to cut off.
+	 *
+	 * A cubic arrives at rest with no speed left, so the last stretch of it crawls: a third of a
+	 * second spent between one pixel of travel and none. That stretch is where the HUD looks like
+	 * it is jittering rather than moving, so the curve is shifted down by this much and rescaled -
+	 * it now reaches zero early, and crosses the last pixel in about two frames instead of twenty.
+	 */
+	static inline var HUD_BOP_CUT:Float = 0.04;
+
 	/** The live HUD bop: where it set off from, what it climbs to, and how far into it we are. */
 	var hudBopStart:Float = 0;
 	var hudBopPeak:Float = 0;
@@ -2659,6 +2669,15 @@ class PlayState extends MusicBeatState
 	 * the whole HUD somewhere else between one frame and the next, and a jump the eye cannot
 	 * follow reads as a shake rather than as a bop. Half a dozen frames is enough for it to read
 	 * as one movement out and back.
+	 *
+	 * The tail is cut for a different reason again, and it is the one that was actually being
+	 * seen. A zoom of 1.0003 moves nothing far enough to notice, but it still resamples every
+	 * sprite on the camera - and sharp UI, outlined text and one-pixel note edges most of all,
+	 * does not survive being resampled by a hair. The edges redistribute between neighbouring
+	 * pixels, and doing that continuously for a third of a second at the end of every bop reads
+	 * as the HUD rapidly changing position by a tiny amount. It is not movement, it is filtering.
+	 * There is no way to be slightly zoomed and crisp, so the fix is to be there for as little
+	 * time as possible: see HUD_BOP_CUT.
 	 */
 	function updateHudBop(elapsed:Float)
 	{
@@ -2673,7 +2692,8 @@ class PlayState extends MusicBeatState
 		}
 
 		var fall:Float = 1 - (hudBopTime - HUD_BOP_RISE) / HUD_BOP_FALL;
-		if(fall <= 0)
+		var shaped:Float = (fall > 0) ? (fall * fall * fall - HUD_BOP_CUT) / (1 - HUD_BOP_CUT) : 0;
+		if(shaped <= 0)
 		{
 			hudBopStart = hudBopPeak = 0;
 			hudBopTime = -1;
@@ -2681,7 +2701,7 @@ class PlayState extends MusicBeatState
 			return;
 		}
 
-		camHUD.zoom = 1 + hudBopPeak * fall * fall * fall;
+		camHUD.zoom = 1 + hudBopPeak * shaped;
 	}
 
 	/**
