@@ -171,6 +171,18 @@ class PlayState extends MusicBeatState
 	public var camZooming:Bool = false;
 	public var camZoomingMult:Float = 1;
 	public var camZoomingDecay:Float = 1;
+
+	/**
+	 * How often the camera bops, in beats, once `Set Camera Bop` has had a say.
+	 *
+	 * Negative means nobody has asked, so bops stay on Psych's own schedule: once per
+	 * section, whatever that section's beat count happens to be. Zero switches them off, and
+	 * any positive value is a beat interval - both of which are V-Slice's meanings, so a
+	 * chart written against its `SetCameraBop` reads the same here.
+	 */
+	public var camZoomingRate:Float = -1;
+	/** Phase for the above, in beats, so bops can land off the downbeat. */
+	public var camZoomingOffset:Float = 0;
 	private var curSong:String = "";
 
 	public var gfSpeed:Int = 1;
@@ -2314,6 +2326,12 @@ class PlayState extends MusicBeatState
 				var zoomTween = CameraEvents.parseTween(value2);
 				tweenCameraZoom(zoomData.zoom, zoomTween.duration * Conductor.stepCrochet / 1000, zoomData.stageRelative, zoomTween.easeFunction);
 
+			case 'Set Camera Bop':
+				var bop = CameraEvents.parseBop(value1, value2);
+				camZoomingMult = bop.intensity;
+				camZoomingRate = bop.rate;
+				camZoomingOffset = bop.offset;
+
 			case 'Focus Camera':
 				if(camFollow == null) return;
 
@@ -3849,12 +3867,35 @@ class PlayState extends MusicBeatState
 	}
 
 	var lastStepHit:Int = -1;
+	/**
+	 * One camera bop, wherever it was asked for.
+	 *
+	 * The 1.35 ceiling is Psych's and V-Slice has the same one, for the same reason: a fast
+	 * bop rate would otherwise walk the camera further in on every beat and never come back.
+	 */
+	public function bopCamera()
+	{
+		if (!camZooming || !ClientPrefs.data.camZooms || FlxG.camera.zoom >= 1.35) return;
+
+		FlxG.camera.zoom += 0.015 * camZoomingMult;
+		camHUD.zoom += 0.03 * camZoomingMult;
+	}
+
 	override function stepHit()
 	{
 		super.stepHit();
 
 		if(curStep == lastStepHit) {
 			return;
+		}
+
+		// Counted in steps rather than beats so a rate of a quarter beat still lands on
+		// something, which is how V-Slice counts it too.
+		if (camZoomingRate > 0)
+		{
+			var everySteps:Int = Math.round(camZoomingRate * 4);
+			if (everySteps > 0 && (curStep + Math.round(camZoomingOffset * 4)) % everySteps == 0)
+				bopCamera();
 		}
 
 		lastStepHit = curStep;
@@ -3913,11 +3954,9 @@ class PlayState extends MusicBeatState
 			if (generatedMusic && !endingSong && !isCameraOnForcedPos)
 				moveCameraSection();
 
-			if (camZooming && FlxG.camera.zoom < 1.35 && ClientPrefs.data.camZooms)
-			{
-				FlxG.camera.zoom += 0.015 * camZoomingMult;
-				camHUD.zoom += 0.03 * camZoomingMult;
-			}
+			// Only while nothing has set a rate - past that the bop is driven per beat in
+			// stepHit() instead, which is the only way "every two beats" can mean anything.
+			if (camZoomingRate < 0) bopCamera();
 
 			if (SONG.notes[curSection].changeBPM)
 			{

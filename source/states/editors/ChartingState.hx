@@ -86,7 +86,8 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		['Set Property', "Value 1: Variable name\nValue 2: New value"],
 		['Play Sound', "Value 1: Sound file name\nValue 2: Volume (Default: 1), ranges from 0 to 1"],
 		['Zoom Camera', "V-Slice's camera zoom, tweened.\n\nValue 1: Zoom, then optionally the mode:\n\"1.2\" is an absolute zoom,\n\"1.2, stage\" is 1.2x the stage's own zoom.\n\nValue 2: \"duration, ease\" - duration in steps\n(Default: 4), ease name like quadOut or\nelasticInOut (Default: linear).\nUse \"instant\" to snap.\n\nBeat bops still happen on top of this."],
-		['Focus Camera', "V-Slice's camera focus, tweened.\n\nValue 1: bf / dad / gf, or pos, then\noptionally \"x, y\" - an offset for a character,\nan absolute point for pos.\nLeave blank to hand the camera back to\nthe section logic.\n\nValue 2: \"duration, ease\" - same as\nZoom Camera, plus \"classic\" to snap\nwithout holding onto the camera.\n\nNumbers work too and follow V-Slice's,\nNOT Psych's: 0 = bf, 1 = dad, 2 = gf."]
+		['Focus Camera', "V-Slice's camera focus, tweened.\n\nValue 1: bf / dad / gf, or pos, then\noptionally \"x, y\" - an offset for a character,\nan absolute point for pos.\nLeave blank to hand the camera back to\nthe section logic.\n\nValue 2: \"duration, ease\" - same as\nZoom Camera, plus \"classic\" to snap\nwithout holding onto the camera.\n\nNumbers work too and follow V-Slice's,\nNOT Psych's: 0 = bf, 1 = dad, 2 = gf."],
+		['Set Camera Bop', "V-Slice's camera bop controls.\n\nValue 1: Strength, as a multiple of normal\n(Default: 1). \"2\" bops twice as hard,\n\"0\" flattens it.\n\nValue 2: \"rate, offset\" in beats.\nRate is how many beats between bops\n(4 = once a bar). \"0\" stops them.\nLeave blank to go back to Psych's\ndefault of once per section.\nOffset shifts them off the downbeat."]
 	];
 	
 	public static var keysArray:Array<FlxKey> = [ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT]; //Used for Vortex Editor
@@ -175,6 +176,13 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 
 	var behindRenderedNotes:FlxTypedGroup<MetaNote> = new FlxTypedGroup<MetaNote>();
 	var curRenderedNotes:FlxTypedGroup<MetaNote> = new FlxTypedGroup<MetaNote>();
+
+	/** A right click that has not been claimed by a move cancel or a selection drag. */
+	var rightClickArmed:Bool = false;
+	var rightClickX:Float = 0;
+	var rightClickY:Float = 0;
+	/** How far the mouse may wander and still count as a click rather than a drag, in pixels. */
+	static inline var RIGHT_CLICK_SLOP:Float = 4;
 	var movingNotes:FlxTypedGroup<MetaNote> = new FlxTypedGroup<MetaNote>();
 	var eventLockOverlay:FlxSprite;
 	var vortexIndicator:FlxSprite;
@@ -682,6 +690,20 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 
 		for (num => key in keysArray)
 			_keysPressedBuffer[num] = FlxG.keys.checkStatus(key, JUST_PRESSED);
+
+		// Noted here, before anything downstream gets to claim this press. A right click is
+		// already three things in this editor - cancel a move, drag a selection box, and now
+		// delete an event - so the delete only counts if the press was not spoken for and the
+		// mouse stayed put, which is what tells a click apart from the start of a drag.
+		if(FlxG.mouse.justPressedRight)
+		{
+			rightClickArmed = !isMovingNotes;
+			rightClickX = FlxG.mouse.screenX;
+			rightClickY = FlxG.mouse.screenY;
+		}
+		if(rightClickArmed && (Math.abs(FlxG.mouse.screenX - rightClickX) > RIGHT_CLICK_SLOP
+			|| Math.abs(FlxG.mouse.screenY - rightClickY) > RIGHT_CLICK_SLOP))
+			rightClickArmed = false;
 
 		if(autoSaveCap > 0)
 		{
@@ -1303,6 +1325,11 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					movingNotesLastY = dummyArrow.y;
 				}
 			}
+			else if(FlxG.mouse.justReleasedRight && rightClickArmed && !lockedEvents)
+			{
+				rightClickArmed = false;
+				removeEventUnder(noteData);
+			}
 			else if(FlxG.mouse.justPressed && !ignoreClickForThisFrame)
 			{
 				if(FlxG.keys.pressed.CONTROL && FlxG.mouse.justPressed)
@@ -1340,18 +1367,27 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 							}
 							trace('Notes selected: ' + selectedNotes.length);
 						}
-						else if(!FlxG.keys.pressed.CONTROL) // Remove Note/Event
+						else if(!FlxG.keys.pressed.CONTROL)
 						{
-							var kind:String = !closest.isEvent ? 'note' : 'event';
-							trace('Removed $kind at time: ${closest.strumTime}');
-							if(!closest.isEvent)
-								notes.remove(closest);
+							// Events pick up to be edited; right click is what removes them, the way
+							// V-Slice's editor works. Notes keep click-to-delete, which is how charts
+							// actually get made - and an event is a thing you tweak far more often
+							// than you delete, which is why the two differ.
+							if(closest.isEvent)
+							{
+								var sel = selectedNotes.copy();
+								resetSelectedNotes();
+								selectedNotes.push(closest);
+								addUndoAction(SELECT_NOTE, {old: sel, current: selectedNotes.copy()});
+							}
 							else
-								events.remove(cast (closest, EventMetaNote));
-
-							selectedNotes.remove(closest);
-							curRenderedNotes.remove(closest, true);
-							addUndoAction(DELETE_NOTE, !closest.isEvent ? {notes: [closest]} : {events: [closest]});
+							{
+								trace('Removed note at time: ${closest.strumTime}');
+								notes.remove(closest);
+								selectedNotes.remove(closest);
+								curRenderedNotes.remove(closest, true);
+								addUndoAction(DELETE_NOTE, {notes: [closest]});
+							}
 						}
 						if(selectedNotes.length == 1) onSelectNote();
 						forceDataUpdate = true;
@@ -1658,6 +1694,38 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			FlxG.sound.play(Paths.sound('scrollMenu'), 0.6);
 			outputTxt.color = FlxColor.WHITE;
 		}
+	}
+
+	/**
+	 * Deletes the event sitting under the cursor, if the cursor is over the event column.
+	 *
+	 * Shares the lookup the left click uses - same column test, same one-cell window, same
+	 * tie-break - so the event that lights up under the pointer is the event that goes.
+	 */
+	function removeEventUnder(noteData:Int)
+	{
+		if(noteData >= 0) return; // not the event column
+
+		var closeEvents:Array<MetaNote> = curRenderedNotes.members.filter(function(note:MetaNote)
+		{
+			var chartY:Float = FlxG.mouse.y - note.chartY;
+			return note.isEvent && chartY >= 0 && chartY < GRID_SIZE;
+		});
+		if(closeEvents.length < 1) return;
+
+		closeEvents.sort(function(a:MetaNote, b:MetaNote) return Math.abs(a.strumTime - FlxG.mouse.y) < Math.abs(b.strumTime - FlxG.mouse.y) ? 1 : -1);
+
+		var closest:EventMetaNote = cast closeEvents[0];
+		if(closest == null) return;
+
+		trace('Removed event at time: ${closest.strumTime}');
+		events.remove(closest);
+		selectedNotes.remove(closest);
+		curRenderedNotes.remove(closest, true);
+		addUndoAction(DELETE_NOTE, {events: [closest]});
+
+		if(selectedNotes.length == 1) onSelectNote();
+		forceDataUpdate = true;
 	}
 
 	function resetSelectedNotes()

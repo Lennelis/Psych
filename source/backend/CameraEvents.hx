@@ -17,11 +17,16 @@ class CameraEvents
 {
 	public static inline var ZOOM:String = 'Zoom Camera';
 	public static inline var FOCUS:String = 'Focus Camera';
+	public static inline var BOP:String = 'Set Camera Bop';
 
 	/** V-Slice's default, in steps. */
 	public static inline var DEFAULT_DURATION:Float = 4;
 
 	public static inline function isCameraEvent(name:String):Bool
+		return name == ZOOM || name == FOCUS || name == BOP;
+
+	/** Only the two that move the camera over time have a curve worth drawing. */
+	public static inline function hasTweenPreview(name:String):Bool
 		return name == ZOOM || name == FOCUS;
 
 	/** Focus targets. The numbers are V-Slice's, so a chart converted from it lands right. */
@@ -113,6 +118,24 @@ class CameraEvents
 		};
 	}
 
+	/**
+	 * Value 1 of `Set Camera Bop` is the strength, value 2 is `rate, offset` in beats.
+	 *
+	 * A blank rate hands the bop back to Psych's own schedule - once per section - which is
+	 * what the negative stands for. Zero switches bops off, matching V-Slice.
+	 */
+	public static function parseBop(value1:String, value2:String):CameraBop
+	{
+		var strength:Array<String> = splitValue(value1);
+		var timing:Array<String> = splitValue(value2);
+
+		return {
+			intensity: floatAt(strength, 0, 1),
+			rate: (timing.length > 0) ? floatAt(timing, 0, -1) : -1,
+			offset: floatAt(timing, 1, 0)
+		};
+	}
+
 	/** A one-line summary for the chart editor to put under the event. */
 	public static function describe(eventName:String, value1:String, value2:String):String
 	{
@@ -136,6 +159,15 @@ class CameraEvents
 				else if(focus.target == TARGET_POSITION) who = 'position';
 				var offset:String = (focus.x != 0 || focus.y != 0) ? ' (${focus.x}, ${focus.y})' : '';
 				return 'focus $who$offset - $how';
+
+			case BOP:
+				var bop:CameraBop = parseBop(value1, value2);
+				var when:String = 'once a section';
+				if(bop.rate == 0) when = 'never';
+				else if(bop.rate > 0) when = 'every ${bop.rate} beats';
+
+				var phase:String = (bop.rate > 0 && bop.offset != 0) ? ' offset ${bop.offset}' : '';
+				return 'bop ${bop.intensity}x, $when$phase';
 		}
 		return '';
 	}
@@ -158,6 +190,16 @@ typedef CameraZoom =
 	var zoom:Float;
 	/** Whether `zoom` multiplies the stage's own zoom rather than being absolute. */
 	var stageRelative:Bool;
+}
+
+typedef CameraBop =
+{
+	/** Multiplier on Psych's own bop strength. */
+	var intensity:Float;
+	/** Beats between bops. Negative hands it back to the per-section default, zero is off. */
+	var rate:Float;
+	/** Phase in beats. */
+	var offset:Float;
 }
 
 typedef CameraFocus =

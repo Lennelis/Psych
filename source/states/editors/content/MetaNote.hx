@@ -242,7 +242,7 @@ class EventMetaNote extends MetaNote
 	function findCameraEvent():Array<String>
 	{
 		for (event in events)
-			if(event != null && event[0] != null && CameraEvents.isCameraEvent(event[0])) return event;
+			if(event != null && event[0] != null && CameraEvents.hasTweenPreview(event[0])) return event;
 		return null;
 	}
 
