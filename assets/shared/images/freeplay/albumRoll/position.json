@@ -1,0 +1,19 @@
+{
+	"_readme": [
+		"Nudges for the freeplay album, so it can be placed without rebuilding the game.",
+		"Edit, then back out of freeplay and go back in - it is read fresh every time.",
+		"Positive x moves right, positive y moves down. All of these are offsets from",
+		"where the code already puts things, so all zeroes is the built-in placement.",
+		"artScale multiplies the cover's size; 1 leaves it alone."
+	],
+
+	"artX": 0,
+	"artY": 0,
+	"artScale": 1,
+
+	"starsX": 0,
+	"starsY": 0,
+
+	"titleX": 0,
+	"titleY": 0
+}

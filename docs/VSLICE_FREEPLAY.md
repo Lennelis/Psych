@@ -71,10 +71,16 @@ game's usual fade covers its arrival — waiting out the fallback timer just lef
 there unusable with nothing happening. `onDJIntroDone(instant)` is the same code either
 way; `instant` skips the tweens rather than shortening them.
 
-**The album art sits where V-Slice puts it**, at `(FlxG.width - 360, 220)`. `ART_OFFSET_X`
-compensates for the 692px the artist put the cover at inside its own symbol, which
-flxanimate applies. There is no matching vertical shift, so `ART_OFFSET_Y` is zero —
-subtracting one put the whole album up behind the top border.
+**The album is placed from a file.** `assets/shared/images/freeplay/albumRoll/position.json`
+holds nudges for the cover, the difficulty stars and the album title, plus a scale for the
+cover: positive x right, positive y down, all offsets from where the code puts them, so
+all zeroes is the built-in placement. It is read fresh every time the menu is built, so
+editing it and re-entering freeplay shows the change without a rebuild.
+
+That file exists because the placement had been guessed wrong twice. The cover is drawn
+through an atlas symbol carrying its own matrix — `ART_OFFSET_X` takes back the 692px the
+artist put it at inside that symbol — and working out from the outside where it lands is
+exactly the sort of thing that is quicker to see than to derive.
 
 **Song previews wait half a second**, not V-Slice's quarter. The inst is read off disk on
 the main thread here, so a quarter second meant scrolling toward the bottom of a list

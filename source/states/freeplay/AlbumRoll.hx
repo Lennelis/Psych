@@ -40,12 +40,54 @@ class AlbumRoll extends FlxSpriteGroup
 
 	/** Where the cover sits inside its own atlas, read off the symbol's matrix. */
 	static inline var ART_OFFSET_X:Float = 692.45;
-
-	// Zero on purpose. The X compensation below is real - the artist put the cover 692px right
-	// inside its own symbol and flxanimate applies that - but there is no matching Y shift, and
-	// subtracting one put the whole album up behind the top border. V-Slice places it at a
-	// plain (FlxG.width - 360, 220).
 	static inline var ART_OFFSET_Y:Float = 0;
+
+	/**
+	 * Nudges read from `images/freeplay/albumRoll/position.json`, so the album can be placed
+	 * without a rebuild.
+	 *
+	 * The atlas draws the cover through a symbol with its own matrix, and working out where
+	 * that lands from the outside has been guesswork twice over. Rather than guess a third
+	 * time, the numbers live in a file: positive x right, positive y down, all offsets from
+	 * where the code already puts things, so all zeroes is the built-in placement.
+	 *
+	 * Read fresh each time the menu is built, so editing the file and re-entering freeplay
+	 * shows the change.
+	 */
+	var nudge:AlbumNudges;
+
+	function readNudges():AlbumNudges
+	{
+		var loaded:AlbumNudges = {artX: 0, artY: 0, artScale: 1, starsX: 0, starsY: 0, titleX: 0, titleY: 0};
+
+		try
+		{
+			var raw:String = Paths.getTextFromFile('images/freeplay/albumRoll/position.json');
+			if (raw == null || raw.length < 1) return loaded;
+
+			var parsed:Dynamic = haxe.Json.parse(raw);
+			function pick(name:String, fallback:Float):Float
+			{
+				var value:Dynamic = Reflect.field(parsed, name);
+				if (value == null) return fallback;
+
+				var asFloat:Float = cast value;
+				return Math.isNaN(asFloat) ? fallback : asFloat;
+			}
+
+			loaded.artX = pick('artX', 0);
+			loaded.artY = pick('artY', 0);
+			loaded.artScale = pick('artScale', 1);
+			loaded.starsX = pick('starsX', 0);
+			loaded.starsY = pick('starsY', 0);
+			loaded.titleX = pick('titleX', 0);
+			loaded.titleY = pick('titleY', 0);
+		}
+		catch (e:Dynamic)
+			trace('AlbumRoll: could not read position.json ($e)');
+
+		return loaded;
+	}
 
 	var newAlbumArt:PsychFlxAnimate;
 	var albumTitle:FlxSprite = null;
@@ -60,7 +102,9 @@ class AlbumRoll extends FlxSpriteGroup
 		// and 269 down of wherever the sprite is - that is where the artist put it inside
 		// the symbol, and it is in the matrices in Animation.json. Taking that back off
 		// is what stops the cover being drawn off the right of the screen.
-		newAlbumArt = new PsychFlxAnimate(FlxG.width - 360 - ART_OFFSET_X, 220 - ART_OFFSET_Y);
+		nudge = readNudges();
+
+		newAlbumArt = new PsychFlxAnimate(FlxG.width - 360 - ART_OFFSET_X + nudge.artX, 220 - ART_OFFSET_Y + nudge.artY);
 		try
 		{
 			Paths.loadAnimateAtlas(newAlbumArt, 'freeplay/albumRoll/freeplayAlbum');
@@ -73,8 +117,9 @@ class AlbumRoll extends FlxSpriteGroup
 
 		newAlbumArt.antialiasing = ClientPrefs.data.antialiasing;
 		newAlbumArt.visible = false;
+		if (nudge.artScale != 1) newAlbumArt.scale.set(nudge.artScale, nudge.artScale);
 
-		difficultyStars = new DifficultyStars(FlxG.width - 330, 209);
+		difficultyStars = new DifficultyStars(FlxG.width - 330 + nudge.starsX, 209 + nudge.starsY);
 		difficultyStars.visible = false;
 
 		add(newAlbumArt);
@@ -184,7 +229,7 @@ class AlbumRoll extends FlxSpriteGroup
 
 		if (!Paths.fileExists('images/$assetKey.png', IMAGE) || !Paths.fileExists('images/$assetKey.xml', TEXT)) return;
 
-		albumTitle = new FlxSprite(FlxG.width - 355, 500);
+		albumTitle = new FlxSprite(FlxG.width - 355 + nudge.titleX, 500 + nudge.titleY);
 		albumTitle.frames = Paths.getSparrowAtlas(assetKey);
 		albumTitle.antialiasing = ClientPrefs.data.antialiasing;
 		albumTitle.visible = this.visible && newAlbumArt.visible && difficultyStars.visible;
@@ -483,4 +528,16 @@ class FreeplayFlames extends FlxSpriteGroup
 		setFlamePositions();
 		return this.flameSpreadY;
 	}
+}
+
+/** What `images/freeplay/albumRoll/position.json` is allowed to move. */
+typedef AlbumNudges =
+{
+	var artX:Float;
+	var artY:Float;
+	var artScale:Float;
+	var starsX:Float;
+	var starsY:Float;
+	var titleX:Float;
+	var titleY:Float;
 }

@@ -1088,7 +1088,16 @@ class VSliceFreeplayState extends MusicBeatState
 		}
 
 		@:privateAccess
-		if (PlayState._lastLoadedModDirectory != Mods.currentModDirectory) Paths.freeGraphicsFromMemory();
+		if (PlayState._lastLoadedModDirectory != Mods.currentModDirectory)
+		{
+			// Left for PlayState to do rather than done here. freeGraphicsFromMemory() works out
+			// what to keep by walking the live state's sprites, and this menu is still on screen
+			// and still drawing for the frames the transition takes - so anything its scan misses
+			// gets its texture freed mid-render, and the next draw dies inside FlxDrawQuadsItem.
+			// nextReloadAll reaches the same end from PlayState.create(), by which point there is
+			// nothing of this menu left to trip over.
+			PlayState.nextReloadAll = true;
+		}
 
 		LoadingState.prepareToSongEarly();
 		LoadingState.loadAndSwitchState(new PlayState());
