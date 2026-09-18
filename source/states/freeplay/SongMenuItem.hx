@@ -549,6 +549,8 @@ class SongMenuItem extends FlxSpriteGroup
 			textAppear();
 			songText.flickerText();
 		}
+
+		if (pixelIcon != null && pixelIcon.hasLosingFace) pixelIcon.animation.play('losing');
 	}
 
 	public function intendedX(index:Float):Float
@@ -649,7 +651,12 @@ class FreeplayRank extends FlxSprite
 		{
 			this.visible = true;
 
+			// Straight to the end of it. The rank is re-assigned every time the selection
+			// moves, so playing from frame zero meant the badge flickering through its
+			// flourish on every song you scrolled past. V-Slice's badges sit still too;
+			// the animation is for a rank being newly earned, which is not this.
 			animation.play(val, true, false);
+			if (animation.curAnim != null) animation.curAnim.finish();
 			centerOffsets(false);
 
 			// V-Slice nudges two of the badges up; the rest sit centred.
@@ -722,6 +729,9 @@ class FreeplayIcon extends FlxSprite
 {
 	public var char(default, null):String = '';
 
+	/** Whether this fell back to a health icon that has a losing face to show on confirm. */
+	public var hasLosingFace(default, null):Bool = false;
+
 	/**
 	 * How far left of its own position the icon is drawn.
 	 *
@@ -747,6 +757,7 @@ class FreeplayIcon extends FlxSprite
 		if (this.char == char) return;
 
 		this.char = char;
+		hasLosingFace = false;
 
 		if (char == null || char.length < 1)
 		{
@@ -809,6 +820,14 @@ class FreeplayIcon extends FlxSprite
 		var frameCount:Int = Math.round(graphic.width / size);
 		loadGraphic(graphic, frameCount > 1, size, size);
 		animation.add('icon', [0], 0, false);
+
+		// Psych's second face is the losing one. V-Slice's own pixel icons have a confirm
+		// animation to play when a song is picked; a health icon has no such thing, but it
+		// does have this, and a character pulling a face as you pick their song is closer to
+		// what that moment is for than the icon just sitting there.
+		if (frameCount > 1) animation.add('losing', [1], 0, false);
+		hasLosingFace = frameCount > 1;
+
 		animation.play('icon');
 
 		antialiasing = ClientPrefs.data.antialiasing;

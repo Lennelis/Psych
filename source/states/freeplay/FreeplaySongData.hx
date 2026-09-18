@@ -1,6 +1,8 @@
 package states.freeplay;
 
 import backend.Highscore;
+import backend.Song;
+import backend.Song.SwagSong;
 import backend.WeekData;
 import haxe.Json;
 
@@ -127,19 +129,13 @@ class FreeplaySongData
 
 		try
 		{
-			var path:String = Paths.json(formatted() + '/' + Highscore.formatSong(formatted(), index));
-			var raw:String = Paths.getFileContent(path);
-
-			if (raw != null && raw.length > 0)
-			{
-				// Psych charts are wrapped in a "song" object; a few older ones are not.
-				var parsed:Dynamic = Json.parse(raw);
-				var song:Dynamic = Reflect.field(parsed, 'song');
-				if (song == null) song = parsed;
-
-				var value:Dynamic = Reflect.field(song, 'bpm');
-				if (value != null) bpm = Math.round(cast(value, Float));
-			}
+			// Through Song.getChart rather than reading the file here. Resolving a chart path
+			// is not one lookup - mods, then the song's own level folder, then shared, with a
+			// different reader for each - and doing it by hand got mod charts wrong, which is
+			// why every modded song showed a bpm of 000. This is the same call gameplay makes,
+			// so whatever it can load, this can read.
+			var chart:SwagSong = Song.getChart(Highscore.formatSong(formatted(), index), formatted());
+			if (chart != null) bpm = Math.round(chart.bpm);
 		}
 		catch (e:Dynamic)
 			trace('FreeplaySongData: could not read a bpm for "$songName" ($e)');

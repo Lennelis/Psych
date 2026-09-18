@@ -51,7 +51,15 @@ class VSliceFreeplayState extends MusicBeatState
 	/**
 	 * For the audio preview, the time to wait before attempting to load a song preview.
 	 */
-	public static final FADE_IN_DELAY:Float = 0.25;
+	/**
+	 * How long a song has to be the selected one before its preview starts loading.
+	 *
+	 * V-Slice uses a quarter second, but it can afford to: this reads the inst off disk on the
+	 * main thread, so scrolling for the bottom of a long list meant loading every song on the
+	 * way past and a stutter for each one. Long enough now that only resting on a song pays
+	 * for it.
+	 */
+	public static final FADE_IN_DELAY:Float = 0.5;
 
 	/**
 	 * For positioning the DJ, and what sits with him, on wide displays.
@@ -366,43 +374,69 @@ class VSliceFreeplayState extends MusicBeatState
 		addVirtualPadCamera();
 		#end
 
-		// The menu opens when the DJ finishes his intro, which is V-Slice's own cue.
-		if (dj != null && dj.loaded) dj.onIntroDone.add(onDJIntroDone);
-
-		// And it opens anyway if he hasn't managed it in time. V-Slice can take its DJ
-		// for granted; this cannot, and a DJ that never finishes his intro used to mean a
-		// menu stuck half built - no top bar, no letters, a card still on its way in.
-		new FlxTimer().start(1.5, function(_) onDJIntroDone());
+		if (dj != null && dj.loaded)
+		{
+			// The menu opens when the DJ finishes his intro, which is V-Slice's own cue - and
+			// anyway if he hasn't managed it in time. V-Slice can take its DJ for granted; this
+			// cannot, and one that never finishes used to mean a menu stuck half built.
+			dj.onIntroDone.add(function() onDJIntroDone());
+			new FlxTimer().start(1.5, function(_) onDJIntroDone());
+		}
+		else
+		{
+			// No DJ at all, so there is nothing to wait for and no entrance of his to head.
+			// Sitting out his timer just left the menu unusable for a second and a half with
+			// nothing happening on screen. It arrives fully built instead, under the same fade
+			// the rest of the game comes in on.
+			onDJIntroDone(true);
+		}
 	}
 
 	/** Whether the menu has finished arriving, so the watchdog can't run this twice. */
 	var introDone:Bool = false;
 
-	/** Everything that lands once the intro is over and the menu becomes usable. */
-	function onDJIntroDone():Void
+	/**
+	 * Everything that lands once the intro is over and the menu becomes usable.
+	 *
+	 * `instant` puts it all in place at once instead of animating it in, for when there is no
+	 * DJ and so no entrance to be in step with.
+	 */
+	function onDJIntroDone(?instant:Bool = false):Void
 	{
 		if (introDone) return;
 
 		introDone = true;
 		uiState = Idle;
 
-		FlxTween.color(backingImage, 0.6, 0xFF000000, 0xFFFFFFFF, {
-			ease: FlxEase.expoOut,
-			onUpdate: function(_) angleMaskShader.extraColor = backingImage.color,
-			onComplete: function(_) blackOverlayBullshitLOLXD.visible = false
-		});
+		if (instant)
+		{
+			backingImage.color = 0xFFFFFFFF;
+			angleMaskShader.extraColor = backingImage.color;
+			blackOverlayBullshitLOLXD.visible = false;
+		}
+		else
+		{
+			FlxTween.color(backingImage, 0.6, 0xFF000000, 0xFFFFFFFF, {
+				ease: FlxEase.expoOut,
+				onUpdate: function(_) angleMaskShader.extraColor = backingImage.color,
+				onComplete: function(_) blackOverlayBullshitLOLXD.visible = false
+			});
+		}
 
+		var restingX:Float = (CUTOUT_WIDTH * DJ_POS_MULTI) + 90;
 		FlxTween.cancelTweensOf(grpDifficulties);
 		for (diff in grpDifficulties.group.members)
 		{
 			if (diff == null) continue;
 
 			FlxTween.cancelTweensOf(diff);
-			FlxTween.tween(diff, {x: (CUTOUT_WIDTH * DJ_POS_MULTI) + 90}, 0.6, {ease: FlxEase.quartOut});
+			if (instant) diff.x = restingX;
+			else FlxTween.tween(diff, {x: restingX}, 0.6, {ease: FlxEase.quartOut});
 			diff.y = 80;
 			diff.visible = (diff == currentDifficultySprite);
 		}
-		FlxTween.tween(grpDifficulties, {x: (CUTOUT_WIDTH * DJ_POS_MULTI) + 90}, 0.6, {ease: FlxEase.quartOut});
+		if (instant) grpDifficulties.x = restingX;
+		else FlxTween.tween(grpDifficulties, {x: restingX}, 0.6, {ease: FlxEase.quartOut});
 
 		diffSelLeft.visible = true;
 		diffSelRight.visible = true;
@@ -410,7 +444,7 @@ class VSliceFreeplayState extends MusicBeatState
 
 		exitMovers.set([diffSelLeft, diffSelRight], {x: -diffSelLeft.width * 2, speed: 0.26});
 
-		new FlxTimer().start(1 / 24, function(handShit)
+		function showTopRow()
 		{
 			fnfHighscoreSpr.visible = true;
 			topLeftCornerText.visible = true;
@@ -421,13 +455,27 @@ class VSliceFreeplayState extends MusicBeatState
 			clearBoxSprite.visible = true;
 			txtCompletion.visible = true;
 			intendedCompletion = 0;
+		}
 
-			new FlxTimer().start(1.5 / 24, function(bold)
+		function settle()
+		{
+			sillyStrokeWidth(0);
+			changeSelection();
+		}
+
+		if (instant)
+		{
+			showTopRow();
+			settle();
+		}
+		else
+		{
+			new FlxTimer().start(1 / 24, function(handShit)
 			{
-				sillyStrokeWidth(0);
-				changeSelection();
+				showTopRow();
+				new FlxTimer().start(1.5 / 24, function(bold) settle());
 			});
-		});
+		}
 
 		albumRoll.playIntro();
 		albumRoll.albumId = albumIdFor(currentCapsule.freeplayData);

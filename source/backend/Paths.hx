@@ -108,6 +108,18 @@ class Paths
 					protectedGfx.push(gfx);
 					//trace('gfx added to the list successfully!');
 				}
+
+				// FlxAnimate draws an Adobe atlas through its own symbol library and never
+				// sets `graphic`, so asking for that alone leaves every animate sprite on
+				// screen unprotected: the purge frees the texture out from under one that is
+				// still being drawn, and the next frame dies in FlxDrawQuadsItem on a null
+				// reference. Its atlas hangs off `frames`, which an ordinary sprite has too.
+				var framesHolder:Dynamic = Reflect.getProperty(spr, 'frames');
+				if(framesHolder != null)
+				{
+					var framesParent:FlxGraphic = Reflect.getProperty(framesHolder, 'parent');
+					if(framesParent != null) protectedGfx.push(framesParent);
+				}
 			}
 			//catch(haxe.Exception) {}
 		}

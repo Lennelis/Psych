@@ -63,6 +63,32 @@ there is no DJ yet. And the menu's own background is drawn behind the card, beca
 V-Slice opens freeplay as a substate over the main menu, where Psych switches states and
 would otherwise show black.
 
+## Where it departs on purpose
+
+**No DJ means no entrance.** V-Slice opens the menu when its DJ finishes his intro. With no
+DJ loaded there is nothing to wait for, so the menu is built in place at once and the
+game's usual fade covers its arrival — waiting out the fallback timer just left it sitting
+there unusable with nothing happening. `onDJIntroDone(instant)` is the same code either
+way; `instant` skips the tweens rather than shortening them.
+
+**The album art sits where V-Slice puts it**, at `(FlxG.width - 360, 220)`. `ART_OFFSET_X`
+compensates for the 692px the artist put the cover at inside its own symbol, which
+flxanimate applies. There is no matching vertical shift, so `ART_OFFSET_Y` is zero —
+subtracting one put the whole album up behind the top border.
+
+**Song previews wait half a second**, not V-Slice's quarter. The inst is read off disk on
+the main thread here, so a quarter second meant scrolling toward the bottom of a list
+loaded every song on the way past and stuttered for each. `FADE_IN_DELAY` is the one knob.
+
+**The rank badge does not animate on hover.** It is re-assigned every time the selection
+moves, so playing it from frame zero meant the badge flickering through its flourish on
+every song scrolled past. It jumps to its resting frame instead.
+
+**A health icon plays its losing face when a song is picked.** V-Slice's own pixel icons
+have a confirm animation; a character who only has a Psych health icon has no such thing,
+but the second frame of that strip is the losing face, and pulling one as you pick their
+song is nearer to what the moment is for than sitting still.
+
 ## What Psych has that V-Slice doesn't
 
 Difficulties belong to a **week** in Psych, so a difficulty *number* means nothing on its

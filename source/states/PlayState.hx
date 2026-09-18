@@ -1315,6 +1315,12 @@ class PlayState extends MusicBeatState
 	{
 		startingSong = false;
 
+		// Psych only switched bopping on at the first note anybody hit, so a song with a long
+		// intro sat perfectly still through all of it. V-Slice bops from the downbeat, and a
+		// chart that would rather not can say so with `Set Camera Bop`. The tutorial keeps its
+		// exemption, which is where that check came from in the first place.
+		if (songName != 'tutorial') camZooming = true;
+
 		@:privateAccess
 		FlxG.sound.playMusic(inst._sound, 1, false);
 		#if FLX_PITCH FlxG.sound.music.pitch = playbackRate; #end

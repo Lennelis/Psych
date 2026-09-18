@@ -41,7 +41,11 @@ class AlbumRoll extends FlxSpriteGroup
 	/** Where the cover sits inside its own atlas, read off the symbol's matrix. */
 	static inline var ART_OFFSET_X:Float = 692.45;
 
-	static inline var ART_OFFSET_Y:Float = 269;
+	// Zero on purpose. The X compensation below is real - the artist put the cover 692px right
+	// inside its own symbol and flxanimate applies that - but there is no matching Y shift, and
+	// subtracting one put the whole album up behind the top border. V-Slice places it at a
+	// plain (FlxG.width - 360, 220).
+	static inline var ART_OFFSET_Y:Float = 0;
 
 	var newAlbumArt:PsychFlxAnimate;
 	var albumTitle:FlxSprite = null;
