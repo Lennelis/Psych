@@ -3,6 +3,8 @@ package states.editors.content;
 import objects.Note;
 import shaders.RGBPalette;
 import flixel.util.FlxDestroyUtil;
+import flixel.graphics.FlxGraphic;
+import openfl.display.BitmapData;
 
 class MetaNote extends Note
 {
@@ -157,6 +159,14 @@ class EventMetaNote extends MetaNote
 	
 	override function draw()
 	{
+		if(tweenSprite != null && tweenSprite.exists && tweenSprite.visible)
+		{
+			tweenSprite.x = this.x + this.width/2 - tweenSprite.width/2;
+			tweenSprite.y = this.y + this.height/2;
+			tweenSprite.alpha = this.alpha * 0.9;
+			tweenSprite.draw();
+		}
+
 		if(eventText != null && eventText.exists && eventText.visible)
 		{
 			eventText.y = this.y + this.height/2 - eventText.height/2;
@@ -168,14 +178,124 @@ class EventMetaNote extends MetaNote
 
 	override function setSustainLength(v:Float, stepCrochet:Float, zoom:Float = 1) {}
 
+	//
+	// Camera event tween preview.
+	//
+	// Camera events say "move to here over four steps, easing out" and until now the only way to
+	// find out what that looked like was to play the song. This hangs the ease curve off the event
+	// in the chart grid, running down the same four steps it will actually take: time goes down the
+	// column, the curve's horizontal position is how far through the move you are. Linear is a
+	// diagonal, quadOut leans early, back and elastic visibly overshoot the edges.
+	//
+	// Both the shape and the length come from CameraEvents, the same parse gameplay runs, so the
+	// picture can't drift away from what the song does.
+	//
+
+	/** Rendered once per ease and scaled per event, so the cache stays one entry per curve. */
+	static final CURVE_WIDTH:Int = 48;
+	static final CURVE_HEIGHT:Int = 192;
+	/** Side room so an overshooting ease has somewhere to overshoot into. */
+	static final CURVE_MARGIN:Int = 6;
+
+	static function getCurveGraphic(ease:String, easeFunction:Float->Float):FlxGraphic
+	{
+		var key:String = 'chartCameraEase|$ease';
+		if(FlxG.bitmap.checkCache(key)) return FlxG.bitmap.get(key);
+
+		// Faint fill behind the curve, so the span the tween covers reads even where the line is
+		// near-vertical.
+		var bitmap:BitmapData = new BitmapData(CURVE_WIDTH, CURVE_HEIGHT, true, 0x18FFFFFF);
+		var span:Float = CURVE_WIDTH - 1 - CURVE_MARGIN * 2;
+		var previousX:Int = -1;
+
+		for (row in 0...CURVE_HEIGHT)
+		{
+			var progress:Float = row / (CURVE_HEIGHT - 1);
+			var value:Float = easeFunction(progress);
+
+			var col:Int = Math.round(CURVE_MARGIN + value * span);
+			if(col < 0) col = 0;
+			else if(col > CURVE_WIDTH - 1) col = CURVE_WIDTH - 1;
+
+			// Join to the previous sample. A steep ease moves several pixels sideways per row, and
+			// without this it draws as a dotted line rather than a curve.
+			var from:Int = (previousX < 0) ? col : previousX;
+			var lo:Int = Std.int(Math.min(from, col));
+			var hi:Int = Std.int(Math.max(from, col));
+			for (x in lo...hi + 1) bitmap.setPixel32(x, row, FlxColor.WHITE);
+
+			// Two pixels wide, since this gets scaled down to the width of one grid column.
+			if(col < CURVE_WIDTH - 1) bitmap.setPixel32(col + 1, row, FlxColor.WHITE);
+			previousX = col;
+		}
+
+		var graphic:FlxGraphic = FlxG.bitmap.add(bitmap, false, key);
+		graphic.persist = true;
+		graphic.destroyOnNoUse = false;
+		return graphic;
+	}
+
+	public var tweenSprite:FlxSprite;
+	var _tweenZoom:Float = 1;
+
+	/** The first camera event on this note, or null if it carries none. */
+	function findCameraEvent():Array<String>
+	{
+		for (event in events)
+			if(event != null && event[0] != null && CameraEvents.isCameraEvent(event[0])) return event;
+		return null;
+	}
+
+	public function updateTweenPreview(zoom:Float = 1)
+	{
+		_tweenZoom = zoom;
+
+		var event:Array<String> = findCameraEvent();
+		if(event == null)
+		{
+			if(tweenSprite != null) tweenSprite.visible = false;
+			return;
+		}
+
+		// Nothing to draw for an instant or classic move - there is no curve, it just happens.
+		var tween = CameraEvents.parseTween(event[2]);
+		if(tween.duration <= 0)
+		{
+			if(tweenSprite != null) tweenSprite.visible = false;
+			return;
+		}
+
+		if(tweenSprite == null)
+		{
+			tweenSprite = new FlxSprite();
+			tweenSprite.scrollFactor.x = 0;
+			tweenSprite.antialiasing = ClientPrefs.data.antialiasing;
+		}
+		tweenSprite.visible = true;
+		// Warm for zoom, cool for focus, so a chart with both stays readable at a glance.
+		tweenSprite.color = (event[0] == CameraEvents.ZOOM) ? 0xFFFFD166 : 0xFF5BC8FF;
+
+		var graphic:FlxGraphic = getCurveGraphic(tween.ease, tween.easeFunction);
+		if(tweenSprite.graphic != graphic) tweenSprite.loadGraphic(graphic);
+
+		// One step is one grid square tall, the same conversion sustains use.
+		var height:Float = Math.max(ChartingState.GRID_SIZE * 0.25, tween.duration * ChartingState.GRID_SIZE * zoom);
+		tweenSprite.setGraphicSize(ChartingState.GRID_SIZE, height);
+		tweenSprite.updateHitbox();
+	}
+
 	public var events:Array<Array<String>>;
 	public function updateEventText()
 	{
+		updateTweenPreview(_tweenZoom);
+
 		var myTime:Float = Math.floor(this.strumTime);
 		if(events.length == 1)
 		{
 			var event = events[0];
 			eventText.text = 'Event: ${event[0]} ($myTime ms)\nValue 1: ${event[1]}\nValue 2: ${event[2]}';
+			if(CameraEvents.isCameraEvent(event[0]))
+				eventText.text += '\n${CameraEvents.describe(event[0], event[1], event[2])}';
 		}
 		else if(events.length > 1)
 		{
@@ -188,6 +308,7 @@ class EventMetaNote extends MetaNote
 	override function destroy()
 	{
 		eventText = FlxDestroyUtil.destroy(eventText);
+		tweenSprite = FlxDestroyUtil.destroy(tweenSprite);
 		super.destroy();
 	}
 }

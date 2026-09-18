@@ -518,20 +518,6 @@ class PhillyStreets extends BaseStage
 		FlxG.camera.setFilters([new ShaderFilter(rainShader)]);
 	}
 	
-	override function openSubState(SubState:flixel.FlxSubState)
-	{
-		// The rain is a filter on the game camera, so it keeps shading every pixel behind the game over
-		// screen - on the one stage that's already the heaviest in the game. Drop it while we're dead.
-		if(rainShader != null && Std.isOfType(SubState, GameOverSubstate))
-			FlxG.camera.setFilters([]);
-	}
-
-	override function closeSubState()
-	{
-		if(rainShader != null && (FlxG.camera.filters == null || FlxG.camera.filters.length == 0))
-			FlxG.camera.setFilters([new ShaderFilter(rainShader)]);
-	}
-
 	var currentNeneState:NeneState = STATE_DEFAULT;
 	var animationFinished:Bool = false;
 	override function update(elapsed:Float)

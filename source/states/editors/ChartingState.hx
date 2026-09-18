@@ -84,7 +84,9 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		['Change Character', "Value 1: Character to change (Dad, BF, GF)\nValue 2: New character's name"],
 		['Change Scroll Speed', "Value 1: Scroll Speed Multiplier (1 is default)\nValue 2: Time it takes to change fully in seconds."],
 		['Set Property', "Value 1: Variable name\nValue 2: New value"],
-		['Play Sound', "Value 1: Sound file name\nValue 2: Volume (Default: 1), ranges from 0 to 1"]
+		['Play Sound', "Value 1: Sound file name\nValue 2: Volume (Default: 1), ranges from 0 to 1"],
+		['Zoom Camera', "V-Slice's camera zoom, tweened.\n\nValue 1: Zoom, then optionally the mode:\n\"1.2\" is an absolute zoom,\n\"1.2, stage\" is 1.2x the stage's own zoom.\n\nValue 2: \"duration, ease\" - duration in steps\n(Default: 4), ease name like quadOut or\nelasticInOut (Default: linear).\nUse \"instant\" to snap.\n\nBeat bops still happen on top of this."],
+		['Focus Camera', "V-Slice's camera focus, tweened.\n\nValue 1: bf / dad / gf, or pos, then\noptionally \"x, y\" - an offset for a character,\nan absolute point for pos.\nLeave blank to hand the camera back to\nthe section logic.\n\nValue 2: \"duration, ease\" - same as\nZoom Camera, plus \"classic\" to snap\nwithout holding onto the camera.\n\nNumbers work too and follow V-Slice's,\nNOT Psych's: 0 = bf, 1 = dad, 2 = gf."]
 	];
 	
 	public static var keysArray:Array<FlxKey> = [ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT]; //Used for Vortex Editor
@@ -2210,6 +2212,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					curRenderedNotes.add(event);
 					event.alpha = (event.strumTime >= Conductor.songPosition) ? 1 : 0.6;
 					event.eventText.visible = true;
+					event.updateTweenPreview(curZoom);
 				}
 			}
 		}
@@ -2242,6 +2245,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 						behindRenderedNotes.add(event);
 						event.alpha = 0.4;
 						event.eventText.visible = false;
+						event.updateTweenPreview(curZoom);
 					}
 				}
 			}

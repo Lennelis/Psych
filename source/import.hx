@@ -29,6 +29,7 @@ import backend.MusicBeatSubstate;
 import backend.CustomFadeTransition;
 import backend.ClientPrefs;
 import backend.Conductor;
+import backend.CameraEvents;
 import backend.BaseStage;
 import backend.Difficulty;
 import backend.Mods;

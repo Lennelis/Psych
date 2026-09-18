@@ -240,6 +240,12 @@ class PlayState extends MusicBeatState
 	public static var deathCounter:Int = 0;
 
 	public var defaultCamZoom:Float = 1.05;
+	/**
+	 * The zoom the stage itself asked for, kept apart from `defaultCamZoom` because events move that
+	 * one. `Zoom Camera` in stage mode multiplies this, so "1.2, stage" still means a fifth closer
+	 * than the stage normally sits even after an earlier event has zoomed somewhere else.
+	 */
+	public var stageDefaultZoom:Float = 1.05;
 
 	// how big to stretch the pixel art assets
 	public static var daPixelZoom:Float = 6;
@@ -367,7 +373,7 @@ class PlayState extends MusicBeatState
 		curStage = SONG.stage;
 
 		var stageData:StageFile = StageData.getStageFile(curStage);
-		defaultCamZoom = stageData.defaultZoom;
+		defaultCamZoom = stageDefaultZoom = stageData.defaultZoom;
 
 		stageUI = "normal";
 		if (stageData.stageUI != null && stageData.stageUI.trim().length > 0)
@@ -1850,6 +1856,9 @@ class PlayState extends MusicBeatState
 			FlxG.camera.zoom = FlxMath.lerp(defaultCamZoom, FlxG.camera.zoom, Math.exp(-elapsed * 3.125 * camZoomingDecay * playbackRate));
 			camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, Math.exp(-elapsed * 3.125 * camZoomingDecay * playbackRate));
 		}
+		// Nothing decays toward defaultCamZoom when bops are off, so an authored zoom would move a
+		// number nobody reads. Apply it straight while the tween runs.
+		else if (camZoomTween != null) FlxG.camera.zoom = defaultCamZoom;
 
 		FlxG.watch.addQuick("secShit", curSection);
 		FlxG.watch.addQuick("beatShit", curBeat);
@@ -2277,6 +2286,79 @@ class PlayState extends MusicBeatState
 					}
 				}
 
+			case 'Zoom Camera':
+				var zoomData = CameraEvents.parseZoom(value1);
+				var zoomTween = CameraEvents.parseTween(value2);
+				tweenCameraZoom(zoomData.zoom, zoomTween.duration * Conductor.stepCrochet / 1000, zoomData.stageRelative, zoomTween.easeFunction);
+
+			case 'Focus Camera':
+				if(camFollow == null) return;
+
+				var focus = CameraEvents.parseFocus(value1);
+				var focusTween = CameraEvents.parseTween(value2);
+
+				// Blank value 1 gives the camera back to the section logic, the same way a blank
+				// `Camera Follow Pos` does. Charters already know that shape.
+				if(focus.release)
+				{
+					cancelCameraFollowTween();
+					isCameraOnForcedPos = false;
+					FlxG.camera.target = camFollow;
+					moveCameraSection();
+					return;
+				}
+
+				var character:Character = null;
+				if(focus.target == CameraEvents.TARGET_BF) character = boyfriend;
+				else if(focus.target == CameraEvents.TARGET_DAD) character = dad;
+				else if(focus.target == CameraEvents.TARGET_GF) character = gf;
+
+				var targetX:Float = focus.x;
+				var targetY:Float = focus.y;
+				if(focus.target != CameraEvents.TARGET_POSITION)
+				{
+					// Not a position, so we need the character - and they can genuinely be missing,
+					// gf most of all, so bail rather than slamming the camera to the offset alone.
+					if(character == null) return;
+
+					// Spelled out per character rather than shared, because moveCamera() itself is:
+					// boyfriend subtracts his cameraPosition where the other two add theirs. Focusing
+					// on someone with no offset has to land exactly where a section pointed at them
+					// would have, so this matches moveCamera() and moveCameraToGirlfriend() term for
+					// term instead of deriving one from the other.
+					var midpoint:FlxPoint = character.getMidpoint();
+					if(focus.target == CameraEvents.TARGET_BF)
+					{
+						targetX += midpoint.x - 100 - character.cameraPosition[0] + boyfriendCameraOffset[0];
+						targetY += midpoint.y - 100 + character.cameraPosition[1] + boyfriendCameraOffset[1];
+					}
+					else if(focus.target == CameraEvents.TARGET_DAD)
+					{
+						targetX += midpoint.x + 150 + character.cameraPosition[0] + opponentCameraOffset[0];
+						targetY += midpoint.y - 100 + character.cameraPosition[1] + opponentCameraOffset[1];
+					}
+					else
+					{
+						targetX += midpoint.x + character.cameraPosition[0] + girlfriendCameraOffset[0];
+						targetY += midpoint.y + character.cameraPosition[1] + girlfriendCameraOffset[1];
+					}
+					midpoint.put();
+				}
+
+				if(focusTween.classic)
+				{
+					// V-Slice's CLASSIC: snap, and don't hold onto the camera afterwards.
+					cancelCameraFollowTween();
+					isCameraOnForcedPos = false;
+					camFollow.setPosition(targetX, targetY);
+					FlxG.camera.target = camFollow;
+					FlxG.camera.snapToTarget();
+					return;
+				}
+
+				isCameraOnForcedPos = true;
+				tweenCameraToPosition(targetX, targetY, focusTween.duration * Conductor.stepCrochet / 1000, focusTween.easeFunction);
+
 			case 'Alt Idle Animation':
 				var char:Character = dad;
 				switch(value1.toLowerCase().trim()) {
@@ -2466,6 +2548,102 @@ class PlayState extends MusicBeatState
 		camFollow.x += gf.cameraPosition[0] + girlfriendCameraOffset[0];
 		camFollow.y += gf.cameraPosition[1] + girlfriendCameraOffset[1];
 		tweenCamIn();
+	}
+
+	/**
+	 * The two tweens the `Focus Camera` and `Zoom Camera` events drive.
+	 *
+	 * Psych's camera normally chases `camFollow` with a soft lerp and decays its zoom back toward
+	 * `defaultCamZoom` every frame. Both of those would smear an authored ease into something else,
+	 * so while one of these is running it owns the thing it is moving, and hands it back on finish.
+	 */
+	public var camFollowTween:FlxTween;
+	public var camZoomTween:FlxTween;
+
+	public function cancelCameraFollowTween()
+	{
+		if(camFollowTween != null)
+		{
+			camFollowTween.cancel();
+			camFollowTween = null;
+		}
+	}
+
+	public function cancelCameraZoomTween()
+	{
+		if(camZoomTween != null)
+		{
+			camZoomTween.cancel();
+			camZoomTween = null;
+		}
+	}
+
+	/** Puts the follow point somewhere and takes the camera there. */
+	public function tweenCameraToPosition(x:Float, y:Float, duration:Float = 0, ?ease:Float->Float)
+	{
+		if(camFollow == null) return;
+
+		camFollow.setPosition(x, y);
+		tweenCameraToFollowPoint(duration, ease);
+	}
+
+	/**
+	 * Takes the camera to wherever `camFollow` already is.
+	 *
+	 * A duration of zero snaps. Otherwise the camera stops following for the length of the tween and
+	 * its scroll is driven directly, which is the only way the ease that was asked for is the ease
+	 * that gets drawn - chasing an eased point with a lerp gives you neither curve. This mirrors what
+	 * V-Slice does for the same reason.
+	 */
+	public function tweenCameraToFollowPoint(duration:Float = 0, ?ease:Float->Float)
+	{
+		cancelCameraFollowTween();
+		if(camFollow == null) return;
+
+		if(duration <= 0)
+		{
+			FlxG.camera.target = camFollow;
+			FlxG.camera.snapToTarget();
+			return;
+		}
+
+		FlxG.camera.target = null;
+		var targetX:Float = camFollow.x - FlxG.camera.width * 0.5;
+		var targetY:Float = camFollow.y - FlxG.camera.height * 0.5;
+		camFollowTween = FlxTween.tween(FlxG.camera.scroll, {x: targetX, y: targetY}, duration / playbackRate, {
+			ease: ease,
+			onComplete: function(_)
+			{
+				camFollowTween = null;
+				FlxG.camera.target = camFollow;
+			}
+		});
+	}
+
+	/**
+	 * Tweens the camera's resting zoom.
+	 *
+	 * This moves `defaultCamZoom` rather than `FlxG.camera.zoom`, because the latter is what beat bops
+	 * punch and what decays back toward the former every frame - setting it would just be undone. So
+	 * the bops keep working on top of an authored zoom, which is what V-Slice does with its own
+	 * currentCameraZoom.
+	 */
+	public function tweenCameraZoom(zoom:Float, duration:Float = 0, stageRelative:Bool = false, ?ease:Float->Float)
+	{
+		cancelCameraZoomTween();
+
+		var target:Float = stageRelative ? zoom * stageDefaultZoom : zoom;
+		if(duration <= 0)
+		{
+			defaultCamZoom = target;
+			if(!camZooming) FlxG.camera.zoom = target;
+			return;
+		}
+
+		camZoomTween = FlxTween.tween(this, {defaultCamZoom: target}, duration / playbackRate, {
+			ease: ease,
+			onComplete: function(_) camZoomTween = null
+		});
 	}
 
 	var cameraTwn:FlxTween;
