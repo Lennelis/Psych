@@ -40,6 +40,10 @@
 	
 	<define name="MULTITHREADED_LOADING" /> <!-- UNCOMMENTING THIS LINE WILL ENABLE MULTITHREADED LOADING, WHICH IMPROVES LOADING TIMES, BUT APPARENTLY CAN FREEZE THE GAME ON SONG LOAD IN OLDER PCs? -->
 	<define name="SHOW_LOADING_SCREEN" />
+	<!-- Purge the menu's assets in the loading screen, BEFORE the song's are preloaded, instead of
+	     after in PlayState.create. Keeps both sets from being resident at once, which is what phones
+	     actually run out of. Needs the loading screen, so it is gated on it. -->
+	<define name="STRICT_LOADING_SCREEN" if="mobile SHOW_LOADING_SCREEN" />
 	<define name="PSYCH_WATERMARKS"/> <!-- DELETE THIS TO REMOVE THE PSYCH LOGO FROM LOADING SCREEN -->
 
 	<section if="officialBuild">

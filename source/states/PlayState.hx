@@ -288,7 +288,14 @@ class PlayState extends MusicBeatState
 	{
 		//trace('Playback Rate: ' + playbackRate);
 		_lastLoadedModDirectory = Mods.currentModDirectory;
+		#if STRICT_LOADING_SCREEN
+		// The loading screen already purged, before it preloaded the song. Doing it again here would
+		// throw away everything it just fetched.
+		if(!ClientPrefs.data.strictLoadingScreen) Paths.clearStoredMemory();
+		#else
 		Paths.clearStoredMemory();
+		#end
+
 		if(nextReloadAll)
 		{
 			Paths.clearUnusedMemory();
@@ -1766,6 +1773,23 @@ class PlayState extends MusicBeatState
 		else FlxG.camera.followLerp = 0;
 		callOnScripts('onUpdate', [elapsed]);
 
+		// Advance the song clock BEFORE super.update(), not after. Everything downstream that asks
+		// "what time is it" - Note.update()'s hit windows and tooLate latch, curStep/curBeat and so
+		// every beatHit - used to run against the PREVIOUS frame's timestamp, so every hit window was
+		// judged one whole frame stale by construction. That is 17ms at 60fps but 33ms at 30, against
+		// a sick window of only 45ms, which is why the timing drifts when the framerate drops.
+		if (startedCountdown && !paused)
+		{
+			Conductor.songPosition += elapsed * 1000 * playbackRate;
+			if (Conductor.songPosition >= Conductor.offset)
+			{
+				Conductor.songPosition = FlxMath.lerp(FlxG.sound.music.time + Conductor.offset, Conductor.songPosition, Math.exp(-elapsed * 5));
+				var timeDiff:Float = Math.abs((FlxG.sound.music.time + Conductor.offset) - Conductor.songPosition);
+				if (timeDiff > 1000 * playbackRate)
+					Conductor.songPosition = Conductor.songPosition + 1000 * FlxMath.signOf(timeDiff);
+			}
+		}
+
 		super.update(elapsed);
 
 		setOnScripts('curDecStep', curDecStep);
@@ -1798,18 +1822,6 @@ class PlayState extends MusicBeatState
 		updateHealthLerp(elapsed);
 		updateIconsScale(elapsed);
 		updateIconsPosition();
-
-		if (startedCountdown && !paused)
-		{
-			Conductor.songPosition += elapsed * 1000 * playbackRate;
-			if (Conductor.songPosition >= Conductor.offset)
-			{
-				Conductor.songPosition = FlxMath.lerp(FlxG.sound.music.time + Conductor.offset, Conductor.songPosition, Math.exp(-elapsed * 5));
-				var timeDiff:Float = Math.abs((FlxG.sound.music.time + Conductor.offset) - Conductor.songPosition);
-				if (timeDiff > 1000 * playbackRate)
-					Conductor.songPosition = Conductor.songPosition + 1000 * FlxMath.signOf(timeDiff);
-			}
-		}
 
 		if (startingSong)
 		{
@@ -1866,8 +1878,8 @@ class PlayState extends MusicBeatState
 				callOnLuas('onSpawnNote', [notes.members.indexOf(dunceNote), dunceNote.noteData, dunceNote.noteType, dunceNote.isSustainNote, dunceNote.strumTime]);
 				callOnHScript('onSpawnNote', [dunceNote]);
 
-				var index:Int = unspawnNotes.indexOf(dunceNote);
-				unspawnNotes.splice(index, 1);
+				// It's always the head of the array - this was doing a linear search for index 0.
+				unspawnNotes.shift();
 			}
 		}
 
@@ -2611,6 +2623,9 @@ class PlayState extends MusicBeatState
 					FlxG.sound.music.stop();
 
 					canResync = false;
+					// Not prepareToSongEarly(): this hand-off is non-intrusive, so no LoadingState is
+					// built and nothing downstream would preload in its place. There's no purge to race
+					// with here either, for the same reason.
 					LoadingState.prepareToSong();
 					LoadingState.loadAndSwitchState(new PlayState(), false, false);
 				}
@@ -2841,8 +2856,16 @@ class PlayState extends MusicBeatState
 
 		// obtain notes that the player can hit
 		var plrInputNotes:Array<Note> = notes.members.filter(function(n:Note):Bool {
-			var canHit:Bool = n != null && !strumsBlocked[n.noteData] && n.canBeHit && n.mustPress && !n.tooLate && !n.wasGoodHit && !n.blockHit;
-			return canHit && !n.isSustainNote && n.noteData == key;
+			if(n == null || strumsBlocked[n.noteData] || !n.mustPress || n.tooLate || n.wasGoodHit || n.blockHit) return false;
+
+			// Re-test the window here rather than trusting `n.canBeHit`. That flag was computed in
+			// Note.update() against the smoothed conductor clock, but songPosition has just been snapped
+			// to the raw audio clock a few lines up, which is what popUpScore() will rate the hit with.
+			// Gating on one clock and scoring on another lets a note the player legitimately hit get
+			// dropped, so both decisions use the same timestamp now.
+			var inWindow:Bool = (n.strumTime > Conductor.songPosition - (Conductor.safeZoneOffset * n.lateHitMult) &&
+								n.strumTime < Conductor.songPosition + (Conductor.safeZoneOffset * n.earlyHitMult));
+			return inWindow && !n.isSustainNote && n.noteData == key;
 		});
 		plrInputNotes.sort(sortHitNotes);
 

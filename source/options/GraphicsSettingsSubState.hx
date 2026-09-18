@@ -45,6 +45,14 @@ class GraphicsSettingsSubState extends BaseOptionsMenu
 			BOOL);
 		addOption(option);
 
+		#if STRICT_LOADING_SCREEN
+		var option:Option = new Option('Strict Loading Screen', //Name
+			"If checked, the game frees the menu's assets first and only then preloads the song,\ninstead of holding both at once. Useful on devices that are short on memory.", //Description
+			'strictLoadingScreen',
+			BOOL);
+		addOption(option);
+		#end
+
 		#if !html5 //Apparently other framerates isn't correctly supported on Browser? Probably it has some V-Sync shit enabled by default, idk
 		var option:Option = new Option('Framerate',
 			"Pretty self explanatory, isn't it?",
@@ -55,7 +63,8 @@ class GraphicsSettingsSubState extends BaseOptionsMenu
 		final refreshRate:Int = FlxG.stage.application.window.displayMode.refreshRate;
 		option.minValue = 60;
 		option.maxValue = 240;
-		option.defaultValue = Std.int(FlxMath.bound(refreshRate, option.minValue, option.maxValue));
+		// Phones default to 60 even on a 120Hz panel - see ClientPrefs. Raising it by hand still works.
+		option.defaultValue = Std.int(FlxMath.bound(refreshRate, option.minValue, #if mobile 60 #else option.maxValue #end));
 		option.displayFormat = '%v FPS';
 		option.onChange = onChangeFramerate;
 		#end

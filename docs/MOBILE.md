@@ -10,6 +10,7 @@ together, and what still doesn't work.
 * [Trying the touch controls on desktop](#trying-the-touch-controls-on-desktop)
 * [How the touch controls work](#how-the-touch-controls-work)
 * [Where files live on a phone](#where-files-live-on-a-phone)
+* [Performance on a phone](#performance-on-a-phone)
 * [What isn't done](#what-isnt-done)
 
 ---
@@ -370,6 +371,96 @@ to drop a folder.
 
 Crash logs go to `crash/` inside that same folder — on a device you can't attach
 a debugger to, that file is the only way to find out why a build died.
+
+---
+
+## Performance on a phone
+
+Four things were costing frames or accuracy on mobile specifically. All four are
+fixed; this records what they were, because none of them are obvious from reading
+the code and at least two look deliberate.
+
+### The A-Bot's FFT was running at full size
+
+`ABotSpeaker.initAnalyzer()` shrinks the spectrum analyser's transform to 256
+points, because the native FFT is much slower than the browser one it was written
+against. That shrink was gated on `#if desktop` — and `desktop` is false on
+Android. Phones were running the library's default (far larger) FFT **every
+frame**, on the main thread, for the duration of any Weekend 1 song. It's `#if
+sys` now, which is what V-Slice itself uses and what P-Slice's fork corrected it
+to independently.
+
+### Hit windows were judged a frame late
+
+`PlayState.update()` used to call `super.update(elapsed)` *before* advancing
+`Conductor.songPosition`. Everything that asks what time it is — `Note.update()`'s
+`canBeHit` test and its `tooLate` latch, `curStep`/`curBeat` and therefore every
+`beatHit()` — therefore ran against the **previous** frame's timestamp.
+
+That's a fixed one-frame lag by construction: 17ms at 60fps, but 33ms at 30fps,
+against a sick window of 45ms. So the judgement didn't just get noisier when the
+framerate dropped, it *shifted*, which is why no amount of tuning `ratingOffset`
+could compensate — the bias moves with the framerate. The clock is advanced before
+`super.update()` now.
+
+A related mismatch: `keyPressed()` snaps `songPosition` to the raw audio clock so
+that `popUpScore()` rates the hit accurately, but it was then filtering candidate
+notes on `n.canBeHit`, which had been computed against the *smoothed* conductor
+clock. Gating on one clock and scoring on another can drop a note the player
+legitimately hit, so the window is re-tested there against the same timestamp the
+rating will use.
+
+### The framerate default followed the panel
+
+`ClientPrefs` picks a default framerate from the display's refresh rate, bounded
+to 60-240. On a 120Hz phone that means defaulting to **120fps**, doubling the GPU
+work for a framerate the device can't hold on the heavier stages anyway. Mobile is
+capped at 60 now. The Framerate option still goes to 240 if you want it.
+
+### Textures were resident twice
+
+`cacheOnGPU` uploads a texture and then frees the CPU-side copy. It defaulted off,
+so every graphic sat in RAM *and* VRAM. Weekend 1 alone is around 234MB of decoded
+texture (78MB of stage, 156MB of characters), so that's not a rounding error. It
+defaults on for mobile now.
+
+The one caveat: with it on, a bitmap loaded through `Paths` can't be read back
+pixel-by-pixel. In practice the only places that do that are the Character Editor's
+`dominantColor()` and the Lua `getPixelColor()` — freeplay's capsule text and song
+titles build their graphics from `FlxText`, which is unaffected.
+
+### Strict loading screen
+
+Borrowed from P-Slice. `LoadingState` now frees the menu's assets *before*
+preloading the song's, instead of `PlayState.create()` freeing them afterwards.
+Same total work, but the two sets never coexist, so peak memory is roughly the
+larger of the two rather than their sum — which is what a phone actually runs out
+of. Compiled in on mobile only (`STRICT_LOADING_SCREEN`, which requires
+`SHOW_LOADING_SCREEN` since there has to *be* a loading screen to do the work in),
+and there's a **Strict Loading Screen** toggle under Options -> Graphics.
+
+Menus call `LoadingState.prepareToSongEarly()` rather than `prepareToSong()`; that
+skips the early preload when strict mode is on, so the loading screen's purge
+doesn't throw away assets that were just fetched. The one exception is the story
+mode song-to-song hand-off in `PlayState`, which is non-intrusive — no
+`LoadingState` is built for it, so it has to preload for itself.
+
+### What was looked at and left alone
+
+**ASTC texture compression.** P-Slice's big mobile win is loading GPU-compressed
+`.astc` textures instead of PNGs — they stay compressed in VRAM and skip the PNG
+decode entirely, which would cut Weekend 1's texture budget by several times over.
+It isn't ported here because `createASTCTexture` doesn't exist in stock OpenFL;
+P-Slice pins `FunkinCrew/openfl` and a forked lime for it, and it needs a whole
+separate compressed asset pack built at setup time. Worth revisiting, but it's a
+library-fork decision, not a code change.
+
+**Weekend 1's stage art.** `phillyStreets` stacks 13 layers, several of them
+full-screen and alpha-blended, two with `blend = ADD` (which flushes the sprite
+batch). `phillyTraffic.png` is 3060x1808 for a traffic light. **Low Quality** in
+Options -> Graphics already drops 7 of those 13 layers, and **Shaders** turns off
+the full-screen rain filter, which is the single most expensive thing on that
+stage. Both are worth trying before anyone re-exports art.
 
 ---
 

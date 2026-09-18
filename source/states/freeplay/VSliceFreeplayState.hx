@@ -1042,7 +1042,7 @@ class VSliceFreeplayState extends MusicBeatState
 		@:privateAccess
 		if (PlayState._lastLoadedModDirectory != Mods.currentModDirectory) Paths.freeGraphicsFromMemory();
 
-		LoadingState.prepareToSong();
+		LoadingState.prepareToSongEarly();
 		LoadingState.loadAndSwitchState(new PlayState());
 
 		#if !SHOW_LOADING_SCREEN

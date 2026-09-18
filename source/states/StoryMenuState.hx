@@ -362,7 +362,7 @@ class StoryMenuState extends MusicBeatState
 				trace('CHANGED MOD DIRECTORY, RELOADING STUFF');
 				Paths.freeGraphicsFromMemory();
 			}
-			LoadingState.prepareToSong();
+			LoadingState.prepareToSongEarly();
 			new FlxTimer().start(1, function(tmr:FlxTimer)
 			{
 				#if !SHOW_LOADING_SCREEN FlxG.sound.music.stop(); #end

@@ -89,6 +89,19 @@ class LoadingState extends MusicBeatState
 	#end
 	override function create()
 	{
+		#if STRICT_LOADING_SCREEN
+		// Free the menu we just came from BEFORE pulling the song in, rather than after it in
+		// PlayState.create. Same total work, but the two sets never overlap, so peak memory is roughly
+		// the larger of the two instead of their sum. Has to happen before anything below makes a
+		// graphic, since clearStoredMemory() walks the whole bitmap cache.
+		if(ClientPrefs.data.strictLoadingScreen)
+		{
+			Paths.clearStoredMemory();
+			Paths.clearUnusedMemory();
+			LoadingState.prepareToSong();
+		}
+		#end
+
 		persistentUpdate = true;
 		barGroup = new FlxSpriteGroup();
 		add(barGroup);
@@ -417,6 +430,20 @@ class LoadingState extends MusicBeatState
 		var threadCount:Int = 1;
 		#end
 		threadPool = new FixedThreadPool(threadCount);
+	}
+
+	/**
+	 * What menus call on their way into a song.
+	 *
+	 * Under `STRICT_LOADING_SCREEN` the loading screen preloads instead, once it has purged the menu -
+	 * preloading here as well would just fill the cache with graphics that the purge then throws away.
+	 */
+	public static function prepareToSongEarly()
+	{
+		#if STRICT_LOADING_SCREEN
+		if(ClientPrefs.data.strictLoadingScreen) return;
+		#end
+		prepareToSong();
 	}
 
 	public static function prepareToSong()

@@ -22,7 +22,12 @@ import states.TitleState;
 	public var holdCoverAlpha:Float = 1;
 	public var lowQuality:Bool = false;
 	public var shaders:Bool = true;
-	public var cacheOnGPU:Bool = #if !switch false #else true #end; // GPU Caching made by Raltyro
+	// GPU Caching made by Raltyro. On phones this is worth having on by default: it uploads the texture
+	// and then frees the CPU-side copy, so a stage like Weekend 1's doesn't sit in RAM twice over.
+	public var cacheOnGPU:Bool = #if (mobile || switch) true #else false #end;
+	#if STRICT_LOADING_SCREEN
+	public var strictLoadingScreen:Bool = true;
+	#end
 	public var framerate:Int = 60;
 	public var camZooms:Bool = true;
 	public var hideHud:Bool = false;
@@ -207,7 +212,11 @@ class ClientPrefs {
 
 		if(FlxG.save.data.framerate == null) {
 			final refreshRate:Int = FlxG.stage.application.window.displayMode.refreshRate;
-			data.framerate = Std.int(FlxMath.bound(refreshRate, 60, 240));
+			// Phones are fill-rate bound long before they're CPU bound, so following a 120Hz panel here
+			// just doubles the GPU work for a framerate the device can't hold on the heavier stages.
+			// Desktop keeps the old behaviour; the option is still there for anyone who wants to raise it.
+			final ceiling:Int = #if mobile 60 #else 240 #end;
+			data.framerate = Std.int(FlxMath.bound(refreshRate, 60, ceiling));
 		}
 		#end
 
