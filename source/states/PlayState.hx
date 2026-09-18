@@ -1981,7 +1981,15 @@ class PlayState extends MusicBeatState
 		}
 		#end
 
-		updateHoldCovers();
+		// After the note loop, so the trail positions these read are this frame's, and back to
+		// back with the covers so a hold's glow and its cover can never land on different frames.
+		var playerHoldsDriven:Bool = holdStateFresh;
+		if(holdStateFresh)
+		{
+			updateStrumHoldState(heldLanes, heldSustains, heldPending);
+			holdStateFresh = false;
+		}
+		updateHoldCovers(playerHoldsDriven);
 
 		setOnScripts('botPlay', cpuControlled);
 		callOnScripts('onUpdatePost', [elapsed]);
@@ -3172,6 +3180,19 @@ class PlayState extends MusicBeatState
 	var wasHoldingSustain:Array<Bool> = [];
 
 	/**
+	 * What keysCheck() found this frame, held until the notes have been moved.
+	 *
+	 * Ending a hold asks where the last of its trail is, and keysCheck runs before anything
+	 * moves the notes - so the decision is made further down the frame, once those positions
+	 * are this frame's rather than the previous one's.
+	 */
+	var heldLanes:Array<Bool> = [];
+	var heldSustains:Array<Bool> = [];
+	var heldPending:Array<Bool> = [];
+	/** Whether the three above were filled in this frame. False under botplay and in cutscenes. */
+	var holdStateFresh:Bool = false;
+
+	/**
 	 * When the hold in each lane actually finishes, per the chart.
 	 *
 	 * Sustain pieces are laid out at 0, step, 2*step ... (roundSus - 1) * step, so the
@@ -3237,39 +3258,23 @@ class PlayState extends MusicBeatState
 	}
 
 	/**
-	 * Sees finished covers out and cuts dropped ones short.
+	 * Sees out the covers nothing else is driving.
 	 *
-	 * Only a hold played to its end earns the end animation, and only on the player's
-	 * side: V-Slice makes the opponent's covers vanish at the end instead of playing it,
-	 * so they do here too.
+	 * The player's normally end in `updateStrumHoldState`, alongside the strum's glow. This
+	 * catches the cases where that never ran - botplay, or a cutscene starting mid-hold -
+	 * where there is no key to let go of and the chart's end is the whole story.
+	 *
+	 * The opponent's are always chart-driven, and V-Slice makes theirs vanish at the end
+	 * rather than play the burst, so they do here too.
 	 */
-	/** Whether this lane's key is still down, which is what dropping a cover really means. */
-	inline function laneKeyHeld(lane:Int):Bool
-	{
-		var spr:StrumNote = (lane >= 0 && lane < playerStrums.length) ? playerStrums.members[lane] : null;
-		return spr != null && spr.keyHeld;
-	}
-
-	function updateHoldCovers():Void
+	function updateHoldCovers(playerDriven:Bool):Void
 	{
 		for (i in 0...playerHoldCovers.length)
 		{
 			var cover:HoldCover = playerHoldCovers[i];
 			if(cover == null || !cover.running) continue;
 
-			// Completion is asked about first, and that order is the whole trick: the lane
-			// stops holding on the very frame the sustain ends, so testing whether the key
-			// is still down before testing whether the hold finished takes the end
-			// animation away from every hold that earned one.
-			//
-			// Below that, the bot never lets go, so dropping only means anything in a lane
-			// the player is playing. This asks whether the key is still down rather than
-			// reading wasHoldingSustain: since holdTailConsumed the glow ends when the
-			// trail is gone, which on downscroll is up to a tenth of a second before the
-			// cover's own end time - and reading that signal here would have cut every
-			// downscroll cover short instead of letting it pop.
-			if(Conductor.songPosition >= playerHoldCoverEnd[i]) cover.playEnd();
-			else if(!cpuControlled && !laneKeyHeld(i)) cover.stopCover();
+			if(!playerDriven && Conductor.songPosition >= playerHoldCoverEnd[i]) cover.playEnd();
 		}
 
 		for (i in 0...opponentHoldCovers.length)
@@ -3367,7 +3372,13 @@ class PlayState extends MusicBeatState
 				if(releaseArray[i] || strumsBlocked[i] == true)
 					keyReleased(i);
 
-		updateStrumHoldState(holdArray, sustainArray, holdPending);
+		// Handed on rather than acted on here. Ending a hold asks where the last of its trail
+		// is, and the notes are not moved until further down the frame - deciding at this point
+		// would be reading last frame's positions.
+		heldLanes = holdArray;
+		heldSustains = sustainArray;
+		heldPending = holdPending;
+		holdStateFresh = true;
 	}
 
 	/**
@@ -3387,16 +3398,39 @@ class PlayState extends MusicBeatState
 			var spr:StrumNote = playerStrums.members[i];
 			if(spr == null) continue;
 
+			// Worked out once and used for everything below, because the glow and the cover
+			// coming off the same answer is the whole point.
+			var reachedEnd:Bool = (i < holdEndTime.length && Conductor.songPosition >= holdEndTime[i])
+				|| holdTailConsumed(i);
+
 			// A piece landing this frame, or pieces still to come, both mean the hold is
 			// live. The last clause carries it through the final stretch after the last
 			// piece has been taken, up to where the sustain really ends. It only extends
 			// a hold that was already running, so it can't revive one that was dropped.
 			var holding:Bool = holdArray[i] && (sustainArray[i] || holdPending[i]
-				|| (wasHoldingSustain[i] && i < holdEndTime.length
-					&& Conductor.songPosition < holdEndTime[i] && !holdTailConsumed(i)));
+				|| (wasHoldingSustain[i] && !reachedEnd));
 
 			spr.keyHeld = holdArray[i];
 			spr.holdingSustain = holding;
+
+			// Glow off and cover away, here, together. V-Slice does both in one branch of
+			// Strumline.updateNotes and that is not incidental: deciding them in two places meant
+			// two different answers to "is this hold over", and they drifted apart by however far
+			// the trail's end cap happened to be from a step of time - which moves with the BPM
+			// and the scroll speed, so it felt wrong differently in every song.
+			if(!holding)
+			{
+				var cover:HoldCover = (i < playerHoldCovers.length) ? playerHoldCovers[i] : null;
+				if(cover != null && cover.running)
+				{
+					// Only a hold carried to its end earns the burst. A cover is otherwise cut
+					// short just when the key is up, never merely because this frame did not
+					// count as holding - that also sees off a head tapped and released inside
+					// one frame, which never registers as a hold but does put a cover up.
+					if(wasHoldingSustain[i] && reachedEnd) cover.playEnd();
+					else if(!holdArray[i]) cover.stopCover();
+				}
+			}
 
 			if(wasHoldingSustain[i] && !holding)
 			{
@@ -3410,14 +3444,21 @@ class PlayState extends MusicBeatState
 	/**
 	 * Whether the last of a hold's trail has been eaten by the strums.
 	 *
-	 * `Note.clipToStrumNote` eats a sustain from the strum's *centre*, half a note height
-	 * below its top, and only upscroll gets the matching `correctionOffset` that cancels
-	 * that out. So on downscroll the trail is gone half a note height before
-	 * `strumTime + sustainLength`, and pinning the strum to that time leaves it lit after
-	 * there is nothing left to hold - a small delay that grows as scroll speed drops.
+	 * Psych's sustains run slightly short of the chart, and it is the end cap that does it.
+	 * Every other piece is stretched to cover exactly one step, but `resizeByRatio` skips
+	 * anything whose animation ends in 'end' on purpose, so the cap keeps its art height -
+	 * and the trail therefore covers `(roundSus - 1)` steps plus however long that cap's
+	 * height happens to be worth. Whenever that is under a step, the trail is spent before
+	 * `strumTime + sustainLength` and a strum pinned to the chart time sits lit with nothing
+	 * left to hold.
 	 *
-	 * Asking the last piece where it actually is covers both directions at any speed, and
-	 * mirrors the condition that empties the clip rect rather than guessing at a constant.
+	 * How far short varies with the BPM and the scroll speed, since one is a time and the
+	 * other is a fixed number of pixels - so it cannot be a constant, and asking the last
+	 * piece where it actually is mirrors the condition that empties the clip rect.
+	 *
+	 * (An earlier version of this comment blamed the missing downscroll `correctionOffset`.
+	 * That was wrong: work the two branches through and the half-note terms cancel, so both
+	 * scroll directions consume the tail at the same moment.)
 	 */
 	function holdTailConsumed(lane:Int):Bool
 	{

@@ -121,15 +121,28 @@ state:
   notes with no sustain, and does nothing if that lane's cover is already up - so a hold
   begun by its head, begun by a piece with Guitar Hero sustains switched off, or played
   by the bot, all start one unbroken loop.
-- `updateHoldCovers()` ends it: `playEnd()` once the song reaches the sustain's charted
-  end, `stopCover()` the moment `wasHoldingSustain` says the player let go. The bot is
-  exempt from the drop check, because it never does.
+- `updateStrumHoldState()` ends it, in the same branch that drops the strum to its ghost
+  tap: `playEnd()` for a hold carried to its end, `stopCover()` for one let go of early.
+  `updateHoldCovers()` only picks up what that never saw - the opponent's covers, and the
+  player's under botplay or a cutscene, where there is no key to release and the chart's
+  end is the whole story.
 
-The order of those two questions is load-bearing. A lane stops holding on the very frame
-its sustain ends - that is the same frame `finishConfirm` drops the strum to its ghost
-tap - so asking "did they let go?" before "did it finish?" answers yes to both and takes
-the end animation away from every hold that earned one. Completion is asked first, and
-the burst lands on the same frame as the ghost tap, which is the pop it is there for.
+**One decision, one frame, both effects.** This is the shape V-Slice uses - glow and
+cover come off a single condition in `Strumline.updateNotes` - and it is worth spelling
+out why, because the obvious alternative was tried and it is subtly wrong.
+
+Asking the strum and the cover separately means two answers to "is this hold over". The
+strum follows the trail; the cover followed the chart. Those are not the same instant,
+because Psych's trail runs short: every sustain piece is stretched to cover one step
+except the end cap, which `resizeByRatio` deliberately leaves at its art height. The
+trail therefore covers `(roundSus - 1)` steps plus whatever that cap is worth, and the
+difference is a fixed number of pixels against a length of time - so it moves with the
+BPM and the scroll speed. Tens of milliseconds, different in every song, which is exactly
+how it read: something slightly off that you could not point at.
+
+The decision also runs *after* the note loop rather than inside `keysCheck`, because it
+asks where the last of the trail is and nothing has moved the notes yet at that point in
+the frame. `keysCheck` hands its findings on instead of acting on them.
 
 One cover is built per strum and lives as long as it does, so a hold never waits on a
 pool and a lane's sheet is loaded once. They draw above the notes, which is what lets a
