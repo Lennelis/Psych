@@ -1883,28 +1883,25 @@ class PlayState extends MusicBeatState
 			camZoomBop *= zoomDecay;
 			if(Math.abs(camZoomBop) < 0.0001) camZoomBop = 0;
 			FlxG.camera.zoom = defaultCamZoom + camZoomBop;
-
-			if (camZooming) camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, zoomDecay);
 		}
 		else if (camZooming)
 		{
 			FlxG.camera.zoom = FlxMath.lerp(defaultCamZoom, FlxG.camera.zoom, zoomDecay);
-			camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, zoomDecay);
 
-			// An exponential decay never actually arrives, so without this the cameras settle at
-			// something like 1.0004 instead of 1 and stay there - and where a bop leaves them
-			// depends on the framerate and on exactly when it landed. A camera's zoom decides
-			// where every sprite on it is drawn to the subpixel, so "back to normal" being a
-			// slightly different number each time is why the strums appeared to shift a hair
-			// after every bop.
+			// An exponential decay never actually arrives, so without this the camera settles at
+			// something like 0.9004 instead of 0.9 and stays there, with where a bop leaves it
+			// depending on the framerate and on exactly when it landed. The residual is far below
+			// anything you could see on a stage; it is pinned anyway so the resting level after a
+			// bop is the same number it was before one. The HUD needs more than a threshold,
+			// because sharp UI shows the whole tail - see updateHudBop.
 			if (Math.abs(FlxG.camera.zoom - defaultCamZoom) < ZOOM_SNAP) FlxG.camera.zoom = defaultCamZoom;
-			if (Math.abs(camHUD.zoom - 1) < ZOOM_SNAP) camHUD.zoom = 1;
 
 			// Kept in step with the camera while nothing is tweening, so a zoom starting mid-decay
 			// picks the bop up where it is rather than from zero. This also absorbs anything a
 			// script or stage wrote straight into camera.zoom.
 			camZoomBop = FlxG.camera.zoom - defaultCamZoom;
 		}
+		updateHudBop(elapsed);
 
 		FlxG.watch.addQuick("secShit", curSection);
 		FlxG.watch.addQuick("beatShit", curBeat);
@@ -2303,7 +2300,8 @@ class PlayState extends MusicBeatState
 					if(flValue2 == null) flValue2 = 0.03;
 
 					FlxG.camera.zoom += flValue1;
-					camHUD.zoom += flValue2;
+					camZoomBop += flValue1;
+					bopHUD(flValue2);
 				}
 
 			case 'Play Animation':
@@ -2631,6 +2629,52 @@ class PlayState extends MusicBeatState
 	 * instead of decaying, which is what made bopping during a zoom look wrong.
 	 */
 	var camZoomBop:Float = 0;
+
+	/** How long a HUD bop takes to fall all the way back, in seconds at 1x. */
+	static inline var HUD_BOP_TIME:Float = 1;
+
+	/** The offset the live HUD bop started from, and how far into its fall it is. */
+	var hudBopAmount:Float = 0;
+	var hudBopTime:Float = 0;
+
+	/**
+	 * The HUD bop used to be an exponential decay toward 1, the same shape the stage camera uses.
+	 * An exponential never arrives, so for about a second after every bop the HUD crept back
+	 * through offsets too small to read as a zoom and still large enough to move everything drawn
+	 * on it by a fraction of a pixel - and the threshold that finally pinned it to 1 did so in a
+	 * single jump. None of that shows on a stage, which is soft and mostly still; on sharp UI it
+	 * reads as the whole HUD shifting just as the bop looks finished.
+	 *
+	 * So the fall is a curve with an end instead of an asymptote. Cubed, it keeps the shape of the
+	 * old decay over the part anyone can see - the half-life lands within a couple of hundredths
+	 * of a second of where it was - and then it reaches exactly 1 and stops.
+	 */
+	function updateHudBop(elapsed:Float)
+	{
+		if(hudBopAmount == 0) return;
+
+		hudBopTime += elapsed * camZoomingDecay * playbackRate;
+		if(hudBopTime >= HUD_BOP_TIME)
+		{
+			hudBopAmount = 0;
+			hudBopTime = 0;
+			camHUD.zoom = 1;
+			return;
+		}
+
+		var fall:Float = 1 - hudBopTime / HUD_BOP_TIME;
+		camHUD.zoom = 1 + hudBopAmount * fall * fall * fall;
+	}
+
+	/**
+	 * Starts the HUD bop over, carrying whatever the last one had left so bops landing on top of
+	 * each other stack the way they used to rather than cutting one another off.
+	 */
+	public function bopHUD(amount:Float)
+	{
+		hudBopAmount = (camHUD.zoom - 1) + amount;
+		hudBopTime = 0;
+	}
 
 	public function cancelCameraFollowTween()
 	{
@@ -3918,7 +3962,7 @@ class PlayState extends MusicBeatState
 		FlxG.camera.zoom += amount;
 		camZoomBop += amount;
 
-		if (ClientPrefs.data.hudBop) camHUD.zoom += 0.03 * camZoomingMult;
+		if (ClientPrefs.data.hudBop) bopHUD(0.03 * camZoomingMult);
 	}
 
 	/** A step tick waiting to be turned into a bop, and whether it began a section. */
