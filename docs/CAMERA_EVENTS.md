@@ -181,10 +181,26 @@ has to be the ease you get. V-Slice nulls its camera target for the same reason.
 
 **Bop** sets `camZoomingMult` (strength), `camZoomingRate` (beats between bops) and
 `camZoomingOffset` (phase). Psych normally bops in `sectionHit`, which cannot express a
-rate at all, so a positive rate moves the bop to `stepHit` with a step-counted interval —
-the way V-Slice does it. A negative rate, which is the default nobody has touched, leaves
-it in `sectionHit` exactly as before. All three are public fields, and `bopCamera()` fires
-one bop on demand.
+rate at all, so a positive rate switches to a step-counted interval the way V-Slice does
+it. A negative rate — the default nobody has touched — keeps the per-section schedule.
+All three are public fields, and `bopCamera()` fires one bop on demand.
+
+The decision itself lives in `updateCameraBop()`, deliberately not in `stepHit`. `stepHit`
+runs inside `super.update()` while `checkEventNote()` does not run until much later in the
+same frame, so a bop event sitting exactly on a beat had already missed that beat and had
+to be written a step early to land where it looked like it should.
+
+`bopCamera()`'s ceiling — there to stop a fast rate walking the camera in and never
+bringing it back — is measured against `defaultCamZoom` rather than a flat 1.35. A flat
+number meant a `Zoom Camera` past it silently stopped the bops, so they cut out and came
+back as the zoom crossed the line. V-Slice measures its own against the HUD camera's
+default for the same reason.
+
+The bop is tracked in `camZoomBop` rather than read back off the camera. Inferring it from
+the difference between the camera and what a zoom tween last wrote gives zero on every
+frame but the one a bop lands on, because the previous frame folded the residual into the
+value being compared against — so the bop flashed for one frame and vanished instead of
+decaying.
 
 The helpers are on `PlayState` and are public, so scripts can use them directly:
 

@@ -1869,15 +1869,11 @@ class PlayState extends MusicBeatState
 			// An authored zoom is a curve, and the branch below would drag that curve to the screen
 			// through a ~0.2s half-life: the ease arrives smeared and the move visibly runs several
 			// times longer than the duration it was given. So while the tween is live it drives the
-			// camera itself.
-			//
-			// Beat bops write straight into camera.zoom, so whatever the camera sits above the base
-			// right now IS the outstanding bop. Decay that on its own and put it back on top of the
-			// tweened base, rather than decaying the base along with it - which is how V-Slice keeps
-			// its bop multiplier and its authored zoom apart.
-			var bop:Float = FlxG.camera.zoom - camZoomLastApplied;
-			if(bop < 0) bop = 0;
-			FlxG.camera.zoom = camZoomLastApplied = defaultCamZoom + bop * zoomDecay;
+			// camera itself, and the bop decays separately on top - the same separation V-Slice
+			// gets from keeping its bop multiplier apart from its authored zoom.
+			camZoomBop *= zoomDecay;
+			if(Math.abs(camZoomBop) < 0.0001) camZoomBop = 0;
+			FlxG.camera.zoom = defaultCamZoom + camZoomBop;
 
 			if (camZooming) camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, zoomDecay);
 		}
@@ -1885,6 +1881,11 @@ class PlayState extends MusicBeatState
 		{
 			FlxG.camera.zoom = FlxMath.lerp(defaultCamZoom, FlxG.camera.zoom, zoomDecay);
 			camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, zoomDecay);
+
+			// Kept in step with the camera while nothing is tweening, so a zoom starting mid-decay
+			// picks the bop up where it is rather than from zero. This also absorbs anything a
+			// script or stage wrote straight into camera.zoom.
+			camZoomBop = FlxG.camera.zoom - defaultCamZoom;
 		}
 
 		FlxG.watch.addQuick("secShit", curSection);
@@ -1979,6 +1980,8 @@ class PlayState extends MusicBeatState
 			}
 			checkEventNote();
 		}
+
+		updateCameraBop();
 
 		#if debug
 		if(!endingSong && !startingSong) {
@@ -2600,8 +2603,16 @@ class PlayState extends MusicBeatState
 	 */
 	public var camFollowTween:FlxTween;
 	public var camZoomTween:FlxTween;
-	/** What the zoom tween last put on the camera, so a beat bop on top of it can be told apart. */
-	var camZoomLastApplied:Float = 0;
+	/**
+	 * How much of the camera's zoom right now is beat bop rather than the resting level.
+	 *
+	 * Tracked rather than inferred from the camera. Inferring it - taking the difference
+	 * between the camera and what the tween last wrote - reads zero on every frame except
+	 * the one a bop lands on, because the previous frame folded the residual into the value
+	 * it was being compared against. The bop then flashed for a single frame and vanished
+	 * instead of decaying, which is what made bopping during a zoom look wrong.
+	 */
+	var camZoomBop:Float = 0;
 
 	public function cancelCameraFollowTween()
 	{
@@ -2680,14 +2691,15 @@ class PlayState extends MusicBeatState
 		{
 			// Snap, and mean it. Moving only the base would leave the decay to crawl the camera
 			// there over about a second, which is not what anyone writing "instant" is asking for.
-			defaultCamZoom = camZoomLastApplied = target;
+			defaultCamZoom = target;
 			FlxG.camera.zoom = target;
+			camZoomBop = 0;
 			return;
 		}
 
-		// The base as it stands before the tween moves it, so the first frame of the loop above
-		// measures the bop that's actually outstanding rather than reading zero.
-		camZoomLastApplied = defaultCamZoom;
+		// Whatever the camera is currently sitting above the resting level is bop, and carries
+		// into the tween rather than being dropped at the moment it starts.
+		camZoomBop = FlxG.camera.zoom - defaultCamZoom;
 		camZoomTween = FlxTween.tween(this, {defaultCamZoom: target}, duration / playbackRate, {
 			ease: ease,
 			onComplete: function(_) camZoomTween = null
@@ -3875,10 +3887,55 @@ class PlayState extends MusicBeatState
 	 */
 	public function bopCamera()
 	{
-		if (!camZooming || !ClientPrefs.data.camZooms || FlxG.camera.zoom >= 1.35) return;
+		if (!camZooming || !ClientPrefs.data.camZooms) return;
 
-		FlxG.camera.zoom += 0.015 * camZoomingMult;
+		// The ceiling is there so a fast bop rate cannot walk the camera in and never bring it
+		// back. Psych compared the zoom against a flat 1.35, which silently stopped bopping the
+		// moment a `Zoom Camera` event took the resting level past it - so the bops cut out and
+		// came back as the zoom crossed the line. Measured against the resting level instead, as
+		// V-Slice measures its own against the HUD camera's default.
+		if (FlxG.camera.zoom >= defaultCamZoom * 1.35) return;
+
+		var amount:Float = 0.015 * camZoomingMult;
+		FlxG.camera.zoom += amount;
+		camZoomBop += amount;
 		camHUD.zoom += 0.03 * camZoomingMult;
+	}
+
+	/** A step tick waiting to be turned into a bop, and whether it began a section. */
+	var bopPendingStep:Int = -1;
+	var bopPendingSection:Bool = false;
+
+	/**
+	 * Decides whether the step that just ticked gets a bop.
+	 *
+	 * This is not in stepHit() on purpose. stepHit runs inside super.update(), and
+	 * checkEventNote() does not run until much later in the same frame - so a `Set Camera
+	 * Bop` sitting exactly on a beat had already missed that beat, and had to be written a
+	 * step early to land where it looked like it should. Reading the rate here means the
+	 * event on a step is in force for that step.
+	 */
+	function updateCameraBop()
+	{
+		if(bopPendingStep < 0 && !bopPendingSection) return;
+
+		if(camZoomingRate > 0)
+		{
+			// Counted in steps rather than beats so a rate of a quarter beat still lands on
+			// something, which is how V-Slice counts it too.
+			var everySteps:Int = Math.round(camZoomingRate * 4);
+			if(bopPendingStep >= 0 && everySteps > 0
+				&& (bopPendingStep + Math.round(camZoomingOffset * 4)) % everySteps == 0)
+				bopCamera();
+		}
+		else if(camZoomingRate < 0 && bopPendingSection)
+		{
+			// Nobody has set a rate, so bops stay on Psych's own schedule: once per section.
+			bopCamera();
+		}
+
+		bopPendingStep = -1;
+		bopPendingSection = false;
 	}
 
 	override function stepHit()
@@ -3889,14 +3946,9 @@ class PlayState extends MusicBeatState
 			return;
 		}
 
-		// Counted in steps rather than beats so a rate of a quarter beat still lands on
-		// something, which is how V-Slice counts it too.
-		if (camZoomingRate > 0)
-		{
-			var everySteps:Int = Math.round(camZoomingRate * 4);
-			if (everySteps > 0 && (curStep + Math.round(camZoomingOffset * 4)) % everySteps == 0)
-				bopCamera();
-		}
+		// Only noted here. Deciding the bop needs this step's events to have been applied, and
+		// they are not read until much further down the frame - see updateCameraBop().
+		bopPendingStep = curStep;
 
 		lastStepHit = curStep;
 		setOnScripts('curStep', curStep);
@@ -3954,9 +4006,7 @@ class PlayState extends MusicBeatState
 			if (generatedMusic && !endingSong && !isCameraOnForcedPos)
 				moveCameraSection();
 
-			// Only while nothing has set a rate - past that the bop is driven per beat in
-			// stepHit() instead, which is the only way "every two beats" can mean anything.
-			if (camZoomingRate < 0) bopCamera();
+			bopPendingSection = true;
 
 			if (SONG.notes[curSection].changeBPM)
 			{
