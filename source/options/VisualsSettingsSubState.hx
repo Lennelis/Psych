@@ -145,6 +145,12 @@ class VisualsSettingsSubState extends BaseOptionsMenu
 		option.decimals = 1;
 		addOption(option);
 
+		var option:Option = new Option('HUD Camera Bop', //Name
+			"If unchecked, the HUD holds still on the beat while the stage keeps bopping.\nThe HUD zooms about its own centre, so anything far from the middle of the\nscreen - the strums most of all - travels a little on every bop.", //Description
+			'hudBop',
+			BOOL);
+		addOption(option);
+
 		var option:Option = new Option('Smooth Health Bar',
 			"If checked, the health bar slides to its new value\ninstead of snapping, the way it does in V-Slice.",
 			'smoothHealthBar',

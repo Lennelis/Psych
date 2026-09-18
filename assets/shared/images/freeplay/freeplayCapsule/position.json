@@ -9,9 +9,9 @@
 		"antialiasText smooths the small labels and the generated week name.",
 		"",
 		"The week name is the one label set from a font rather than drawn by hand, so it has",
-		"no groove of its own. weekTextEngrave puts one back: a shadow in a colour lighter",
-		"than the capsule, offset down and right, so the letter reads as cut in with light",
-		"catching its lower lip. The colour is AARRGGBB."
+		"no groove of its own. weekTextEngrave puts one back: a shadow DARKER than the letter,",
+		"offset down and right, so it reads as cut into the capsule. A lighter colour here",
+		"reads as a drop shadow sitting on top instead. The colour is AARRGGBB."
 	],
 
 	"antialiasText": true,
@@ -23,7 +23,7 @@
 	"weekTextY": 0,
 	"weekTextScale": 1,
 	"weekTextEngrave": true,
-	"weekTextEngraveColor": "FF6E6A82",
+	"weekTextEngraveColor": "FF1A172B",
 	"weekTextEngraveX": 1,
 	"weekTextEngraveY": 1,
 

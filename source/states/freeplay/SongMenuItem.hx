@@ -45,7 +45,7 @@ class SongMenuItem extends FlxSpriteGroup
 			antialiasText: true,
 			songTextX: 0, songTextY: 0,
 			weekTextX: 0, weekTextY: 0, weekTextScale: 1,
-			weekTextEngrave: true, weekTextEngraveColor: 'FF6E6A82', weekTextEngraveX: 1, weekTextEngraveY: 1,
+			weekTextEngrave: true, weekTextEngraveColor: 'FF1A172B', weekTextEngraveX: 1, weekTextEngraveY: 1,
 			bpmTextX: 3, bpmTextY: 1, bpmTextScale: 1,
 			bpmDigitsX: 0, bpmDigitsY: 0, bpmDigitGap: 11,
 			difficultyTextX: 5, difficultyTextY: 2, difficultyTextScale: 1,
@@ -351,9 +351,12 @@ class SongMenuItem extends FlxSpriteGroup
 	 * runtime, and a font gives you a flat fill - which is why it was the one piece of text
 	 * that looked painted on rather than cut in.
 	 *
-	 * A shadow in a colour lighter than the capsule, offset down and right, is what puts the
-	 * lit edge back: the letter reads as a groove with light catching its lower lip. The
-	 * numbers are in position.json because the right ones depend on the capsule art.
+	 * A shadow *darker* than the letter, offset down and right, is what puts the groove back.
+	 * That direction is not a guess: measured across the crops, V-Slice's week name never
+	 * goes lighter than the capsule around it - the whole thing lives between luminance 28
+	 * and 69 against a capsule at 64. A light edge reads as a drop shadow sitting on top of
+	 * the surface, which is the opposite of cut into it. The numbers are in position.json
+	 * because the right ones depend on the capsule art.
 	 */
 	static function createWeekTextGraphic(text:String, key:String):Void
 	{

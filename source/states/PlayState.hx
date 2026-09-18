@@ -3917,7 +3917,8 @@ class PlayState extends MusicBeatState
 		var amount:Float = 0.015 * camZoomingMult;
 		FlxG.camera.zoom += amount;
 		camZoomBop += amount;
-		camHUD.zoom += 0.03 * camZoomingMult;
+
+		if (ClientPrefs.data.hudBop) camHUD.zoom += 0.03 * camZoomingMult;
 	}
 
 	/** A step tick waiting to be turned into a bop, and whether it began a section. */
