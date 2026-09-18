@@ -19,6 +19,88 @@ import shaders.freeplay.HSVShader;
  */
 class SongMenuItem extends FlxSpriteGroup
 {
+	/**
+	 * Nudges read from `images/freeplay/freeplayCapsule/position.json`.
+	 *
+	 * Same idea as the album's: the numbers that decide where a capsule's text sits are
+	 * quicker to see than to derive, so they live in a file rather than in constants that
+	 * have to be guessed at from a screenshot. All offsets, so all zeroes is what the code
+	 * does on its own.
+	 *
+	 * Held statically because a capsule is built many times over; `reloadNudges()` drops it
+	 * so the next menu reads the file again.
+	 */
+	static var nudges:CapsuleNudges = null;
+
+	public static function reloadNudges():Void
+		nudges = null;
+
+	static function nudge():CapsuleNudges
+	{
+		if (nudges != null) return nudges;
+
+		nudges = {
+			antialiasText: true,
+			songTextX: 0, songTextY: 0,
+			weekTextX: 0, weekTextY: 0, weekTextScale: 1,
+			bpmTextX: 0, bpmTextY: 0, bpmTextScale: 1,
+			bpmDigitsX: 0, bpmDigitsY: 0, bpmDigitGap: 11,
+			difficultyTextX: 0, difficultyTextY: 0, difficultyTextScale: 1,
+			difficultyDigitsX: 0, difficultyDigitsY: 0, difficultyDigitGap: 30,
+			newTextX: 0, newTextY: 0, newTextScale: 1,
+			rankX: 0, rankY: 0,
+			iconX: 0, iconY: 0
+		};
+
+		try
+		{
+			var raw:String = Paths.getTextFromFile('images/freeplay/freeplayCapsule/position.json');
+			if (raw == null || raw.length < 1) return nudges;
+
+			var parsed:Dynamic = haxe.Json.parse(raw);
+			function pick(name:String, fallback:Float):Float
+			{
+				var value:Dynamic = Reflect.field(parsed, name);
+				if (value == null) return fallback;
+
+				var asFloat:Float = cast value;
+				return Math.isNaN(asFloat) ? fallback : asFloat;
+			}
+
+			var flag:Dynamic = Reflect.field(parsed, 'antialiasText');
+			if (flag != null) nudges.antialiasText = (flag == true);
+
+			nudges.songTextX = pick('songTextX', 0);
+			nudges.songTextY = pick('songTextY', 0);
+			nudges.weekTextX = pick('weekTextX', 0);
+			nudges.weekTextY = pick('weekTextY', 0);
+			nudges.weekTextScale = pick('weekTextScale', 1);
+			nudges.bpmTextX = pick('bpmTextX', 0);
+			nudges.bpmTextY = pick('bpmTextY', 0);
+			nudges.bpmTextScale = pick('bpmTextScale', 1);
+			nudges.bpmDigitsX = pick('bpmDigitsX', 0);
+			nudges.bpmDigitsY = pick('bpmDigitsY', 0);
+			nudges.bpmDigitGap = pick('bpmDigitGap', 11);
+			nudges.difficultyTextX = pick('difficultyTextX', 0);
+			nudges.difficultyTextY = pick('difficultyTextY', 0);
+			nudges.difficultyTextScale = pick('difficultyTextScale', 1);
+			nudges.difficultyDigitsX = pick('difficultyDigitsX', 0);
+			nudges.difficultyDigitsY = pick('difficultyDigitsY', 0);
+			nudges.difficultyDigitGap = pick('difficultyDigitGap', 30);
+			nudges.newTextX = pick('newTextX', 0);
+			nudges.newTextY = pick('newTextY', 0);
+			nudges.newTextScale = pick('newTextScale', 1);
+			nudges.rankX = pick('rankX', 0);
+			nudges.rankY = pick('rankY', 0);
+			nudges.iconX = pick('iconX', 0);
+			nudges.iconY = pick('iconY', 0);
+		}
+		catch (e:Dynamic)
+			trace('SongMenuItem: could not read the capsule position.json ($e)');
+
+		return nudges;
+	}
+
 	public var capsule:FlxSprite;
 
 	var pixelIcon:FreeplayIcon;
@@ -78,40 +160,49 @@ class SongMenuItem extends FlxSpriteGroup
 		capsule.antialiasing = ClientPrefs.data.antialiasing;
 		add(capsule);
 
-		bpmText = new FlxSprite(144, 87).loadGraphic(Paths.image('freeplay/freeplayCapsule/bpmtext'));
-		bpmText.setGraphicSize(Std.int(bpmText.width * 0.9));
+		var nudged:CapsuleNudges = nudge();
+
+		bpmText = new FlxSprite(144 + nudged.bpmTextX, 87 + nudged.bpmTextY).loadGraphic(Paths.image('freeplay/freeplayCapsule/bpmtext'));
+		bpmText.setGraphicSize(Std.int(bpmText.width * 0.9 * nudged.bpmTextScale));
 		bpmText.updateHitbox();
+		bpmText.antialiasing = nudged.antialiasText;
 		add(bpmText);
 
-		difficultyText = new FlxSprite(414, 87).loadGraphic(Paths.image('freeplay/freeplayCapsule/difficultytext'));
-		difficultyText.setGraphicSize(Std.int(difficultyText.width * 0.9));
+		difficultyText = new FlxSprite(414 + nudged.difficultyTextX, 87 + nudged.difficultyTextY).loadGraphic(Paths.image('freeplay/freeplayCapsule/difficultytext'));
+		difficultyText.setGraphicSize(Std.int(difficultyText.width * 0.9 * nudged.difficultyTextScale));
 		difficultyText.updateHitbox();
+		difficultyText.antialiasing = nudged.antialiasText;
 		add(difficultyText);
 
-		weekText = new FlxSprite(291, 88);
-		weekText.scale.set(0.9, 0.9);
+		weekText = new FlxSprite(291 + nudged.weekTextX, 88 + nudged.weekTextY);
+		weekText.scale.set(0.9 * nudged.weekTextScale, 0.9 * nudged.weekTextScale);
 		weekText.visible = false;
 		weekText.active = false;
+		// The week name is drawn from a font at runtime rather than coming off a sheet like
+		// everything else here, so without this it is the one label on the capsule with hard
+		// pixel edges - which is what made it look flat next to the art beside it.
+		weekText.antialiasing = nudged.antialiasText;
 		add(weekText);
 
-		newText = new FlxSprite(454, 9);
+		newText = new FlxSprite(454 + nudged.newTextX, 9 + nudged.newTextY);
 		newText.frames = Paths.getSparrowAtlas('freeplay/freeplayCapsule/new');
 		newText.animation.addByPrefix('newAnim', 'NEW notif', 24, true);
 		newText.animation.play('newAnim', true);
-		newText.setGraphicSize(Std.int(newText.width * 0.9));
+		newText.setGraphicSize(Std.int(newText.width * 0.9 * nudged.newTextScale));
 		newText.updateHitbox();
+		newText.antialiasing = nudged.antialiasText;
 		add(newText);
 
 		for (i in 0...2)
 		{
-			var num:CapsuleNumber = new CapsuleNumber(466 + (i * 30), 32, true, 0);
+			var num:CapsuleNumber = new CapsuleNumber(466 + nudged.difficultyDigitsX + (i * nudged.difficultyDigitGap), 32 + nudged.difficultyDigitsY, true, 0);
 			add(num);
 			difficultyNumbers.push(num);
 		}
 
 		for (i in 0...3)
 		{
-			var num:CapsuleNumber = new CapsuleNumber(185 + (i * 11), 88.5, false, 0);
+			var num:CapsuleNumber = new CapsuleNumber(185 + nudged.bpmDigitsX + (i * nudged.bpmDigitGap), 88.5 + nudged.bpmDigitsY, false, 0);
 			add(num);
 			bpmNumbers.push(num);
 		}
@@ -119,7 +210,7 @@ class SongMenuItem extends FlxSpriteGroup
 		// Never added to the group; it is only a list of what the pop-in hides and shows.
 		grpHide = new FlxGroup();
 
-		ranking = new FreeplayRank(420, 41);
+		ranking = new FreeplayRank(420 + nudged.rankX, 41 + nudged.rankY);
 		add(ranking);
 
 		blurredRanking = new FreeplayRank(ranking.x, ranking.y);
@@ -136,13 +227,13 @@ class SongMenuItem extends FlxSpriteGroup
 		sparkle.alpha = 0.7;
 		add(sparkle);
 
-		songText = new CapsuleText(capsule.width * 0.26, 45, 'Random', Std.int(40 * realScaled));
+		songText = new CapsuleText(capsule.width * 0.26 + nudged.songTextX, 45 + nudged.songTextY, 'Random', Std.int(40 * realScaled));
 		add(songText);
 		grpHide.add(songText);
 
 		// V-Slice's own position for it. Where it actually ends up being drawn is a
 		// hundred pixels to the left of that and some way above it - see FreeplayIcon.
-		pixelIcon = new FreeplayIcon(160, 35);
+		pixelIcon = new FreeplayIcon(160 + nudged.iconX, 35 + nudged.iconY);
 		add(pixelIcon);
 		grpHide.add(pixelIcon);
 
@@ -278,7 +369,7 @@ class SongMenuItem extends FlxSpriteGroup
 
 		for (i in 0...bpmNumbers.length)
 		{
-			bpmNumbers[i].x = this.x + (shiftX + (i * 11));
+			bpmNumbers[i].x = this.x + (shiftX + nudge().bpmDigitsX + (i * nudge().bpmDigitGap));
 
 			switch (i)
 			{
@@ -882,4 +973,34 @@ class FreeplayMath
 
 		return FlxMath.lerp(target, base, Math.pow(precision, deltaTime / duration));
 	}
+}
+
+/** What `images/freeplay/freeplayCapsule/position.json` is allowed to move. */
+typedef CapsuleNudges =
+{
+	var antialiasText:Bool;
+	var songTextX:Float;
+	var songTextY:Float;
+	var weekTextX:Float;
+	var weekTextY:Float;
+	var weekTextScale:Float;
+	var bpmTextX:Float;
+	var bpmTextY:Float;
+	var bpmTextScale:Float;
+	var bpmDigitsX:Float;
+	var bpmDigitsY:Float;
+	var bpmDigitGap:Float;
+	var difficultyTextX:Float;
+	var difficultyTextY:Float;
+	var difficultyTextScale:Float;
+	var difficultyDigitsX:Float;
+	var difficultyDigitsY:Float;
+	var difficultyDigitGap:Float;
+	var newTextX:Float;
+	var newTextY:Float;
+	var newTextScale:Float;
+	var rankX:Float;
+	var rankY:Float;
+	var iconX:Float;
+	var iconY:Float;
 }

@@ -1,0 +1,48 @@
+{
+	"_readme": [
+		"Nudges for everything drawn on a freeplay capsule, so it can be placed without",
+		"rebuilding the game. Edit, back out of freeplay and go back in - it is read fresh",
+		"each time the menu is built.",
+		"",
+		"Positive x moves right, positive y moves down. Every number here is an offset from",
+		"where the code already puts things, so all zeroes is the built-in placement.",
+		"The *Scale entries multiply a sprite's size; 1 leaves it alone.",
+		"bpmDigitGap and difficultyDigitGap are the spacing between digits.",
+		"antialiasText smooths the small labels and the generated week name."
+	],
+
+	"antialiasText": true,
+
+	"songTextX": 0,
+	"songTextY": 0,
+
+	"weekTextX": 0,
+	"weekTextY": 0,
+	"weekTextScale": 1,
+
+	"bpmTextX": 0,
+	"bpmTextY": 0,
+	"bpmTextScale": 1,
+
+	"bpmDigitsX": 0,
+	"bpmDigitsY": 0,
+	"bpmDigitGap": 11,
+
+	"difficultyTextX": 0,
+	"difficultyTextY": 0,
+	"difficultyTextScale": 1,
+
+	"difficultyDigitsX": 0,
+	"difficultyDigitsY": 0,
+	"difficultyDigitGap": 30,
+
+	"newTextX": 0,
+	"newTextY": 0,
+	"newTextScale": 1,
+
+	"rankX": 0,
+	"rankY": 0,
+
+	"iconX": 0,
+	"iconY": 0
+}

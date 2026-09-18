@@ -183,6 +183,9 @@ class PlayState extends MusicBeatState
 	public var camZoomingRate:Float = -1;
 	/** Phase for the above, in beats, so bops can land off the downbeat. */
 	public var camZoomingOffset:Float = 0;
+
+	/** How close to its resting zoom a camera has to get before it is just put there. */
+	static inline var ZOOM_SNAP:Float = 0.0005;
 	private var curSong:String = "";
 
 	public var gfSpeed:Int = 1;
@@ -1887,6 +1890,15 @@ class PlayState extends MusicBeatState
 		{
 			FlxG.camera.zoom = FlxMath.lerp(defaultCamZoom, FlxG.camera.zoom, zoomDecay);
 			camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, zoomDecay);
+
+			// An exponential decay never actually arrives, so without this the cameras settle at
+			// something like 1.0004 instead of 1 and stay there - and where a bop leaves them
+			// depends on the framerate and on exactly when it landed. A camera's zoom decides
+			// where every sprite on it is drawn to the subpixel, so "back to normal" being a
+			// slightly different number each time is why the strums appeared to shift a hair
+			// after every bop.
+			if (Math.abs(FlxG.camera.zoom - defaultCamZoom) < ZOOM_SNAP) FlxG.camera.zoom = defaultCamZoom;
+			if (Math.abs(camHUD.zoom - 1) < ZOOM_SNAP) camHUD.zoom = 1;
 
 			// Kept in step with the camera while nothing is tweening, so a zoom starting mid-decay
 			// picks the bop up where it is rather than from zero. This also absorbs anything a

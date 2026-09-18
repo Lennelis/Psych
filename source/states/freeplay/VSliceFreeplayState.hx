@@ -189,6 +189,10 @@ class VSliceFreeplayState extends MusicBeatState
 
 		persistentUpdate = true;
 
+		// Dropped so the capsules read their position file again - editing it and coming back
+		// into freeplay is the whole point of it being a file.
+		SongMenuItem.reloadNudges();
+
 		allDifficulties = FreeplaySongData.listAllDifficulties(songs);
 		if (rememberedDifficulty == null || !allDifficulties.contains(rememberedDifficulty)) rememberedDifficulty = Difficulty.getDefault();
 		currentDifficulty = rememberedDifficulty;
@@ -425,6 +429,16 @@ class VSliceFreeplayState extends MusicBeatState
 
 		var restingX:Float = (CUTOUT_WIDTH * DJ_POS_MULTI) + 90;
 		FlxTween.cancelTweensOf(grpDifficulties);
+
+		// The group moves before its members, and that order is not cosmetic. A sprite group
+		// shifts its children by the delta when its own x changes, so setting a child to an
+		// absolute x and then moving the group takes that child twice as far - which put the
+		// remembered difficulty off the side of the screen on arrival, until an arrow press
+		// reset it to an absolute position and it came back. The tweened path got away with it
+		// because both tweens ran together and the child's absolute write landed last.
+		if (instant) grpDifficulties.x = restingX;
+		else FlxTween.tween(grpDifficulties, {x: restingX}, 0.6, {ease: FlxEase.quartOut});
+
 		for (diff in grpDifficulties.group.members)
 		{
 			if (diff == null) continue;
@@ -435,8 +449,6 @@ class VSliceFreeplayState extends MusicBeatState
 			diff.y = 80;
 			diff.visible = (diff == currentDifficultySprite);
 		}
-		if (instant) grpDifficulties.x = restingX;
-		else FlxTween.tween(grpDifficulties, {x: restingX}, 0.6, {ease: FlxEase.quartOut});
 
 		diffSelLeft.visible = true;
 		diffSelRight.visible = true;
