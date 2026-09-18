@@ -1997,6 +1997,7 @@ class PlayState extends MusicBeatState
 		}
 
 		updateCameraBop();
+		updateCamDebug(elapsed);
 
 		#if debug
 		if(!endingSong && !startingSong) {
@@ -3983,6 +3984,8 @@ class PlayState extends MusicBeatState
 		camZoomBop += amount;
 
 		bopHUD(0.03 * camZoomingMult * ClientPrefs.data.hudBopStrength);
+
+		camDebugLastBop = 'step $curStep  beat $curBeat  section $curSection';
 	}
 
 	/** A step tick waiting to be turned into a bop, and whether it began a section. */
@@ -4036,6 +4039,84 @@ class PlayState extends MusicBeatState
 		lastStepHit = curStep;
 		setOnScripts('curStep', curStep);
 		callOnScripts('onStepHit');
+	}
+
+	/**
+	 * A readout for chasing camera artefacts, toggled with F3. Deliberately not behind `#if debug`,
+	 * because the builds anyone actually plays come out of CI in release.
+	 *
+	 * The number that matters is `reversals`: how many times in the last second the HUD zoom
+	 * changed direction. A bop is one move out and one move back, so over a second of bopping it
+	 * should read 1, or 2 where bops overlap. Anything higher means something is fighting the bop
+	 * for the HUD camera, and the shake is not the bop at all. A reading of 0 or 1 through a shake
+	 * means the zoom is smooth and what is being seen is the frame times below it, not the curve.
+	 */
+	var camDebugTxt:FlxText;
+	var camDebugShown:Bool = false;
+	var camDebugLastZoom:Float = 1;
+	var camDebugLastDir:Int = 0;
+	var camDebugReversals:Int = 0;
+	var camDebugWorstFrame:Float = 0;
+	var camDebugWindow:Float = 0;
+	var camDebugReversalsShown:Int = 0;
+	var camDebugWorstShown:Float = 0;
+	var camDebugLastBop:String = 'none yet';
+
+	function updateCamDebug(elapsed:Float)
+	{
+		var dz:Float = camHUD.zoom - camDebugLastZoom;
+		var dir:Int = (dz > 0.000001) ? 1 : ((dz < -0.000001) ? -1 : 0);
+		if(dir != 0)
+		{
+			if(camDebugLastDir != 0 && dir != camDebugLastDir) camDebugReversals++;
+			camDebugLastDir = dir;
+		}
+		camDebugLastZoom = camHUD.zoom;
+
+		if(elapsed > camDebugWorstFrame) camDebugWorstFrame = elapsed;
+
+		camDebugWindow += elapsed;
+		if(camDebugWindow >= 1)
+		{
+			camDebugReversalsShown = camDebugReversals;
+			camDebugWorstShown = camDebugWorstFrame;
+			camDebugReversals = 0;
+			camDebugWorstFrame = 0;
+			camDebugWindow = 0;
+		}
+
+		if(FlxG.keys.justPressed.F3)
+		{
+			if(camDebugTxt == null)
+			{
+				camDebugTxt = new FlxText(10, 10, 0, '', 16);
+				camDebugTxt.setFormat(Paths.font("vcr.ttf"), 16, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+				camDebugTxt.scrollFactor.set();
+				camDebugTxt.cameras = [camOther];
+				add(camDebugTxt);
+			}
+			camDebugShown = !camDebugShown;
+			camDebugTxt.visible = camDebugShown;
+		}
+
+		if(!camDebugShown || camDebugTxt == null) return;
+
+		camDebugTxt.text = 'camHUD  ' + camDebugFixed(camHUD.zoom, 5)
+			+ '\ncamGame ' + camDebugFixed(FlxG.camera.zoom, 5) + '  (rest ' + camDebugFixed(defaultCamZoom, 5) + ')'
+			+ '\nreversals/s ' + camDebugReversalsShown
+			+ '\nframe ' + camDebugFixed(elapsed * 1000, 1) + 'ms  worst/s ' + camDebugFixed(camDebugWorstShown * 1000, 1) + 'ms'
+			+ '\nlast bop ' + camDebugLastBop
+			+ '\nrate ' + camZoomingRate + '  mult ' + camZoomingMult + '  hud ' + ClientPrefs.data.hudBopStrength;
+	}
+
+	static function camDebugFixed(v:Float, places:Int):String
+	{
+		var mult:Float = Math.pow(10, places);
+		var rounded:Float = Math.round(v * mult) / mult;
+		var out:String = Std.string(rounded);
+		if(out.indexOf('.') < 0) out += '.';
+		while(out.length - out.indexOf('.') <= places) out += '0';
+		return out;
 	}
 
 	var lastBeatHit:Int = -1;
