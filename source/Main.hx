@@ -1,9 +1,5 @@
 package;
 
-#if android
-import android.content.Context;
-#end
-
 import debug.FPSCounter;
 
 import flixel.graphics.FlxGraphic;
@@ -76,9 +72,12 @@ class Main extends Sprite
 		#end
 
 		// Credits to MAJigsaw77 (he's the og author for this code)
-		#if android
-		Sys.setCwd(Path.addTrailingSlash(Context.getExternalFilesDir()));
-		#elseif ios
+		// This used to be android.content.Context.getExternalFilesDir() on Android, but
+		// extension-androidtools moved those classes to extension.androidtools.* back at
+		// v2.0, so that import cannot resolve against any current install - and nothing
+		// here installs that library anyway. lime's own applicationStorageDirectory is
+		// the app's private files directory on Android, which is what that call returned.
+		#if (android || ios)
 		Sys.setCwd(lime.system.System.applicationStorageDirectory);
 		#end
 		#if VIDEOS_ALLOWED

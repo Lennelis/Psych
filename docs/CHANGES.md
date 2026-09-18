@@ -83,3 +83,34 @@ branch.
 and `VIDEOS_ALLOWED` off it, so a build without it ships with no week 1–7 songs. The
 only side effect is that the update check and the crash-report link stay switched on,
 both pointing at upstream Psych.
+
+### Android
+
+`.github/workflows/android.yml` also builds an APK. **Stock Psych has no touch
+controls** — no touchpad, no hitbox, no touch input layer of any kind; the only mobile
+things in `Project.xml` were a landscape window block and three commented-out defines.
+So this APK installs and boots but cannot be played by touch. It is for running the
+branch on a phone with a bluetooth controller or keyboard. The playable mobile build
+is the P-Slice fork on `claude/psych-engine-mobile-port-9sau2w`.
+
+Four things had to change before it would compile at all, none of which affect the
+desktop build:
+
+- **`source/Main.hx` imported `android.content.Context`.** `extension-androidtools`
+  moved those classes to `extension.androidtools.*` at v2.0, so that import cannot
+  resolve against any current install — and nothing in `setup/` installs that library
+  anyway, so it could never have compiled. It only existed to set the working
+  directory, which lime's own `applicationStorageDirectory` already returns on Android,
+  so the dependency is gone rather than added.
+- **Discord RPC** is `unless="android"` now; `hxdiscord_rpc` is a desktop-only native
+  library.
+- **Videos** are off for Android; `hxvlc` 2.0.1 does not build for it.
+- **Signing.** An unsigned release APK will not install, so the workflow generates a
+  throwaway keystore per run with `keytool` and `Project.xml` points at it for
+  non-debug Android builds. It is gitignored rather than committed — which does mean
+  every build is signed with a different key, so uninstall the previous build instead
+  of installing over it.
+
+`ANDROID_SETUP` in the lime config is not optional: it gates the Android target before
+lime looks at the SDK and NDK paths at all, so having those three right is not enough
+on its own.
