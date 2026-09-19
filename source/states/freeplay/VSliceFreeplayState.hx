@@ -156,6 +156,15 @@ class VSliceFreeplayState extends MusicBeatState
 	/** The card behind where the DJ will go. */
 	var backingCard:BackingCard;
 
+	/**
+	 * Which backdrop the menu wears. True is the main menu's art with the drifting checker over
+	 * it; false hands the whole thing back to V-Slice's pink card and week 1 portrait, with no
+	 * other change needed anywhere.
+	 */
+	static inline var USE_MENU_BACKGROUND:Bool = true;
+
+	var freeplayBackdrop:FreeplayBackdrop;
+
 	/** The backing card that has the toned dots. */
 	public var backingImage:FlxSprite;
 
@@ -234,6 +243,15 @@ class VSliceFreeplayState extends MusicBeatState
 		txtCompletion = new FlxText(FlxG.width - 95, 82, 0, '0', 32);
 		ostName = new FlxText(8, 8, FlxG.width - 16, albumRoll.getOSTNameOverride(), 48);
 
+		// Behind everything, and added before the card so it stays there. The V-Slice backdrop
+		// this replaces is hidden rather than removed - the card carries the confirm glow and
+		// the scrolling text, which are not background and still have to work.
+		if (USE_MENU_BACKGROUND)
+		{
+			freeplayBackdrop = new FreeplayBackdrop();
+			add(freeplayBackdrop);
+		}
+
 		backingCard = new BackingCard(CUTOUT_WIDTH);
 		backingImage = new FlxSprite(backingCard.pinkBack.width * 0.74, 0).loadGraphic(Paths.image('freeplay/freeplayBGweek1-bf'));
 
@@ -243,6 +261,7 @@ class VSliceFreeplayState extends MusicBeatState
 		add(backingCard);
 		backingCard.build();
 		backingCard.applyExitMovers(exitMovers);
+		if (USE_MENU_BACKGROUND) hideVSliceBackdrop();
 
 		// The DJ is an Adobe Animate atlas authored at the full 1280x720, so he is
 		// positioned by moving the whole stage rather than by placing a sprite - which is
@@ -513,7 +532,7 @@ class VSliceFreeplayState extends MusicBeatState
 		albumRoll.playIntro();
 		albumRoll.albumId = albumIdFor(currentCapsule.freeplayData);
 
-		backingImage.visible = true;
+		backingImage.visible = !USE_MENU_BACKGROUND;
 		backingCard.introDone();
 
 		// Last, so the menu is fully arrived and the capsules are where they belong before one
@@ -1321,6 +1340,24 @@ class VSliceFreeplayState extends MusicBeatState
 	 * time the letter filter changes - so without this the backdrop and the sparks quietly
 	 * migrate off the rank camera partway through a session.
 	 */
+	/**
+	 * Takes V-Slice's own backdrop out of the picture: the pink card it all sits on, the orange
+	 * strip across it, and the week 1 art on the right with the black panel that masks it in.
+	 *
+	 * Hidden rather than deleted. The intro still tweens the art's colour and the exit still
+	 * flies the panel off screen, and both are harmless against an invisible sprite - whereas
+	 * removing them means unpicking the entrance, the exit and the confirm, none of which is
+	 * background. Turning any of these back on is one visible = true.
+	 */
+	function hideVSliceBackdrop():Void
+	{
+		backingCard.pinkBack.visible = false;
+		backingCard.orangeBackShit.visible = false;
+		backingCard.alsoOrangeLOL.visible = false;
+		backingImage.visible = false;
+		blackOverlayBullshitLOLXD.visible = false;
+	}
+
 	function restoreRankCameras():Void
 	{
 		if (rankCamera == null) return;

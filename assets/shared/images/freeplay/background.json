@@ -1,0 +1,38 @@
+{
+	"_readme": [
+		"The freeplay menu's background: the main menu art, a colour wash over it, and a",
+		"checker that drifts across the whole thing forever. These are the built-in defaults -",
+		"the file is here so they can be changed without rebuilding. Back out of freeplay and",
+		"go back in; it is read fresh each time the menu is built.",
+		"",
+		"Colours are AARRGGBB, the same way the capsule's position.json writes them. An alpha",
+		"of 00 on either checker square turns that half of the pattern off.",
+		"",
+		"speed is pixels a second and direction is degrees, measuring the way the screen does:",
+		"0 drifts right, 90 down, 180 left, 270 up. tileSize is one square, so the pattern",
+		"repeats every two of them - which is also how long a full loop takes at a given speed.",
+		"",
+		"blend is one of normal, add, multiply or screen.",
+		"",
+		"tintColor washes menuDesat over menuBG, the same layer the main menu flashes pink on",
+		"its transitions. At tintOpacity 1 it covers the art underneath completely."
+	],
+
+	"tileSize": 60,
+	"gridAngle": 0,
+
+	"colorA": "D900AAFF",
+	"colorB": "0000EEFF",
+
+	"speed": 18,
+	"direction": 225,
+	"offsetX": 0,
+	"offsetY": 0,
+
+	"opacity": 0.36,
+	"blend": "normal",
+
+	"tintEnabled": true,
+	"tintColor": "FF6F52FF",
+	"tintOpacity": 1
+}
