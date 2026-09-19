@@ -1479,8 +1479,11 @@ class VSliceFreeplayState extends MusicBeatState
 		capsule.ranking.scale.set(20, 20);
 		capsule.blurredRanking.scale.set(20, 20);
 
-		FlxTween.tween(capsule.ranking, {'scale.x': 0.9, 'scale.y': 0.9}, 0.1);
-		FlxTween.tween(capsule.blurredRanking, {'scale.x': 0.9, 'scale.y': 0.9}, 0.1);
+		// Settles at 1, not V-Slice's 0.9. Their badge sits at 0.9 in the capsule's normal
+		// layout; ours sits at 1, so landing on 0.9 meant the stamp ended a touch small and
+		// then popped to full size the moment the animation let go of it.
+		FlxTween.tween(capsule.ranking, {'scale.x': 1, 'scale.y': 1}, 0.1);
+		FlxTween.tween(capsule.blurredRanking, {'scale.x': 1, 'scale.y': 1}, 0.1);
 
 		rankTimer(0.1, function(_)
 		{
