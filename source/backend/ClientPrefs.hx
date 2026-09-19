@@ -31,6 +31,7 @@ import states.TitleState;
 	public var framerate:Int = 60;
 	public var camZooms:Bool = true;
 	/** Whether the HUD bops along with the camera, or holds still while the stage moves. */
+	public var hudBopStrength:Float = 1;
 	public var hideHud:Bool = false;
 	public var noteOffset:Int = 0;
 	public var arrowRGB:Array<Array<FlxColor>> = [
