@@ -185,7 +185,13 @@ class PlayState extends MusicBeatState
 	public var camZoomingOffset:Float = 0;
 
 	/** How close to its resting zoom a camera has to get before it is just put there. */
-	static inline var ZOOM_SNAP:Float = 0.0005;
+	/**
+	 * How close the stage camera has to get to its resting zoom before it is walked the rest of
+	 * the way in, and how long that walk takes. The band is about a pixel of travel at the screen
+	 * edge, crossed in three frames - see the settle in update().
+	 */
+	static inline var ZOOM_SETTLE_BAND:Float = 0.0015;
+	static inline var ZOOM_SETTLE_TIME:Float = 0.05;
 	private var curSong:String = "";
 
 	public var gfSpeed:Int = 1;
@@ -1888,13 +1894,22 @@ class PlayState extends MusicBeatState
 		{
 			FlxG.camera.zoom = FlxMath.lerp(defaultCamZoom, FlxG.camera.zoom, zoomDecay);
 
-			// An exponential decay never actually arrives, so without this the camera settles at
+			// An exponential decay never actually arrives, so without help the camera settles at
 			// something like 0.9004 instead of 0.9 and stays there, with where a bop leaves it
-			// depending on the framerate and on exactly when it landed. The residual is far below
-			// anything you could see on a stage; it is pinned anyway so the resting level after a
-			// bop is the same number it was before one. The HUD needs more than a threshold,
-			// because sharp UI shows the whole tail - see updateHudBop.
-			if (Math.abs(FlxG.camera.zoom - defaultCamZoom) < ZOOM_SNAP) FlxG.camera.zoom = defaultCamZoom;
+			// depending on the framerate and on exactly when it landed.
+			//
+			// Pinning it the moment it was close enough did fix that, but it moved the entire
+			// stage by up to a third of a pixel in a single frame at the end of every bop - a
+			// bigger step than the HUD's, and an instant one rather than a ramp. So below a band
+			// of about a pixel's travel it is walked in at a constant speed instead, crossing the
+			// band in three frames. No crawl, and no step large enough to see.
+			var gap:Float = FlxG.camera.zoom - defaultCamZoom;
+			if (gap != 0 && Math.abs(gap) < ZOOM_SETTLE_BAND)
+			{
+				var settle:Float = ZOOM_SETTLE_BAND * elapsed / ZOOM_SETTLE_TIME;
+				if (Math.abs(gap) <= settle) FlxG.camera.zoom = defaultCamZoom;
+				else FlxG.camera.zoom -= (gap > 0) ? settle : -settle;
+			}
 
 			// Kept in step with the camera while nothing is tweening, so a zoom starting mid-decay
 			// picks the bop up where it is rather than from zero. This also absorbs anything a
