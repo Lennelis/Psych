@@ -45,7 +45,6 @@ class SongMenuItem extends FlxSpriteGroup
 			antialiasText: true,
 			songTextX: 0, songTextY: 0,
 			weekTextX: 0, weekTextY: 0, weekTextScale: 1,
-			weekTextEngrave: true, weekTextEngraveColor: 'FF1A172B', weekTextEngraveX: 1, weekTextEngraveY: 1,
 			bpmTextX: 3, bpmTextY: 1, bpmTextScale: 1,
 			bpmDigitsX: 0, bpmDigitsY: 0, bpmDigitGap: 11,
 			difficultyTextX: 5, difficultyTextY: 2, difficultyTextScale: 1,
@@ -79,14 +78,6 @@ class SongMenuItem extends FlxSpriteGroup
 			nudges.weekTextY = pick('weekTextY', nudges.weekTextY);
 			nudges.weekTextScale = pick('weekTextScale', nudges.weekTextScale);
 
-			var engrave:Dynamic = Reflect.field(parsed, 'weekTextEngrave');
-			if (engrave != null) nudges.weekTextEngrave = (engrave == true);
-
-			var engraveColor:Dynamic = Reflect.field(parsed, 'weekTextEngraveColor');
-			if (engraveColor != null) nudges.weekTextEngraveColor = Std.string(engraveColor);
-
-			nudges.weekTextEngraveX = pick('weekTextEngraveX', nudges.weekTextEngraveX);
-			nudges.weekTextEngraveY = pick('weekTextEngraveY', nudges.weekTextEngraveY);
 			nudges.bpmTextX = pick('bpmTextX', nudges.bpmTextX);
 			nudges.bpmTextY = pick('bpmTextY', nudges.bpmTextY);
 			nudges.bpmTextScale = pick('bpmTextScale', nudges.bpmTextScale);
@@ -338,10 +329,7 @@ class SongMenuItem extends FlxSpriteGroup
 	 * bitmap would still be sitting in the cache under the same name.
 	 */
 	static function weekTextKey(text:String):String
-	{
-		var n:CapsuleNudges = nudge();
-		return 'freeplayWeek:$text:${n.weekTextEngrave}:${n.weekTextEngraveColor}:${n.weekTextEngraveX}:${n.weekTextEngraveY}';
-	}
+		return 'freeplayWeek:$text';
 
 	/**
 	 * Renders a week name to a bitmap.
@@ -362,23 +350,11 @@ class SongMenuItem extends FlxSpriteGroup
 	{
 		if (FlxG.bitmap.checkCache(key)) return;
 
-		var n:CapsuleNudges = nudge();
-
+		// Flat, the way every other label on the capsule is. The engraving that was here read as
+		// a drop shadow sitting on top of the surface rather than a groove cut into it, and a
+		// wrong depth cue is more distracting than no depth cue.
 		var weekTextBase:FlxText = new FlxText(0, 0, 0, text);
 		weekTextBase.setFormat(Paths.font('YoureGone-Regular.otf'), 20, 0xFF21242E);
-
-		if (n.weekTextEngrave)
-		{
-			// Through FlxColor rather than Std.parseInt: an AARRGGBB value with the alpha set
-			// is past what a signed 32-bit Int holds, and parseInt has no obligation to do
-			// anything sensible with that.
-			var engraveColor:Null<FlxColor> = FlxColor.fromString('0x' + n.weekTextEngraveColor);
-
-			weekTextBase.borderStyle = SHADOW;
-			weekTextBase.borderColor = (engraveColor != null) ? engraveColor : 0xFF6E6A82;
-			weekTextBase.borderSize = 1;
-			weekTextBase.shadowOffset.set(n.weekTextEngraveX, n.weekTextEngraveY);
-		}
 
 		@:privateAccess
 		weekTextBase.regenGraphic();
@@ -1040,10 +1016,6 @@ typedef CapsuleNudges =
 	var weekTextX:Float;
 	var weekTextY:Float;
 	var weekTextScale:Float;
-	var weekTextEngrave:Bool;
-	var weekTextEngraveColor:String;
-	var weekTextEngraveX:Float;
-	var weekTextEngraveY:Float;
 	var bpmTextX:Float;
 	var bpmTextY:Float;
 	var bpmTextScale:Float;

@@ -5,12 +5,17 @@ class Highscore
 	public static var weekScores:Map<String, Int> = new Map();
 	public static var songScores:Map<String, Int> = new Map<String, Int>();
 	public static var songRating:Map<String, Float> = new Map<String, Float>();
+	/** The rank badge earned on a song, as a FreeplayRankTier value. Absent means never cleared. */
+	public static var songRanks:Map<String, String> = new Map<String, String>();
 
 	public static function resetSong(song:String, diff:Int = 0):Void
 	{
 		var daSong:String = formatSong(song, diff);
 		setScore(daSong, 0);
 		setRating(daSong, 0);
+		songRanks.remove(daSong);
+		FlxG.save.data.songRanks = songRanks;
+		FlxG.save.flush();
 	}
 
 	public static function resetWeek(week:String, diff:Int = 0):Void
@@ -19,7 +24,7 @@ class Highscore
 		setWeekScore(daWeek, 0);
 	}
 
-	public static function saveScore(song:String, score:Int = 0, ?diff:Int = 0, ?rating:Float = -1):Void
+	public static function saveScore(song:String, score:Int = 0, ?diff:Int = 0, ?rating:Float = -1, ?rank:String = null):Void
 	{
 		if(song == null) return;
 		var daSong:String = formatSong(song, diff);
@@ -30,12 +35,14 @@ class Highscore
 			{
 				setScore(daSong, score);
 				if(rating >= 0) setRating(daSong, rating);
+				if(rank != null) setRank(daSong, rank);
 			}
 		}
 		else
 		{
 			setScore(daSong, score);
 			if(rating >= 0) setRating(daSong, rating);
+			if(rank != null) setRank(daSong, rank);
 		}
 	}
 
@@ -77,6 +84,14 @@ class Highscore
 		FlxG.save.flush();
 	}
 
+	static function setRank(song:String, rank:String):Void
+	{
+		// Reminder that I don't need to format this song, it should come formatted!
+		songRanks.set(song, rank);
+		FlxG.save.data.songRanks = songRanks;
+		FlxG.save.flush();
+	}
+
 	public static function formatSong(song:String, diff:Int):String
 	{
 		return Paths.formatToSongPath(song) + Difficulty.getFilePath(diff);
@@ -100,6 +115,19 @@ class Highscore
 		return songRating.get(daSong);
 	}
 
+	/**
+	 * The rank badge saved for a song, or null where there is none.
+	 *
+	 * Unlike the score and the accuracy this is not defaulted into existence on a miss, because
+	 * "never played" and "played badly" are different things on a capsule - the first shows no
+	 * badge at all.
+	 */
+	public static function getRank(song:String, diff:Int):Null<String>
+	{
+		var daSong:String = formatSong(song, diff);
+		return songRanks.exists(daSong) ? songRanks.get(daSong) : null;
+	}
+
 	public static function getWeekScore(week:String, diff:Int):Int
 	{
 		var daWeek:String = formatSong(week, diff);
@@ -119,5 +147,8 @@ class Highscore
 
 		if (FlxG.save.data.songRating != null)
 			songRating = FlxG.save.data.songRating;
+
+		if (FlxG.save.data.songRanks != null)
+			songRanks = FlxG.save.data.songRanks;
 	}
 }

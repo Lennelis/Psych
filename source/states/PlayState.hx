@@ -2927,7 +2927,13 @@ class PlayState extends MusicBeatState
 			#if !switch
 			var percent:Float = ratingPercent;
 			if(Math.isNaN(percent)) percent = 0;
-			Highscore.saveScore(Song.loadedSongName, songScore, storyDifficulty, percent);
+
+			// The badge freeplay shows. Worked out here because it needs the judgement spread and
+			// the miss count, which only the run that just ended knows - see FreeplayRankTier.
+			var earnedRank:String = states.freeplay.FreeplaySongData.FreeplayRankTier.fromPerformance(
+				songMisses, ratingsData[0].hits, ratingsData[1].hits, ratingsData[2].hits, ratingsData[3].hits);
+
+			Highscore.saveScore(Song.loadedSongName, songScore, storyDifficulty, percent, earnedRank);
 			#end
 			playbackRate = 1;
 
@@ -3069,6 +3075,13 @@ class PlayState extends MusicBeatState
 
 		if(daRating.noteSplash && !note.noteSplashData.disabled)
 			spawnNoteSplashOnNote(note);
+
+		// V-Slice breaks the combo on a bad or a shit without counting a miss for it -
+		// JUDGEMENT_BAD_COMBO_BREAK and JUDGEMENT_SHIT_COMBO_BREAK in its Constants. Psych only
+		// ever broke on an actual miss, so a run of bads kept a combo that was not one, and an
+		// "FC" could be full of them. The zero is left to display, the way V-Slice pops a 0 combo
+		// when it breaks one of ten or more.
+		if(daRating.name == 'bad' || daRating.name == 'shit') combo = 0;
 
 		if(!cpuControlled) {
 			songScore += score;

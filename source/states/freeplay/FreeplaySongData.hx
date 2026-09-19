@@ -96,8 +96,19 @@ class FreeplaySongData
 	public function getAccuracy(difficulty:String):Float
 		return Highscore.getRating(formatted(), difficultyIndex(difficulty));
 
+	/**
+	 * The badge saved for a difficulty, or NONE where the song has never been finished.
+	 *
+	 * Read rather than derived, because the tier depends on the miss count and the judgement
+	 * spread, and nothing but the run that earned it knows those. A score saved before ranks
+	 * existed has no badge and does not get one invented for it.
+	 */
 	public function getRank(difficulty:String):FreeplayRankTier
-		return FreeplayRankTier.fromAccuracy(getAccuracy(difficulty), getScore(difficulty));
+	{
+		var saved:Null<String> = Highscore.getRank(formatted(), difficultyIndex(difficulty));
+		if (saved == null) return NONE;
+		return saved;
+	}
 
 	/**
 	 * The number printed under DIFFICULTY on the capsule.
@@ -225,19 +236,38 @@ enum abstract FreeplayRankTier(String) from String to String
 	var PERFECT = 'PERFECT';
 	var PERFECT_GOLD = 'PERFECTSICK';
 
-	/** V-Slice's thresholds, and its name for the animation on the badge sheet. */
-	public static function fromAccuracy(accuracy:Float, score:Int):FreeplayRankTier
+	/**
+	 * The badge a run earns, from how it was played rather than from its accuracy.
+	 *
+	 * Accuracy alone cannot tell a full combo from a run that dropped twenty notes and made
+	 * them up elsewhere, and the full combo is the thing a badge is meant to be about. So this
+	 * reads Psych's own FC tiers - the ones the results screen already prints:
+	 *
+	 *   SFC   every note sick, nothing dropped      gold P
+	 *   GFC   goods allowed, nothing worse          purple P
+	 *   FC    a bad or a shit, still nothing missed  E
+	 *   SDCB  under ten misses                       E
+	 *   Clear ten to twenty misses                   G
+	 *         over twenty                            L
+	 *
+	 * GREAT is on the badge sheet and unreachable here, because these tiers do not divide
+	 * anywhere that would earn it. It stays in the enum for anyone who wants to map to it.
+	 */
+	public static function fromPerformance(misses:Int, sicks:Int, goods:Int, bads:Int, shits:Int):FreeplayRankTier
 	{
-		// Nothing saved at all. A score with no accuracy is an old save, from before
-		// Psych kept one, and there is no honest rank to give that.
-		if (score <= 0 || accuracy < 0) return NONE;
+		// No note of any kind was judged, so there is nothing to rank.
+		if (sicks + goods + bads + shits + misses <= 0) return NONE;
 
-		if (accuracy >= 1) return PERFECT_GOLD;
-		if (accuracy >= 0.99) return PERFECT;
-		if (accuracy >= 0.9) return EXCELLENT;
-		if (accuracy >= 0.8) return GREAT;
-		if (accuracy >= 0.6) return GOOD;
-		return LOSS;
+		if (misses > 20) return LOSS;
+
+		if (misses == 0)
+		{
+			if (bads > 0 || shits > 0) return EXCELLENT;
+			if (goods > 0) return PERFECT;
+			return PERFECT_GOLD;
+		}
+
+		return (misses < 10) ? EXCELLENT : GOOD;
 	}
 
 	/** Colour the capsule flashes when a rank lands. V-Slice's palette. */

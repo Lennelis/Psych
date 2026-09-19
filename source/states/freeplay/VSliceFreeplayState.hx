@@ -7,6 +7,7 @@ import flixel.FlxCamera;
 import flixel.FlxObject;
 import flixel.group.FlxSpriteGroup.FlxTypedSpriteGroup;
 import flixel.text.FlxText;
+import options.GameplayChangersSubstate;
 import shaders.freeplay.AngleMask;
 import shaders.freeplay.HSVShader;
 import shaders.freeplay.PureColor;
@@ -752,6 +753,22 @@ class VSliceFreeplayState extends MusicBeatState
 		if (controls.BACK) goBack();
 
 		if (controls.ACCEPT && currentCapsule != null && currentCapsule.onConfirm != null) currentCapsule.onConfirm();
+
+		// Psych's modifiers, on the key Psych's own freeplay uses for them. V-Slice has no
+		// equivalent menu to copy the binding from, and anyone coming from Psych will already
+		// reach for CTRL here. Previews keep playing underneath, since the substate does not
+		// touch the music and stopping it would restart the song on the way back.
+		if (FlxG.keys.justPressed.CONTROL)
+		{
+			persistentUpdate = false;
+			openSubState(new GameplayChangersSubstate());
+		}
+	}
+
+	override function closeSubState():Void
+	{
+		persistentUpdate = true;
+		super.closeSubState();
 	}
 
 	/**
