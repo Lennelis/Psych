@@ -153,6 +153,7 @@ class VSliceFreeplayState extends MusicBeatState
 	var diffSelRight:DifficultySelector;
 
 	public var funnyCam:FlxCamera;
+	var camSubState:FlxCamera;
 
 	/** The card behind where the DJ will go. */
 	var backingCard:BackingCard;
@@ -416,6 +417,15 @@ class VSliceFreeplayState extends MusicBeatState
 		letterSort.inputCamera = funnyCam;
 
 		setUpRankAnim();
+
+		// Substates get whatever camera flixel hands them, which is the default one - and the
+		// default one is drawn *below* funnyCam, whose backdrop now covers the whole screen.
+		// So the modifiers menu was opening behind an opaque background: still taking input,
+		// which is why it could be heard but not seen. One of its own, added last so it is
+		// above everything the menu draws.
+		camSubState = new FlxCamera();
+		camSubState.bgColor = FlxColor.TRANSPARENT;
+		FlxG.cameras.add(camSubState, false);
 
 		#if TOUCH_CONTROLS_ALLOWED
 		addVirtualPad(FULL, A_B);
@@ -815,7 +825,10 @@ class VSliceFreeplayState extends MusicBeatState
 		if (FlxG.keys.justPressed.CONTROL)
 		{
 			persistentUpdate = false;
-			openSubState(new GameplayChangersSubstate());
+
+			var changers:GameplayChangersSubstate = new GameplayChangersSubstate();
+			openSubState(changers);
+			changers.cameras = [camSubState];
 		}
 
 		// F5 replays the rank animation on the highlighted song without having to earn one,
