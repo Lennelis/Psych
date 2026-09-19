@@ -1331,12 +1331,92 @@ class VSliceFreeplayState extends MusicBeatState
 		rankVignette.cameras = [funnyCam];
 	}
 
+	/**
+	 * Everything the running animation owns, so a second run can take it all back.
+	 *
+	 * The sequence is five timers deep and leaves tweens running on two cameras, the capsule,
+	 * its badge and its target position. Left alone, a second run inherits all of it: the first
+	 * run's four-second failsafe lands in the middle of the second and yanks the capsule home
+	 * before its rank arrives, camera zoom tweens stack into a zoom far past 1.8, and a capsule
+	 * whose restore never ran stays frozen out of the list with doLerp off.
+	 */
+	var rankTimers:Array<FlxTimer> = [];
+	var rankingCapsule:SongMenuItem = null;
+
+	function rankTimer(delay:Float, callback:FlxTimer->Void):Void
+		rankTimers.push(new FlxTimer().start(delay, callback));
+
+	function releaseRankTimers():Void
+	{
+		for (timer in rankTimers)
+			if (timer != null) timer.cancel();
+		rankTimers.resize(0);
+	}
+
+	/**
+	 * Hands the ranked capsule back to the list: off the rank camera, done being written to by
+	 * the animation's tweens, and sitting where the list expects it. Everything here is about
+	 * the capsule alone, because this also runs at the natural end of the animation - where the
+	 * cameras are still easing back and should be left to.
+	 */
+	function restoreRankedCapsule():Void
+	{
+		var capsule:SongMenuItem = rankingCapsule;
+		rankingCapsule = null;
+		if (capsule == null) return;
+
+		IntervalShake.stopShaking(capsule);
+		FlxTween.cancelTweensOf(capsule);
+		FlxTween.cancelTweensOf(capsule.targetPos);
+		FlxTween.cancelTweensOf(capsule.ranking);
+		FlxTween.cancelTweensOf(capsule.blurredRanking);
+
+		capsule.angle = 0;
+		capsule.ranking.scale.set(1, 1);
+		capsule.blurredRanking.scale.set(1, 1);
+		capsule.fakeRanking.visible = false;
+		capsule.fakeBlurredRanking.visible = false;
+		capsule.targetPos.set(rankOriginalPos.x, rankOriginalPos.y);
+		capsule.setPosition(rankOriginalPos.x, rankOriginalPos.y);
+		capsule.doLerp = true;
+		capsule.cameras = [funnyCam];
+	}
+
+	/**
+	 * Everything back as it was, including the parts a finished animation is allowed to leave
+	 * settling. For starting a run over the top of another, not for ending one cleanly.
+	 */
+	function cancelRankAnim():Void
+	{
+		releaseRankTimers();
+
+		FlxTween.cancelTweensOf(rankCamera);
+		FlxTween.cancelTweensOf(funnyCam);
+		FlxTween.cancelTweensOf(rankBg);
+		FlxTween.cancelTweensOf(rankVignette);
+
+		for (capsule in grpCapsules.members)
+			if (capsule != null) IntervalShake.stopShaking(capsule);
+
+		restoreRankedCapsule();
+
+		rankCamera.zoom = 1;
+		funnyCam.zoom = 1;
+		rankBg.alpha = 0;
+		rankVignette.alpha = 0;
+		sparks.visible = sparksAdd.visible = false;
+	}
+
 	function rankAnimStart(params:RankAnimParams):Void
 	{
 		var capsule:SongMenuItem = currentCapsule;
 		if (capsule == null) return;
 
+		// Anything still in flight from a previous run belongs to that run, not this one.
+		cancelRankAnim();
+
 		uiState = RankAnimating;
+		rankingCapsule = capsule;
 
 		clearPreviews();
 		if (FlxG.sound.music != null) FlxG.sound.music.volume = 0;
@@ -1363,6 +1443,8 @@ class VSliceFreeplayState extends MusicBeatState
 		{
 			capsule.fakeRanking.rank = params.oldRank;
 			capsule.fakeBlurredRanking.rank = params.oldRank;
+			capsule.fakeRanking.visible = true;
+			capsule.fakeBlurredRanking.visible = true;
 			capsule.fakeRanking.alpha = 1;
 			sparksAdd.color = params.oldRank.getColor();
 		}
@@ -1375,11 +1457,12 @@ class VSliceFreeplayState extends MusicBeatState
 
 		capsule.setPosition((FlxG.width / 2) - (capsule.capsule.width / 2), (FlxG.height / 2) - (capsule.capsule.height / 2));
 
-		new FlxTimer().start(0.5, function(_) rankDisplayNew(params, capsule));
+		rankTimer(0.5, function(_) rankDisplayNew(params, capsule));
 
 		// A menu that cannot be left is worse than one that skips its flourish. If any step of
-		// the sequence fails to arrive, this puts the capsule back and hands control over.
-		new FlxTimer().start(4, function(_)
+		// the sequence fails to arrive, this puts the capsule back and hands control over. It is
+		// tracked like the rest, so it dies with its own run rather than landing in the next.
+		rankTimer(4, function(_)
 		{
 			if (uiState == RankAnimating) rankAnimFinish(capsule);
 		});
@@ -1399,7 +1482,7 @@ class VSliceFreeplayState extends MusicBeatState
 		FlxTween.tween(capsule.ranking, {'scale.x': 0.9, 'scale.y': 0.9}, 0.1);
 		FlxTween.tween(capsule.blurredRanking, {'scale.x': 0.9, 'scale.y': 0.9}, 0.1);
 
-		new FlxTimer().start(0.1, function(_)
+		rankTimer(0.1, function(_)
 		{
 			capsule.fakeRanking.visible = false;
 			capsule.fakeBlurredRanking.visible = false;
@@ -1426,14 +1509,14 @@ class VSliceFreeplayState extends MusicBeatState
 			IntervalShake.shake(capsule, 0.3, 1 / 30, 0.1, 0, FlxEase.quadOut);
 		});
 
-		new FlxTimer().start(0.4, function(_)
+		rankTimer(0.4, function(_)
 		{
 			FlxTween.tween(funnyCam, {zoom: 1}, 0.8, {ease: FlxEase.sineIn});
 			FlxTween.tween(rankCamera, {zoom: 1.2}, 0.8, {ease: FlxEase.backIn});
 			FlxTween.tween(capsule, {x: rankOriginalPos.x - 7, y: rankOriginalPos.y - 80}, 1.3, {ease: FlxEase.quartIn});
 		});
 
-		new FlxTimer().start(0.6, function(_) rankAnimSlam(params, capsule));
+		rankTimer(0.6, function(_) rankAnimSlam(params, capsule));
 	}
 
 	function rankAnimSlam(params:RankAnimParams, capsule:SongMenuItem):Void
@@ -1443,7 +1526,7 @@ class VSliceFreeplayState extends MusicBeatState
 
 		FlxTween.tween(capsule.targetPos, {x: rankOriginalPos.x, y: rankOriginalPos.y}, 0.5, {ease: FlxEase.expoOut});
 
-		new FlxTimer().start(0.5, function(_)
+		rankTimer(0.5, function(_)
 		{
 			// The flight tween from rankDisplayNew still has a few tenths left to run, and it
 			// writes x/y every frame - so it has to go before anything sets a final position,
@@ -1476,7 +1559,7 @@ class VSliceFreeplayState extends MusicBeatState
 				var distance:Float = Math.abs(index - curSelected) - 1;
 				if (distance >= 5) continue;
 
-				new FlxTimer().start(distance / 20, function(_) IntervalShake.shake(other, 0.3, 1 / 30, 0.06, 0, FlxEase.quadOut));
+				rankTimer(distance / 20, function(_) IntervalShake.shake(other, 0.3, 1 / 30, 0.06, 0, FlxEase.quadOut));
 			}
 
 			IntervalShake.shake(capsule, 0.6, 1 / 24, 0.12, 0, FlxEase.quadOut, function(_) rankAnimFinish(capsule));
@@ -1487,19 +1570,16 @@ class VSliceFreeplayState extends MusicBeatState
 	{
 		if (uiState != RankAnimating) return;
 
-		// Before anything else, because stopShaking below fires the shake's completion
-		// callback - which is this function - and the guard above is what stops that
-		// re-entering and starting the song preview a second time.
+		// Before the teardown, because that stops the shake whose completion callback is this
+		// function - and the guard above is what keeps that from re-entering and starting the
+		// song preview twice.
 		uiState = Idle;
 
-		IntervalShake.stopShaking(capsule);
-		capsule.setPosition(rankOriginalPos.x, rankOriginalPos.y);
-		capsule.targetPos.set(rankOriginalPos.x, rankOriginalPos.y);
-		capsule.angle = 0;
-		rankBg.alpha = 0;
-
-		capsule.doLerp = true;
-		capsule.cameras = [funnyCam];
+		// Only the capsule. The cameras are mid-elastic and the vignette mid-fade, and both are
+		// heading exactly where they should - cutting them here is what made the end of the
+		// animation snap rather than settle.
+		releaseRankTimers();
+		restoreRankedCapsule();
 		capsule.sparkle.alpha = 0.7;
 
 		playCurSongPreview(capsule);
