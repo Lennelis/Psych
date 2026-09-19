@@ -803,9 +803,10 @@ class VSliceFreeplayState extends MusicBeatState
 		if (FlxG.keys.justPressed.F5 && currentCapsule != null && currentCapsule.freeplayData != null)
 		{
 			var previous:FreeplayRankTier = currentCapsule.ranking.rank;
+			var oldRank:Null<FreeplayRankTier> = previous.exists() ? previous : null;
 			testRankIndex = (testRankIndex + 1) % TEST_RANKS.length;
 
-			rankAnimStart({oldRank: previous.exists() ? previous : null, newRank: TEST_RANKS[testRankIndex]});
+			rankAnimStart({oldRank: oldRank, newRank: TEST_RANKS[testRankIndex]});
 		}
 	}
 

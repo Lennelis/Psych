@@ -2946,11 +2946,8 @@ class PlayState extends MusicBeatState
 
 				// Freeplay picks this up on the way in. Story mode does not pass through it, so
 				// it would be left sitting for whenever freeplay next opened.
-				if (!isStoryMode)
-					VSliceFreeplayState.pendingRankAnim = {
-						oldRank: previousRank.exists() ? previousRank : null,
-						newRank: earnedRank
-					};
+				var knockedOff:Null<FreeplayRankTier> = previousRank.exists() ? previousRank : null;
+				if (!isStoryMode) VSliceFreeplayState.pendingRankAnim = {oldRank: knockedOff, newRank: earnedRank};
 			}
 			#end
 			playbackRate = 1;

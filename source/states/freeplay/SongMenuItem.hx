@@ -484,7 +484,13 @@ class SongMenuItem extends FlxSpriteGroup
 		impactThing.alpha = 0;
 		FlxTween.tween(impactThing.scale, {x: 2.5, y: 2.5}, 0.5);
 
-		evilTrail = new FlxTrail(impactThing, null, 15, 0.03, 0.01, 0.069);
+		// V-Slice passes (15, 0.03, 0.01, 0.069) here, but its flixel-addons is a fork whose
+		// FlxTrail takes a Float delay. Ours is 3.2.2, where the signature is
+		// (target, graphic, length:Int, delay:Int, alpha:Float, diff:Float) - a delay counted in
+		// frames, and an alpha that is the first ghost's own rather than a scale factor. Copying
+		// their numbers would not compile, and the 0.01 would be invisible if it did. So: fifteen
+		// ghosts, one per frame, fading from 0.4 to nothing across the length of the trail.
+		evilTrail = new FlxTrail(impactThing, null, 15, 0, 0.4, 0.025);
 		evilTrail.blend = BlendMode.ADD;
 		evilTrail.color = ((newRank != null) ? newRank : ranking.rank).getColor();
 
