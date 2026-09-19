@@ -139,22 +139,36 @@ class FreeplayBackdrop extends FlxSpriteGroup
 	/**
 	 * AARRGGBB, as the rest of the freeplay's files write colours.
 	 *
-	 * Through FlxColor.fromString rather than Std.parseInt: a value with the alpha byte set is
-	 * past what a signed 32-bit Int holds, and parseInt has no obligation to do anything
-	 * sensible with that.
+	 * One byte at a time, and deliberately not through FlxColor.fromString. That takes the whole
+	 * string to Std.parseInt, and a colour with its alpha byte set - anything from 0x80000000 up
+	 * - is larger than a signed 32-bit Int holds. What comes back is saturated rather than
+	 * wrapped, so every opaque colour arrived as white: the purple wash rendered as plain
+	 * menuDesat and the cyan checker as a faint grey one. Four bytes read separately are each at
+	 * most 0xFF, so there is nothing to overflow.
 	 */
 	static function parseColor(value:String, fallback:FlxColor):FlxColor
 	{
 		if (value == null) return fallback;
 
 		var clean:String = value.trim();
-		if (clean.length < 1) return fallback;
 		if (clean.charAt(0) == '#') clean = clean.substr(1);
-		if (clean.substr(0, 2).toLowerCase() != '0x') clean = '0x' + clean;
+		if (clean.substr(0, 2).toLowerCase() == '0x') clean = clean.substr(2);
 
-		var parsed:Null<FlxColor> = FlxColor.fromString(clean);
-		return (parsed != null) ? parsed : fallback;
+		// Six digits is an opaque colour written without its alpha.
+		if (clean.length == 6) clean = 'FF' + clean;
+		if (clean.length != 8) return fallback;
+
+		var a:Null<Int> = byteAt(clean, 0);
+		var r:Null<Int> = byteAt(clean, 2);
+		var g:Null<Int> = byteAt(clean, 4);
+		var b:Null<Int> = byteAt(clean, 6);
+		if (a == null || r == null || g == null || b == null) return fallback;
+
+		return FlxColor.fromRGB(r, g, b, a);
 	}
+
+	static function byteAt(hex:String, at:Int):Null<Int>
+		return Std.parseInt('0x' + hex.substr(at, 2));
 
 	static function readSettings():FreeplayBackdropSettings
 	{

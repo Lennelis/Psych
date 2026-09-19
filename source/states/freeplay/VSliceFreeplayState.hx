@@ -4,6 +4,7 @@ import backend.Highscore;
 import backend.IntervalShake;
 import backend.Song;
 import backend.WeekData;
+import flixel.FlxBasic;
 import flixel.FlxCamera;
 import flixel.FlxObject;
 import openfl.display.BlendMode;
@@ -362,10 +363,10 @@ class VSliceFreeplayState extends MusicBeatState
 		exitMovers.set([fpScoreDisplay, fnfHighscoreSpr, clearBoxSprite], {x: FlxG.width, speed: 0.3});
 		exitMovers.set([txtCompletion], {x: FlxG.width * 1.05, speed: 0.315});
 
-		add(letterSort);
+		// The letter sorter is not added. Kept as an object because its selection callback and
+		// its exit mover are wired up below and further down, and an object nothing updates is
+		// quieter than unpicking both.
 		letterSort.visible = false;
-
-		exitMovers.set([letterSort], {y: -100, speed: 0.3});
 
 		// Reminder, this is a callback function being set, rather than these being called here in create()
 		letterSort.changeSelectionCallback = function(str:String)
@@ -495,7 +496,6 @@ class VSliceFreeplayState extends MusicBeatState
 
 		diffSelLeft.visible = true;
 		diffSelRight.visible = true;
-		letterSort.visible = true;
 
 		exitMovers.set([diffSelLeft, diffSelRight], {x: -diffSelLeft.width * 2, speed: 0.26});
 
@@ -1079,6 +1079,12 @@ class VSliceFreeplayState extends MusicBeatState
 	{
 		clearPreviews();
 
+		// A rank animation opens on silence and starts the preview itself at the end. Without
+		// this the song that was just finished starts playing the moment the menu settles, then
+		// gets cut a third of a second later when the animation takes over - which is the song
+		// briefly playing again on the way back from a run.
+		if (queuedRankAnim != null || uiState == RankAnimating) return;
+
 		var capsule:SongMenuItem = currentCapsule;
 		previewTimers.push(new FlxTimer().start(FADE_IN_DELAY, function(_) playCurSongPreview(capsule)));
 	}
@@ -1358,13 +1364,28 @@ class VSliceFreeplayState extends MusicBeatState
 		// crash on the way into the menu, which is what a wrong position cost the first time.
 		if (backingCard != null)
 		{
-			if (backingCard.pinkBack != null) backingCard.pinkBack.visible = false;
-			if (backingCard.orangeBackShit != null) backingCard.orangeBackShit.visible = false;
-			if (backingCard.alsoOrangeLOL != null) backingCard.alsoOrangeLOL.visible = false;
+			// `exists`, not `visible`. The card turns its own pieces back on in three places -
+			// the entrance, the skip and the confirm - and one of them runs after this does,
+			// which is how the yellow stripe came back. A sprite that does not exist is neither
+			// drawn nor updated, and none of those three sets that.
+			retire(backingCard.pinkBack);
+			retire(backingCard.orangeBackShit);
+			retire(backingCard.alsoOrangeLOL);
+			retire(backingCard.cardGlow);
+			retire(backingCard.backingTextYeah);
 		}
 
 		if (backingImage != null) backingImage.visible = false;
 		if (blackOverlayBullshitLOLXD != null) blackOverlayBullshitLOLXD.visible = false;
+	}
+
+	static function retire(sprite:FlxBasic):Void
+	{
+		if (sprite == null) return;
+
+		sprite.exists = false;
+		sprite.visible = false;
+		sprite.active = false;
 	}
 
 	function restoreRankCameras():Void
