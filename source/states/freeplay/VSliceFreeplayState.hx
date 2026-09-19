@@ -261,7 +261,6 @@ class VSliceFreeplayState extends MusicBeatState
 		add(backingCard);
 		backingCard.build();
 		backingCard.applyExitMovers(exitMovers);
-		if (USE_MENU_BACKGROUND) hideVSliceBackdrop();
 
 		// The DJ is an Adobe Animate atlas authored at the full 1280x720, so he is
 		// positioned by moving the whole stage rather than by placing a sprite - which is
@@ -288,6 +287,10 @@ class VSliceFreeplayState extends MusicBeatState
 		blackOverlayBullshitLOLXD.updateHitbox();
 
 		exitMovers.set([blackOverlayBullshitLOLXD, backingImage], {x: FlxG.width * 1.5, speed: 0.4, wait: 0});
+
+		// Here and not up with the card: the black panel is built a good thirty lines below it,
+		// so hiding the backdrop any earlier reaches for a sprite that does not exist yet.
+		if (USE_MENU_BACKGROUND) hideVSliceBackdrop();
 
 		add(grpDifficulties);
 		add(backingImage);
@@ -1351,11 +1354,17 @@ class VSliceFreeplayState extends MusicBeatState
 	 */
 	function hideVSliceBackdrop():Void
 	{
-		backingCard.pinkBack.visible = false;
-		backingCard.orangeBackShit.visible = false;
-		backingCard.alsoOrangeLOL.visible = false;
-		backingImage.visible = false;
-		blackOverlayBullshitLOLXD.visible = false;
+		// Null-guarded so moving this call again is a backdrop that does not hide rather than a
+		// crash on the way into the menu, which is what a wrong position cost the first time.
+		if (backingCard != null)
+		{
+			if (backingCard.pinkBack != null) backingCard.pinkBack.visible = false;
+			if (backingCard.orangeBackShit != null) backingCard.orangeBackShit.visible = false;
+			if (backingCard.alsoOrangeLOL != null) backingCard.alsoOrangeLOL.visible = false;
+		}
+
+		if (backingImage != null) backingImage.visible = false;
+		if (blackOverlayBullshitLOLXD != null) blackOverlayBullshitLOLXD.visible = false;
 	}
 
 	function restoreRankCameras():Void
