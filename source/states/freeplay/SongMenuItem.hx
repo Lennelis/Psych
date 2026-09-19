@@ -1,6 +1,7 @@
 package states.freeplay;
 import states.freeplay.FreeplaySongData.FreeplayRankTier;
 
+import flixel.addons.effects.FlxTrail;
 import flixel.group.FlxGroup;
 import flixel.group.FlxSpriteGroup;
 import flixel.math.FlxPoint;
@@ -119,6 +120,16 @@ class SongMenuItem extends FlxSpriteGroup
 	public var favIcon:FlxSprite;
 	public var ranking:FreeplayRank;
 	public var blurredRanking:FreeplayRank;
+
+	/**
+	 * The badge a capsule wore *before* the run that is being celebrated.
+	 *
+	 * The rank animation needs both at once - the old one sitting there while the new one
+	 * slams in on top of it - so there is a second pair rather than one that gets swapped.
+	 * Hidden and unused at every other moment.
+	 */
+	public var fakeRanking:FreeplayRank;
+	public var fakeBlurredRanking:FreeplayRank;
 	public var targetPos:FlxPoint = new FlxPoint();
 	public var doLerp:Bool = false;
 	public var doJumpIn:Bool = false;
@@ -219,6 +230,15 @@ class SongMenuItem extends FlxSpriteGroup
 		blurredRanking = new FreeplayRank(ranking.x, ranking.y);
 		blurredRanking.shader = new GaussianBlurShader(1);
 		add(blurredRanking);
+
+		fakeRanking = new FreeplayRank(ranking.x, ranking.y);
+		fakeRanking.visible = false;
+		add(fakeRanking);
+
+		fakeBlurredRanking = new FreeplayRank(ranking.x, ranking.y);
+		fakeBlurredRanking.shader = new GaussianBlurShader(1);
+		fakeBlurredRanking.visible = false;
+		add(fakeBlurredRanking);
 
 		sparkle = new FlxSprite(ranking.x, ranking.y);
 		sparkle.frames = Paths.getSparrowAtlas('freeplay/sparkle');
@@ -371,7 +391,7 @@ class SongMenuItem extends FlxSpriteGroup
 		var clipSize:Int = 290;
 		var clipType:Int = 0;
 
-		if (ranking.visible)
+		if (ranking.visible || fakeRanking.visible)
 		{
 			favIconBlurred.x = this.x + 370;
 			favIcon.x = favIconBlurred.x;
@@ -437,6 +457,70 @@ class SongMenuItem extends FlxSpriteGroup
 				case 1: difficultyNumbers[i].digit = newRating % 10;
 				default:
 			}
+		}
+	}
+
+	var evilTrail:FlxTrail;
+	var impactThing:FlxSprite;
+	var hasTrail:Bool = false;
+
+	/**
+	 * The burst a capsule gives off when a new rank lands on it: a copy of the capsule art
+	 * blown up to two and a half times, trailed and tinted to the rank's colour, fading out
+	 * from behind the capsule itself.
+	 *
+	 * The copy exists because the trail has to follow something that is growing, and the real
+	 * capsule is busy being slammed into place by its own tweens.
+	 */
+	public function fadeAnim(?newRank:FreeplayRankTier):Void
+	{
+		if (hasTrail) clearUpTrail();
+		hasTrail = true;
+
+		impactThing = new FlxSprite(0, 0);
+		impactThing.frames = capsule.frames;
+		impactThing.frame = capsule.frame;
+		impactThing.updateHitbox();
+		impactThing.alpha = 0;
+		FlxTween.tween(impactThing.scale, {x: 2.5, y: 2.5}, 0.5);
+
+		evilTrail = new FlxTrail(impactThing, null, 15, 0.03, 0.01, 0.069);
+		evilTrail.blend = BlendMode.ADD;
+		evilTrail.color = ((newRank != null) ? newRank : ranking.rank).getColor();
+
+		// Behind everything else on the capsule. V-Slice sorts by an explicit zIndex; this
+		// group draws in insertion order, so the two go in at the bottom instead.
+		insert(0, evilTrail);
+		insert(0, impactThing);
+
+		FlxTween.tween(evilTrail, {alpha: 0}, 0.6, {
+			ease: FlxEase.quadOut,
+			onComplete: function(_)
+			{
+				clearUpTrail();
+				hasTrail = false;
+			}
+		});
+	}
+
+	/** The colour the last fadeAnim is burning in, for the vignette to match. */
+	public function getTrailColor():FlxColor
+		return (evilTrail != null) ? evilTrail.color : FlxColor.WHITE;
+
+	function clearUpTrail():Void
+	{
+		if (evilTrail != null)
+		{
+			remove(evilTrail, true);
+			evilTrail.destroy();
+			evilTrail = null;
+		}
+
+		if (impactThing != null)
+		{
+			remove(impactThing, true);
+			impactThing.destroy();
+			impactThing = null;
 		}
 	}
 

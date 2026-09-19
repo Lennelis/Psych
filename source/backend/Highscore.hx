@@ -24,7 +24,7 @@ class Highscore
 		setWeekScore(daWeek, 0);
 	}
 
-	public static function saveScore(song:String, score:Int = 0, ?diff:Int = 0, ?rating:Float = -1, ?rank:String = null):Void
+	public static function saveScore(song:String, score:Int = 0, ?diff:Int = 0, ?rating:Float = -1):Void
 	{
 		if(song == null) return;
 		var daSong:String = formatSong(song, diff);
@@ -35,14 +35,12 @@ class Highscore
 			{
 				setScore(daSong, score);
 				if(rating >= 0) setRating(daSong, rating);
-				if(rank != null) setRank(daSong, rank);
 			}
 		}
 		else
 		{
 			setScore(daSong, score);
 			if(rating >= 0) setRating(daSong, rating);
-			if(rank != null) setRank(daSong, rank);
 		}
 	}
 
@@ -82,6 +80,17 @@ class Highscore
 		songRating.set(song, rating);
 		FlxG.save.data.songRating = songRating;
 		FlxG.save.flush();
+	}
+
+	/**
+	 * Kept apart from saveScore on purpose. A score only counts when it beats the old one, and
+	 * a rank is not the same question - a careful run can earn a better badge while scoring
+	 * less than a reckless one did. Whoever calls this decides whether it is an improvement.
+	 */
+	public static function saveRank(song:String, rank:String, ?diff:Int = 0):Void
+	{
+		if(song == null || rank == null) return;
+		setRank(formatSong(song, diff), rank);
 	}
 
 	static function setRank(song:String, rank:String):Void

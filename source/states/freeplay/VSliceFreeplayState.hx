@@ -1,10 +1,12 @@
 package states.freeplay;
 
 import backend.Highscore;
+import backend.IntervalShake;
 import backend.Song;
 import backend.WeekData;
 import flixel.FlxCamera;
 import flixel.FlxObject;
+import openfl.display.BlendMode;
 import flixel.group.FlxSpriteGroup.FlxTypedSpriteGroup;
 import flixel.text.FlxText;
 import options.GameplayChangersSubstate;
@@ -88,6 +90,16 @@ class VSliceFreeplayState extends MusicBeatState
 	 * The difficulty we were on when this menu was last accessed.
 	 */
 	public static var rememberedDifficulty:String = null;
+
+	/**
+	 * Set by PlayState when a run earns a better badge than the song had. Consumed once, by
+	 * the next freeplay to open - a static rather than a constructor argument because six
+	 * different places build this menu, all of them through FreeplayHub.
+	 */
+	public static var pendingRankAnim:Null<RankAnimParams> = null;
+
+	/** The above, once this state has taken it, waiting for the menu to finish arriving. */
+	var queuedRankAnim:Null<RankAnimParams> = null;
 
 	var songs:Array<FreeplaySongData> = [];
 	var curSelected:Int = 0;
@@ -189,6 +201,12 @@ class VSliceFreeplayState extends MusicBeatState
 		}
 
 		persistentUpdate = true;
+
+		// Which song it lands on needs no saying: rememberedSongName and rememberedDifficulty
+		// were set when the song was picked, and this menu already reopens on them. Carrying a
+		// name through PlayState as well would only give the two a way to disagree.
+		queuedRankAnim = pendingRankAnim;
+		pendingRankAnim = null;
 
 		// Dropped so the capsules read their position file again - editing it and coming back
 		// into freeplay is the whole point of it being a file.
@@ -374,6 +392,8 @@ class VSliceFreeplayState extends MusicBeatState
 		forEach(function(basic) basic.cameras = [funnyCam]);
 		letterSort.inputCamera = funnyCam;
 
+		setUpRankAnim();
+
 		#if TOUCH_CONTROLS_ALLOWED
 		addVirtualPad(FULL, A_B);
 		addVirtualPadCamera();
@@ -495,6 +515,17 @@ class VSliceFreeplayState extends MusicBeatState
 
 		backingImage.visible = true;
 		backingCard.introDone();
+
+		// Last, so the menu is fully arrived and the capsules are where they belong before one
+		// of them gets picked up. A short beat after, because landing a rank on the same frame
+		// the list settles reads as a glitch rather than a flourish.
+		if (queuedRankAnim != null)
+		{
+			var params:RankAnimParams = queuedRankAnim;
+			queuedRankAnim = null;
+			uiState = RankAnimating;
+			new FlxTimer().start(0.3, function(_) rankAnimStart(params));
+		}
 	}
 
 	/**
@@ -608,6 +639,7 @@ class VSliceFreeplayState extends MusicBeatState
 		}
 
 		if (funnyCam != null) forEach(function(basic) basic.cameras = [funnyCam]);
+		restoreRankCameras();
 
 		rememberSelection();
 		changeSelection();
@@ -763,7 +795,25 @@ class VSliceFreeplayState extends MusicBeatState
 			persistentUpdate = false;
 			openSubState(new GameplayChangersSubstate());
 		}
+
+		// F5 replays the rank animation on the highlighted song without having to earn one,
+		// stepping to the next tier each press so all six can be seen in a row. Nothing is
+		// written to the save - the badge goes back to the real one on the next selection
+		// change - so this cannot award a rank by accident.
+		if (FlxG.keys.justPressed.F5 && currentCapsule != null && currentCapsule.freeplayData != null)
+		{
+			var previous:FreeplayRankTier = currentCapsule.ranking.rank;
+			testRankIndex = (testRankIndex + 1) % TEST_RANKS.length;
+
+			rankAnimStart({oldRank: previous.exists() ? previous : null, newRank: TEST_RANKS[testRankIndex]});
+		}
 	}
+
+	static final TEST_RANKS:Array<FreeplayRankTier> = [
+		FreeplayRankTier.LOSS, FreeplayRankTier.GOOD, FreeplayRankTier.GREAT,
+		FreeplayRankTier.EXCELLENT, FreeplayRankTier.PERFECT, FreeplayRankTier.PERFECT_GOLD
+	];
+	var testRankIndex:Int = -1;
 
 	override function closeSubState():Void
 	{
@@ -1200,6 +1250,284 @@ class VSliceFreeplayState extends MusicBeatState
 		});
 	}
 
+	// ---------------------------------------------------------------------------------------
+	// The rank animation. V-Slice's rankAnimStart -> rankDisplayNew -> rankAnimSlam -> finish,
+	// with its timings kept. What is missing is the DJ, who in V-Slice fist-pumps through all
+	// of it; there is nobody to pump here, so those calls are simply absent rather than faked.
+	// ---------------------------------------------------------------------------------------
+
+	var rankCamera:FlxCamera;
+	var rankBg:FlxSprite;
+	var rankVignette:FlxSprite;
+	var sparks:FlxSprite;
+	var sparksAdd:FlxSprite;
+	var rankOriginalPos:FlxPoint = new FlxPoint();
+
+	function setUpRankAnim():Void
+	{
+		// The capsule being ranked is moved onto a camera of its own so it can be flung to the
+		// middle of the screen and zoomed into without dragging the rest of the menu with it.
+		rankCamera = new FlxCamera();
+		rankCamera.bgColor = FlxColor.TRANSPARENT;
+		FlxG.cameras.add(rankCamera, false);
+
+		rankBg = new FlxSprite().makeGraphic(FlxG.width, FlxG.height, 0xD3000000);
+		rankBg.scrollFactor.set();
+		rankBg.alpha = 0;
+		rankBg.cameras = [rankCamera];
+
+		// Directly beneath the capsules rather than on the end of the list. A camera does not
+		// reorder anything - the state's member order is the draw order - so appending this
+		// would black out the very capsule it is meant to be sitting behind.
+		var capsuleLayer:Int = members.indexOf(grpCapsules);
+		if (capsuleLayer < 0) add(rankBg);
+		else insert(capsuleLayer, rankBg);
+
+		rankVignette = new FlxSprite().loadGraphic(Paths.image('freeplay/rankVignette'));
+		rankVignette.scrollFactor.set();
+		rankVignette.scale.set(2, 2);
+		rankVignette.updateHitbox();
+		rankVignette.blend = BlendMode.ADD;
+		rankVignette.alpha = 0;
+		rankVignette.cameras = [funnyCam];
+		add(rankVignette);
+
+		sparks = new FlxSprite();
+		sparks.frames = Paths.getSparrowAtlas('freeplay/sparks');
+		sparks.animation.addByPrefix('sparks', 'sparks', 24, false);
+		sparks.setPosition(517, 134);
+		sparks.scale.set(0.5, 0.5);
+		sparks.blend = BlendMode.ADD;
+		sparks.visible = false;
+		sparks.cameras = [rankCamera];
+		add(sparks);
+
+		sparksAdd = new FlxSprite();
+		sparksAdd.frames = Paths.getSparrowAtlas('freeplay/sparksadd');
+		sparksAdd.animation.addByPrefix('sparks add', 'sparks add', 24, false);
+		sparksAdd.setPosition(498, 116);
+		sparksAdd.scale.set(0.5, 0.5);
+		sparksAdd.blend = BlendMode.ADD;
+		sparksAdd.visible = false;
+		sparksAdd.cameras = [rankCamera];
+		add(sparksAdd);
+	}
+
+	/**
+	 * Puts the rank sprites back on their own camera.
+	 *
+	 * generateSongList ends by sweeping every member onto funnyCam, and it runs again every
+	 * time the letter filter changes - so without this the backdrop and the sparks quietly
+	 * migrate off the rank camera partway through a session.
+	 */
+	function restoreRankCameras():Void
+	{
+		if (rankCamera == null) return;
+
+		rankBg.cameras = [rankCamera];
+		sparks.cameras = [rankCamera];
+		sparksAdd.cameras = [rankCamera];
+		rankVignette.cameras = [funnyCam];
+	}
+
+	function rankAnimStart(params:RankAnimParams):Void
+	{
+		var capsule:SongMenuItem = currentCapsule;
+		if (capsule == null) return;
+
+		uiState = RankAnimating;
+
+		clearPreviews();
+		if (FlxG.sound.music != null) FlxG.sound.music.volume = 0;
+
+		capsule.sparkle.alpha = 0;
+		capsule.doLerp = false;
+		capsule.cameras = [rankCamera];
+
+		// Where it has to come back to. Read off the capsule rather than written down, so the
+		// slam lands wherever the list actually puts the selected song.
+		rankOriginalPos.set(capsule.targetPos.x, capsule.targetPos.y);
+
+		rankBg.alpha = 1;
+		rankCamera.fade(FlxColor.BLACK, 0.5, true, null, true);
+
+		// The badge it is losing, sitting there to be knocked off. With nothing to knock off,
+		// the new one simply arrives and there are no sparks.
+		capsule.ranking.visible = false;
+		capsule.blurredRanking.visible = false;
+		capsule.fakeRanking.visible = false;
+		capsule.fakeBlurredRanking.visible = false;
+
+		if (params.oldRank != null)
+		{
+			capsule.fakeRanking.rank = params.oldRank;
+			capsule.fakeBlurredRanking.rank = params.oldRank;
+			capsule.fakeRanking.alpha = 1;
+			sparksAdd.color = params.oldRank.getColor();
+		}
+
+		rankCamera.zoom = 1.85;
+		FlxTween.tween(rankCamera, {zoom: 1.8}, 0.6, {ease: FlxEase.sineIn});
+
+		funnyCam.zoom = 1.15;
+		FlxTween.tween(funnyCam, {zoom: 1.1}, 0.6, {ease: FlxEase.sineIn});
+
+		capsule.setPosition((FlxG.width / 2) - (capsule.capsule.width / 2), (FlxG.height / 2) - (capsule.capsule.height / 2));
+
+		new FlxTimer().start(0.5, function(_) rankDisplayNew(params, capsule));
+
+		// A menu that cannot be left is worse than one that skips its flourish. If any step of
+		// the sequence fails to arrive, this puts the capsule back and hands control over.
+		new FlxTimer().start(4, function(_)
+		{
+			if (uiState == RankAnimating) rankAnimFinish(capsule);
+		});
+	}
+
+	function rankDisplayNew(params:RankAnimParams, capsule:SongMenuItem):Void
+	{
+		// Twenty times its size and shrunk in a tenth of a second, which is what makes it read
+		// as a stamp coming down rather than a sprite appearing.
+		capsule.ranking.visible = true;
+		capsule.blurredRanking.visible = true;
+		capsule.ranking.rank = params.newRank;
+		capsule.blurredRanking.rank = params.newRank;
+		capsule.ranking.scale.set(20, 20);
+		capsule.blurredRanking.scale.set(20, 20);
+
+		FlxTween.tween(capsule.ranking, {'scale.x': 0.9, 'scale.y': 0.9}, 0.1);
+		FlxTween.tween(capsule.blurredRanking, {'scale.x': 0.9, 'scale.y': 0.9}, 0.1);
+
+		new FlxTimer().start(0.1, function(_)
+		{
+			capsule.fakeRanking.visible = false;
+			capsule.fakeBlurredRanking.visible = false;
+
+			if (params.oldRank != null)
+			{
+				sparks.visible = sparksAdd.visible = true;
+				sparks.animation.play('sparks', true);
+				sparksAdd.animation.play('sparks add', true);
+				sparks.animation.finishCallback = function(_) sparks.visible = sparksAdd.visible = false;
+			}
+
+			FlxG.sound.play(Paths.sound(rankImpactSound(params.newRank)));
+
+			rankCamera.zoom = 1.3;
+			FlxTween.tween(rankCamera, {zoom: 1.5}, 0.3, {ease: FlxEase.backInOut});
+			FlxTween.tween(funnyCam, {zoom: 1.05}, 0.3, {ease: FlxEase.elasticOut});
+
+			capsule.x -= 10;
+			capsule.y -= 20;
+			capsule.angle = -3;
+			FlxTween.tween(capsule, {angle: 0}, 0.5, {ease: FlxEase.backOut});
+
+			IntervalShake.shake(capsule, 0.3, 1 / 30, 0.1, 0, FlxEase.quadOut);
+		});
+
+		new FlxTimer().start(0.4, function(_)
+		{
+			FlxTween.tween(funnyCam, {zoom: 1}, 0.8, {ease: FlxEase.sineIn});
+			FlxTween.tween(rankCamera, {zoom: 1.2}, 0.8, {ease: FlxEase.backIn});
+			FlxTween.tween(capsule, {x: rankOriginalPos.x - 7, y: rankOriginalPos.y - 80}, 1.3, {ease: FlxEase.quartIn});
+		});
+
+		new FlxTimer().start(0.6, function(_) rankAnimSlam(params, capsule));
+	}
+
+	function rankAnimSlam(params:RankAnimParams, capsule:SongMenuItem):Void
+	{
+		FlxTween.tween(rankBg, {alpha: 0}, 0.5, {ease: FlxEase.expoIn});
+		FlxG.sound.play(Paths.sound(rankSlamSound(params.newRank)));
+
+		FlxTween.tween(capsule.targetPos, {x: rankOriginalPos.x, y: rankOriginalPos.y}, 0.5, {ease: FlxEase.expoOut});
+
+		new FlxTimer().start(0.5, function(_)
+		{
+			// The flight tween from rankDisplayNew still has a few tenths left to run, and it
+			// writes x/y every frame - so it has to go before anything sets a final position,
+			// or the capsule drifts back out of place under the shake. The angle tween is
+			// collateral and is started again below.
+			FlxTween.cancelTweensOf(capsule);
+			IntervalShake.stopShaking(capsule);
+
+			funnyCam.shake(0.0045, 0.35);
+
+			rankCamera.zoom = 0.8;
+			funnyCam.zoom = 0.8;
+			FlxTween.tween(rankCamera, {zoom: 1}, 1, {ease: FlxEase.elasticOut});
+			FlxTween.tween(funnyCam, {zoom: 1}, 0.8, {ease: FlxEase.elasticOut});
+
+			capsule.fadeAnim(params.newRank);
+			rankVignette.color = capsule.getTrailColor();
+			rankVignette.alpha = 1;
+			FlxTween.tween(rankVignette, {alpha: 0}, 0.6, {ease: FlxEase.expoOut});
+
+			capsule.doLerp = false;
+			capsule.setPosition(rankOriginalPos.x, rankOriginalPos.y);
+			FlxTween.tween(capsule, {angle: 0}, 0.5, {ease: FlxEase.backOut});
+
+			// The rest of the list flinches away from it, furthest first.
+			for (index => other in grpCapsules.members)
+			{
+				if (other == null || index == curSelected) continue;
+
+				var distance:Float = Math.abs(index - curSelected) - 1;
+				if (distance >= 5) continue;
+
+				new FlxTimer().start(distance / 20, function(_) IntervalShake.shake(other, 0.3, 1 / 30, 0.06, 0, FlxEase.quadOut));
+			}
+
+			IntervalShake.shake(capsule, 0.6, 1 / 24, 0.12, 0, FlxEase.quadOut, function(_) rankAnimFinish(capsule));
+		});
+	}
+
+	function rankAnimFinish(capsule:SongMenuItem):Void
+	{
+		if (uiState != RankAnimating) return;
+
+		// Before anything else, because stopShaking below fires the shake's completion
+		// callback - which is this function - and the guard above is what stops that
+		// re-entering and starting the song preview a second time.
+		uiState = Idle;
+
+		IntervalShake.stopShaking(capsule);
+		capsule.setPosition(rankOriginalPos.x, rankOriginalPos.y);
+		capsule.targetPos.set(rankOriginalPos.x, rankOriginalPos.y);
+		capsule.angle = 0;
+		rankBg.alpha = 0;
+
+		capsule.doLerp = true;
+		capsule.cameras = [funnyCam];
+		capsule.sparkle.alpha = 0.7;
+
+		playCurSongPreview(capsule);
+	}
+
+	/** The thud as the badge lands. V-Slice keys this off the new rank, not the old. */
+	function rankImpactSound(rank:FreeplayRankTier):String
+	{
+		return switch (rank)
+		{
+			case LOSS: 'ranks/rankinbad';
+			case PERFECT, PERFECT_GOLD: 'ranks/rankinperfect';
+			default: 'ranks/rankinnormal';
+		}
+	}
+
+	/** The fanfare as the capsule slams home. */
+	function rankSlamSound(rank:FreeplayRankTier):String
+	{
+		return switch (rank)
+		{
+			case GOOD: 'ranks/good';
+			case GREAT: 'ranks/great';
+			case EXCELLENT: 'ranks/excellent';
+			case PERFECT, PERFECT_GOLD: 'ranks/perfect';
+			default: 'ranks/loss';
+		}
+	}
+
 	override function destroy():Void
 	{
 		clearPreviews();
@@ -1241,12 +1569,27 @@ typedef MoveData =
 
 typedef ExitMoverData = Map<Array<FlxSprite>, MoveData>;
 
+/**
+ * What a just-finished song wants the freeplay to celebrate.
+ *
+ * `oldRank` is null when the song had never been ranked, which is the difference between
+ * a badge appearing out of nothing and one being knocked off by a better one - the sparks
+ * only play for the second.
+ */
+typedef RankAnimParams =
+{
+	var ?oldRank:FreeplayRankTier;
+	var newRank:FreeplayRankTier;
+}
+
 /** What the menu is doing, and so what it will listen to. V-Slice's `UIStateMachine`. */
 enum abstract FreeplayUIState(String)
 {
 	var EnteringFreeplay;
 	var Idle;
 	var Exiting;
+	/** A rank is landing on a capsule. Everything is on hold until it has. */
+	var RankAnimating;
 }
 
 /**

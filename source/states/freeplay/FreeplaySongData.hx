@@ -287,6 +287,24 @@ enum abstract FreeplayRankTier(String) from String to String
 
 	public inline function exists():Bool
 		return (cast this : FreeplayRankTier) != NONE;
+
+	/**
+	 * How good this tier is, for asking whether a run beat what was already saved. Higher wins.
+	 * GREAT keeps its place even though the tiers above never produce it.
+	 */
+	public function weight():Int
+	{
+		return switch (cast this : FreeplayRankTier)
+		{
+			case LOSS: 1;
+			case GOOD: 2;
+			case GREAT: 3;
+			case EXCELLENT: 4;
+			case PERFECT: 5;
+			case PERFECT_GOLD: 6;
+			default: 0;
+		}
+	}
 }
 
 /**

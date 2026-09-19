@@ -23,6 +23,8 @@ import cutscenes.DialogueBoxPsych;
 
 import states.StoryMenuState;
 import states.FreeplayState;
+import states.freeplay.FreeplaySongData.FreeplayRankTier;
+import states.freeplay.VSliceFreeplayState;
 import states.editors.ChartingState;
 import states.editors.CharacterEditorState;
 
@@ -2928,12 +2930,28 @@ class PlayState extends MusicBeatState
 			var percent:Float = ratingPercent;
 			if(Math.isNaN(percent)) percent = 0;
 
-			// The badge freeplay shows. Worked out here because it needs the judgement spread and
-			// the miss count, which only the run that just ended knows - see FreeplayRankTier.
-			var earnedRank:String = states.freeplay.FreeplaySongData.FreeplayRankTier.fromPerformance(
-				songMisses, ratingsData[0].hits, ratingsData[1].hits, ratingsData[2].hits, ratingsData[3].hits);
+			Highscore.saveScore(Song.loadedSongName, songScore, storyDifficulty, percent);
 
-			Highscore.saveScore(Song.loadedSongName, songScore, storyDifficulty, percent, earnedRank);
+			// The badge freeplay shows. Worked out here because it needs the judgement spread
+			// and the miss count, which only the run that just ended knows - see FreeplayRankTier.
+			var earnedRank:FreeplayRankTier = FreeplayRankTier.fromPerformance(songMisses, ratingsData[0].hits, ratingsData[1].hits,
+				ratingsData[2].hits, ratingsData[3].hits);
+
+			var savedRank:Null<String> = Highscore.getRank(Song.loadedSongName, storyDifficulty);
+			var previousRank:FreeplayRankTier = (savedRank != null) ? savedRank : FreeplayRankTier.NONE;
+
+			if (earnedRank.weight() > previousRank.weight())
+			{
+				Highscore.saveRank(Song.loadedSongName, earnedRank, storyDifficulty);
+
+				// Freeplay picks this up on the way in. Story mode does not pass through it, so
+				// it would be left sitting for whenever freeplay next opened.
+				if (!isStoryMode)
+					VSliceFreeplayState.pendingRankAnim = {
+						oldRank: previousRank.exists() ? previousRank : null,
+						newRank: earnedRank
+					};
+			}
 			#end
 			playbackRate = 1;
 
