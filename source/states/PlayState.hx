@@ -187,13 +187,6 @@ class PlayState extends MusicBeatState
 	public var camZoomingOffset:Float = 0;
 
 	/** How close to its resting zoom a camera has to get before it is just put there. */
-	/**
-	 * How close the stage camera has to get to its resting zoom before it is walked the rest of
-	 * the way in, and how long that walk takes. The band is about a pixel of travel at the screen
-	 * edge, crossed in three frames - see the settle in update().
-	 */
-	static inline var ZOOM_SETTLE_BAND:Float = 0.0015;
-	static inline var ZOOM_SETTLE_TIME:Float = 0.05;
 	private var curSong:String = "";
 
 	public var gfSpeed:Int = 1;
@@ -1891,34 +1884,19 @@ class PlayState extends MusicBeatState
 			camZoomBop *= zoomDecay;
 			if(Math.abs(camZoomBop) < 0.0001) camZoomBop = 0;
 			FlxG.camera.zoom = defaultCamZoom + camZoomBop;
+
+			if (camZooming) camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, zoomDecay);
 		}
 		else if (camZooming)
 		{
 			FlxG.camera.zoom = FlxMath.lerp(defaultCamZoom, FlxG.camera.zoom, zoomDecay);
-
-			// An exponential decay never actually arrives, so without help the camera settles at
-			// something like 0.9004 instead of 0.9 and stays there, with where a bop leaves it
-			// depending on the framerate and on exactly when it landed.
-			//
-			// Pinning it the moment it was close enough did fix that, but it moved the entire
-			// stage by up to a third of a pixel in a single frame at the end of every bop - a
-			// bigger step than the HUD's, and an instant one rather than a ramp. So below a band
-			// of about a pixel's travel it is walked in at a constant speed instead, crossing the
-			// band in three frames. No crawl, and no step large enough to see.
-			var gap:Float = FlxG.camera.zoom - defaultCamZoom;
-			if (gap != 0 && Math.abs(gap) < ZOOM_SETTLE_BAND)
-			{
-				var settle:Float = ZOOM_SETTLE_BAND * elapsed / ZOOM_SETTLE_TIME;
-				if (Math.abs(gap) <= settle) FlxG.camera.zoom = defaultCamZoom;
-				else FlxG.camera.zoom -= (gap > 0) ? settle : -settle;
-			}
+			camHUD.zoom = FlxMath.lerp(1, camHUD.zoom, zoomDecay);
 
 			// Kept in step with the camera while nothing is tweening, so a zoom starting mid-decay
 			// picks the bop up where it is rather than from zero. This also absorbs anything a
 			// script or stage wrote straight into camera.zoom.
 			camZoomBop = FlxG.camera.zoom - defaultCamZoom;
 		}
-		updateHudBop(elapsed);
 
 		FlxG.watch.addQuick("secShit", curSection);
 		FlxG.watch.addQuick("beatShit", curBeat);
@@ -2318,7 +2296,7 @@ class PlayState extends MusicBeatState
 
 					FlxG.camera.zoom += flValue1;
 					camZoomBop += flValue1;
-					bopHUD(flValue2);
+					camHUD.zoom += flValue2;
 				}
 
 			case 'Play Animation':
@@ -2646,92 +2624,6 @@ class PlayState extends MusicBeatState
 	 * instead of decaying, which is what made bopping during a zoom look wrong.
 	 */
 	var camZoomBop:Float = 0;
-
-	/**
-	 * How long a HUD bop takes to rise to its peak and then fall all the way back, in seconds at 1x.
-	 * The rise is a handful of frames - long enough that the HUD arrives instead of appearing there.
-	 */
-	static inline var HUD_BOP_RISE:Float = 0.08;
-	static inline var HUD_BOP_FALL:Float = 0.92;
-
-	/**
-	 * How much of the fall's tail to cut off.
-	 *
-	 * A cubic arrives at rest with no speed left, so the last stretch of it crawls: a third of a
-	 * second spent between one pixel of travel and none. That stretch is where the HUD looks like
-	 * it is jittering rather than moving, so the curve is shifted down by this much and rescaled -
-	 * it now reaches zero early, and crosses the last pixel in about two frames instead of twenty.
-	 */
-	static inline var HUD_BOP_CUT:Float = 0.04;
-
-	/** The live HUD bop: where it set off from, what it climbs to, and how far into it we are. */
-	var hudBopStart:Float = 0;
-	var hudBopPeak:Float = 0;
-	var hudBopTime:Float = -1;
-
-	/**
-	 * The HUD bop used to be an exponential decay toward 1, the same shape the stage camera uses.
-	 * An exponential never arrives, so for about a second after every bop the HUD crept back
-	 * through offsets too small to read as a zoom and still large enough to move everything drawn
-	 * on it by a fraction of a pixel - and the threshold that finally pinned it to 1 did so in a
-	 * single jump. None of that shows on a stage, which is soft and mostly still; on sharp UI it
-	 * reads as the whole HUD shifting just as the bop looks finished.
-	 *
-	 * So the fall is a curve with an end instead of an asymptote. Cubed, it keeps the shape of the
-	 * old decay over the part anyone can see - the half-life lands within a couple of hundredths
-	 * of a second of where it was - and then it reaches exactly 1 and stops.
-	 *
-	 * The rise is eased for the same reason the fall has an end. Going straight to the peak puts
-	 * the whole HUD somewhere else between one frame and the next, and a jump the eye cannot
-	 * follow reads as a shake rather than as a bop. Half a dozen frames is enough for it to read
-	 * as one movement out and back.
-	 *
-	 * The tail is cut for a different reason again, and it is the one that was actually being
-	 * seen. A zoom of 1.0003 moves nothing far enough to notice, but it still resamples every
-	 * sprite on the camera - and sharp UI, outlined text and one-pixel note edges most of all,
-	 * does not survive being resampled by a hair. The edges redistribute between neighbouring
-	 * pixels, and doing that continuously for a third of a second at the end of every bop reads
-	 * as the HUD rapidly changing position by a tiny amount. It is not movement, it is filtering.
-	 * There is no way to be slightly zoomed and crisp, so the fix is to be there for as little
-	 * time as possible: see HUD_BOP_CUT.
-	 */
-	function updateHudBop(elapsed:Float)
-	{
-		if(hudBopTime < 0) return;
-
-		hudBopTime += elapsed * camZoomingDecay * playbackRate;
-
-		if(hudBopTime < HUD_BOP_RISE)
-		{
-			camHUD.zoom = 1 + FlxMath.lerp(hudBopStart, hudBopPeak, FlxEase.sineOut(hudBopTime / HUD_BOP_RISE));
-			return;
-		}
-
-		var fall:Float = 1 - (hudBopTime - HUD_BOP_RISE) / HUD_BOP_FALL;
-		var shaped:Float = (fall > 0) ? (fall * fall * fall - HUD_BOP_CUT) / (1 - HUD_BOP_CUT) : 0;
-		if(shaped <= 0)
-		{
-			hudBopStart = hudBopPeak = 0;
-			hudBopTime = -1;
-			camHUD.zoom = 1;
-			return;
-		}
-
-		camHUD.zoom = 1 + hudBopPeak * shaped;
-	}
-
-	/**
-	 * Starts the HUD bop over, setting off from wherever the HUD is rather than from rest, so bops
-	 * landing on top of each other stack instead of cutting one another off.
-	 */
-	public function bopHUD(amount:Float)
-	{
-		if(amount == 0) return;
-
-		hudBopStart = camHUD.zoom - 1;
-		hudBopPeak = hudBopStart + amount;
-		hudBopTime = 0;
-	}
 
 	public function cancelCameraFollowTween()
 	{
@@ -4045,7 +3937,7 @@ class PlayState extends MusicBeatState
 		FlxG.camera.zoom += amount;
 		camZoomBop += amount;
 
-		bopHUD(0.03 * camZoomingMult * ClientPrefs.data.hudBopStrength);
+		camHUD.zoom += 0.03 * camZoomingMult;
 	}
 
 	/** A step tick waiting to be turned into a bop, and whether it began a section. */
