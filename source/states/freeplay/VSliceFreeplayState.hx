@@ -907,6 +907,12 @@ class VSliceFreeplayState extends MusicBeatState
 		intendedCompletion = (daSong != null) ? Math.max(0, daSong.getAccuracy(currentDifficulty)) : 0;
 		rememberedSongName = (daSong != null) ? daSong.songName : null;
 
+		// The background takes the song's own colour - the same one that tints its capsule.
+		// Instant while the menu is still arriving, because there is nothing to move away from
+		// yet and a transition on the first frame reads as the menu booting in the wrong colour.
+		if (freeplayBackdrop != null)
+			freeplayBackdrop.setSong((daSong != null) ? daSong.color : null, !introDone);
+
 		changeDiff();
 		currentCapsule.refreshDisplay(currentDifficulty);
 
