@@ -133,14 +133,33 @@ class FreeplayBackdrop extends FlxSpriteGroup
 		checker.color = check;
 	}
 
+	/**
+	 * HSL saturation, which is not what FlxColor.saturation gives you.
+	 *
+	 * That property is the HSB one - `(max - min) / max` - while `lightness` and `fromHSL` are
+	 * HSL. Reading one and passing it to the other is a round trip that does not come back:
+	 * week 1's 9271FD reports 0.553 as HSB against 0.972 as HSL, so every colour arrived washed
+	 * out and grey next to what the preview drew.
+	 */
+	static function hslSaturation(color:FlxColor):Float
+	{
+		var mx:Float = Math.max(color.redFloat, Math.max(color.greenFloat, color.blueFloat));
+		var mn:Float = Math.min(color.redFloat, Math.min(color.greenFloat, color.blueFloat));
+		var spread:Float = mx - mn;
+		if (spread <= 0) return 0;
+
+		var light:Float = (mx + mn) / 2;
+		return (light > 0.5) ? spread / (2 - mx - mn) : spread / (mx + mn);
+	}
+
 	/** The song's own colour, adjusted - a very dark or very grey week needs lifting. */
 	function washFor(song:FlxColor):FlxColor
-		return FlxColor.fromHSL(song.hue, clamp01(song.saturation * settings.bgSaturation),
+		return FlxColor.fromHSL(song.hue, clamp01(hslSaturation(song) * settings.bgSaturation),
 			clamp01(song.lightness + settings.bgLightness));
 
 	/** Described as a distance from the wash, so every song keeps the same relationship. */
 	function checkerFor(wash:FlxColor):FlxColor
-		return FlxColor.fromHSL(wash.hue + settings.hueApart, clamp01(wash.saturation + settings.saturationApart),
+		return FlxColor.fromHSL(wash.hue + settings.hueApart, clamp01(hslSaturation(wash) + settings.saturationApart),
 			clamp01(wash.lightness + settings.lightnessApart));
 
 	/**
@@ -167,7 +186,8 @@ class FreeplayBackdrop extends FlxSpriteGroup
 			else if (delta < -180) delta += 360;
 		}
 
-		return FlxColor.fromHSL(from.hue + delta * t, from.saturation + (to.saturation - from.saturation) * t,
+		var fromSat:Float = hslSaturation(from), toSat:Float = hslSaturation(to);
+		return FlxColor.fromHSL(from.hue + delta * t, fromSat + (toSat - fromSat) * t,
 			from.lightness + (to.lightness - from.lightness) * t);
 	}
 
