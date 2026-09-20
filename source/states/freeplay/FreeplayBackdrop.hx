@@ -122,7 +122,7 @@ class FreeplayBackdrop extends FlxSpriteGroup
 		var washT:Float = clamp01(elapsedMs / settings.transitionMs);
 		var checkT:Float = clamp01((elapsedMs - settings.checkerLagMs) / settings.transitionMs);
 
-		apply(blend(washFrom, washTo, ease(washT)), blend(checkerFrom, checkerTo, ease(checkT)));
+		apply(mixColors(washFrom, washTo, ease(washT)), mixColors(checkerFrom, checkerTo, ease(checkT)));
 
 		if (washT >= 1 && checkT >= 1) elapsedMs = -1;
 	}
@@ -144,13 +144,14 @@ class FreeplayBackdrop extends FlxSpriteGroup
 			clamp01(wash.lightness + settings.lightnessApart));
 
 	/**
-	 * Mixes two colours.
+	 * Mixes two colours. Not called `blend` - FlxSprite already has a field by that name, and
+	 * shadowing it is a compile error rather than a quiet surprise, which is the good outcome.
 	 *
 	 * Through hue by default, because a straight line between two colours in RGB passes near
 	 * grey when they are close to opposite - gold to indigo visibly desaturates halfway. Going
 	 * round the wheel keeps the colour saturated the whole way across.
 	 */
-	function blend(from:FlxColor, to:FlxColor, t:Float):FlxColor
+	function mixColors(from:FlxColor, to:FlxColor, t:Float):FlxColor
 	{
 		if (settings.blend == 'rgb') return FlxColor.interpolate(from, to, t);
 
