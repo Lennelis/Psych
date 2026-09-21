@@ -94,6 +94,27 @@ class MusicBeatState extends FlxState
 		return virtualPadCamera;
 	}
 
+	/**
+	 * One extra on-screen button, for something a keyboard reaches with a key and a
+	 * touchscreen otherwise cannot reach at all.
+	 *
+	 * Drawn on the pad's own camera where there is one, for the same reason the pad is:
+	 * a button is hit-tested against the camera it says it is on, so one riding a camera
+	 * that moves takes its taps with it.
+	 */
+	public function addTouchButton(label:String, x:Float, y:Float, width:Int, height:Int, onPress:Void->Void):TouchButton
+	{
+		var button:TouchButton = new TouchButton(x, y, [label.toLowerCase()]);
+		button.setGraphic(label, width, height);
+		button.antialiasing = ClientPrefs.data.antialiasing;
+		button.idleAlpha = ClientPrefs.data.controlsAlpha;
+		button.alpha = button.idleAlpha;
+		button.onDown.add(function(_) onPress());
+		button.cameras = [(virtualPadCamera != null) ? virtualPadCamera : camera];
+		add(button);
+		return button;
+	}
+
 	public function removeVirtualPad():Void
 	{
 		if (virtualPad != null)

@@ -448,6 +448,11 @@ class VSliceFreeplayState extends MusicBeatState
 		#if TOUCH_CONTROLS_ALLOWED
 		addVirtualPad(FULL, A_B);
 		addVirtualPadCamera();
+
+		// CTRL has no equivalent on a touchscreen, so the modifiers menu had no way in at all.
+		// Between the d-pad on the left and the action buttons on the right, which is the one
+		// part of the bottom edge the pad leaves alone.
+		modsButton = addTouchButton('MODS', (FlxG.width - 180) / 2, FlxG.height - 94, 180, 70, openModifiers);
 		#end
 
 		// The menu's own track, in place of whatever the main menu left playing.
@@ -711,6 +716,9 @@ class VSliceFreeplayState extends MusicBeatState
 
 		if (funnyCam != null) forEach(function(basic) basic.cameras = [funnyCam]);
 		restoreRankCameras();
+		#if TOUCH_CONTROLS_ALLOWED
+		restoreTouchCameras();
+		#end
 
 		rememberSelection();
 		changeSelection();
@@ -838,6 +846,18 @@ class VSliceFreeplayState extends MusicBeatState
 		}
 	}
 
+	/** The modifiers menu, from the CTRL key or the on-screen button that stands in for it. */
+	function openModifiers():Void
+	{
+		if (!canInteract()) return;
+
+		persistentUpdate = false;
+
+		var changers:GameplayChangersSubstate = new GameplayChangersSubstate();
+		openSubState(changers);
+		changers.cameras = [camSubState];
+	}
+
 	static inline function snap(base:Float, target:Float, threshold:Float):Float
 		return Math.abs(base - target) <= threshold ? target : base;
 
@@ -865,14 +885,7 @@ class VSliceFreeplayState extends MusicBeatState
 		// equivalent menu to copy the binding from, and anyone coming from Psych will already
 		// reach for CTRL here. A preview keeps playing underneath, since the substate does not
 		// touch the music and stopping it would restart the song on the way back.
-		if (FlxG.keys.justPressed.CONTROL)
-		{
-			persistentUpdate = false;
-
-			var changers:GameplayChangersSubstate = new GameplayChangersSubstate();
-			openSubState(changers);
-			changers.cameras = [camSubState];
-		}
+		if (FlxG.keys.justPressed.CONTROL) openModifiers();
 
 		// F5 replays the rank animation on the highlighted song without having to earn one,
 		// stepping to the next tier each press so all six can be seen in a row. Nothing is
@@ -1502,6 +1515,26 @@ class VSliceFreeplayState extends MusicBeatState
 		sprite.visible = false;
 		sprite.active = false;
 	}
+
+	#if TOUCH_CONTROLS_ALLOWED
+	var modsButton:TouchButton;
+
+	/**
+	 * Puts the touch controls back on their own camera.
+	 *
+	 * Same reason `restoreRankCameras` exists: generateSongList sweeps every member onto
+	 * funnyCam and runs again on every filter and difficulty change, so anything that wants a
+	 * camera of its own has to say so again afterwards. A button is hit-tested against the
+	 * camera it claims, so one that quietly moved would stop answering where it is drawn.
+	 */
+	function restoreTouchCameras():Void
+	{
+		if (virtualPadCamera == null) return;
+
+		if (virtualPad != null) virtualPad.cameras = [virtualPadCamera];
+		if (modsButton != null) modsButton.cameras = [virtualPadCamera];
+	}
+	#end
 
 	function restoreRankCameras():Void
 	{

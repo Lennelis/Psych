@@ -192,7 +192,22 @@ class FreeplayState extends MusicBeatState
 
 		#if TOUCH_CONTROLS_ALLOWED
 		addVirtualPad(FULL, A_B_C);
+
+		// The tip line says to press CTRL for the modifiers, which a touchscreen cannot do.
+		// Between the d-pad and the action buttons, where the pad leaves the bottom edge free.
+		addTouchButton('MODS', (FlxG.width - 180) / 2, FlxG.height - 94, 180, 70, openModifiers);
 		#end
+	}
+
+	/** The modifiers menu, from the CTRL key or the on-screen button that stands in for it. */
+	function openModifiers():Void
+	{
+		// Not while the music player has the song up - that is what the key check did, and the
+		// button can be tapped in exactly the same state.
+		if(player.playingMusic) return;
+
+		persistentUpdate = false;
+		openSubState(new GameplayChangersSubstate());
 	}
 
 	override function closeSubState()
@@ -327,11 +342,7 @@ class FreeplayState extends MusicBeatState
 			}
 		}
 
-		if(FlxG.keys.justPressed.CONTROL && !player.playingMusic)
-		{
-			persistentUpdate = false;
-			openSubState(new GameplayChangersSubstate());
-		}
+		if(FlxG.keys.justPressed.CONTROL) openModifiers();
 		else if(FlxG.keys.justPressed.SPACE)
 		{
 			if(instPlaying != curSelected && !player.playingMusic)
