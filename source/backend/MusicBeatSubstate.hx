@@ -98,6 +98,28 @@ class MusicBeatSubstate extends FlxSubState
 		}
 	}
 
+	/**
+	 * Keeps the pad on whatever camera this substate ends up on.
+	 *
+	 * A pad is pinned to a camera by name, because a button is hit-tested against the camera
+	 * it claims rather than against wherever it is drawn. The name is taken when the pad is
+	 * made - and Psych's substates build themselves in their constructors, so that happens
+	 * before the state that opened one has had a chance to say which camera it wants it on.
+	 * The pad kept the default draw target it was born with while the rest of the substate
+	 * moved, and a state that draws over that target - freeplay's backdrop covers the screen -
+	 * then buried it: invisible, but still updating and still answering taps where it lay.
+	 *
+	 * A pad on a camera of its own asked for that camera, so it is left alone.
+	 */
+	override function set_cameras(value:Array<FlxCamera>):Array<FlxCamera>
+	{
+		super.set_cameras(value);
+
+		if (virtualPad != null && virtualPadCamera == null) virtualPad.cameras = value;
+
+		return value;
+	}
+
 	override function destroy():Void
 	{
 		removeVirtualPad();
