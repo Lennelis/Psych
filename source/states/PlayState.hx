@@ -2011,7 +2011,7 @@ class PlayState extends MusicBeatState
 		var playerHoldsDriven:Bool = holdStateFresh;
 		if(holdStateFresh)
 		{
-			updateHoldCoverState(heldLanes, heldSustains, heldPending);
+			updateStrumHoldState(heldLanes, heldSustains, heldPending);
 			holdStateFresh = false;
 		}
 		updateHoldCovers(playerHoldsDriven);
@@ -3181,6 +3181,10 @@ class PlayState extends MusicBeatState
 		var spr:StrumNote = playerStrums.members[key];
 		if(spr != null)
 		{
+			// keysCheck() maintains this every frame, but it runs after the strums update, so
+			// leaving it to that alone means the strum spends a frame acting on the wrong
+			// answer. Set it where we already know it.
+			spr.keyHeld = true;
 			if(strumsBlocked[key] != true && spr.animation.curAnim.name != 'confirm')
 			{
 				spr.playAnim('pressed');
@@ -3217,6 +3221,7 @@ class PlayState extends MusicBeatState
 		var spr:StrumNote = playerStrums.members[key];
 		if(spr != null)
 		{
+			spr.keyHeld = false;
 			spr.playAnim('static');
 			spr.resetAnim = 0;
 		}
@@ -3322,7 +3327,7 @@ class PlayState extends MusicBeatState
 	/**
 	 * Sees out the covers nothing else is driving.
 	 *
-	 * The player's normally end in `updateHoldCoverState`. This
+	 * The player's normally end in `updateStrumHoldState`, alongside the strum's glow. This
 	 * catches the cases where that never ran - botplay, or a cutscene starting mid-hold -
 	 * where there is no key to let go of and the chart's end is the whole story.
 	 *
@@ -3444,18 +3449,24 @@ class PlayState extends MusicBeatState
 	}
 
 	/**
-	 * Keeps the player's hold covers in step with what's actually held down.
+	 * Keeps the player's strums in step with what's actually held down.
 	 *
-	 * The strums themselves are Psych's, so they are not driven from here: a hit plays
-	 * `confirm` and the key going up plays `static`, with no bookkeeping in between.
+	 * Mirrors how V-Slice's Strumline behaves. A tapped note lets the confirm
+	 * animation play out and then waits `StrumNote.CONFIRM_HOLD_TIME` before falling
+	 * back to the ghost tap, while a sustain drops the instant it runs out - that
+	 * difference in timing is the whole point of it.
 	 */
-	function updateHoldCoverState(holdArray:Array<Bool>, sustainArray:Array<Bool>, holdPending:Array<Bool>):Void
+	function updateStrumHoldState(holdArray:Array<Bool>, sustainArray:Array<Bool>, holdPending:Array<Bool>):Void
 	{
 		for (i in 0...sustainArray.length)
 		{
 			if(i >= playerStrums.length) break;
 
-			// Worked out once and used for everything below.
+			var spr:StrumNote = playerStrums.members[i];
+			if(spr == null) continue;
+
+			// Worked out once and used for everything below, because the glow and the cover
+			// coming off the same answer is the whole point.
 			var reachedEnd:Bool = (i < holdEndTime.length && Conductor.songPosition >= holdEndTime[i])
 				|| holdTailConsumed(i);
 
@@ -3466,6 +3477,14 @@ class PlayState extends MusicBeatState
 			var holding:Bool = holdArray[i] && (sustainArray[i] || holdPending[i]
 				|| (wasHoldingSustain[i] && !reachedEnd));
 
+			spr.keyHeld = holdArray[i];
+			spr.holdingSustain = holding;
+
+			// Glow off and cover away, here, together. V-Slice does both in one branch of
+			// Strumline.updateNotes and that is not incidental: deciding them in two places meant
+			// two different answers to "is this hold over", and they drifted apart by however far
+			// the trail's end cap happened to be from a step of time - which moves with the BPM
+			// and the scroll speed, so it felt wrong differently in every song.
 			if(!holding)
 			{
 				var cover:HoldCover = (i < playerHoldCovers.length) ? playerHoldCovers[i] : null;
@@ -3480,7 +3499,11 @@ class PlayState extends MusicBeatState
 				}
 			}
 
-			if(wasHoldingSustain[i] && !holding) holdHead[i] = null;
+			if(wasHoldingSustain[i] && !holding)
+			{
+				spr.finishConfirm();
+				holdHead[i] = null;
+			}
 			wasHoldingSustain[i] = holding;
 		}
 	}
@@ -3677,7 +3700,7 @@ class PlayState extends MusicBeatState
 		}
 
 		if(opponentVocals.length <= 0) vocals.volume = 1;
-		strumPlayAnim(true, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate);
+		strumPlayAnim(true, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate, note.isSustainNote);
 		note.hitByOpponent = true;
 		startHoldCover(false, note);
 		
@@ -3762,9 +3785,13 @@ class PlayState extends MusicBeatState
 			if(!cpuControlled)
 			{
 				var spr = playerStrums.members[note.noteData];
-				if(spr != null) spr.playAnim('confirm', true);
+				if(spr != null)
+				{
+					if(isSus) spr.holdConfirm();
+					else spr.tapConfirm();
+				}
 			}
-			else strumPlayAnim(false, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate);
+			else strumPlayAnim(false, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / playbackRate, isSus);
 			vocals.volume = 1;
 
 			if (!note.isSustainNote)
@@ -4221,12 +4248,12 @@ class PlayState extends MusicBeatState
 	}
 
 	/**
-	 * Lights a strum for a note that just landed, and sets it to drop back after `time`.
+	 * Lights a strum for a note that just landed.
 	 *
-	 * The glow restarts on every note, a sustain's pieces included, which is what gives a
-	 * hold its pulse in step with the chart.
+	 * `isSustain` keeps a hold from restarting the glow on every piece; the timer is
+	 * still refreshed, so the strum stays lit for as long as pieces keep arriving.
 	 */
-	function strumPlayAnim(isDad:Bool, id:Int, time:Float) {
+	function strumPlayAnim(isDad:Bool, id:Int, time:Float, ?isSustain:Bool = false) {
 		var spr:StrumNote = null;
 		if(isDad) {
 			spr = opponentStrums.members[id];
@@ -4235,7 +4262,8 @@ class PlayState extends MusicBeatState
 		}
 
 		if(spr != null) {
-			spr.playAnim('confirm', true);
+			if(isSustain) spr.holdConfirm();
+			else spr.tapConfirm();
 			spr.resetAnim = time;
 		}
 	}
