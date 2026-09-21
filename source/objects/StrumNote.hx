@@ -66,6 +66,45 @@ class StrumNote extends FlxSprite
 	}
 
 	public var useRGBShader:Bool = true;
+
+	/** Whether this skin's own art wants recolouring. See `skinWantsStrumRGB`. */
+	var skinRGB:Bool = true;
+
+	/** Answers cached per skin, the way the splash caches its pixel variants. */
+	static var strumRGBBySkin:Map<String, Bool> = new Map<String, Bool>();
+
+	/**
+	 * Whether the colour shader may recolour a skin's strums.
+	 *
+	 * The shader multiplies a sheet's red, green and blue channels by the three colours in the
+	 * Note Colors setting, so strums have to be drawn in those three channels for it to come out
+	 * right. A skin drawn in finished colours instead says `"rgbStrums": false` in a json beside
+	 * its sheet and is left alone; running the shader over it a second time is what turned the
+	 * Vanilla skin's press and confirm art pale.
+	 *
+	 * Only the strums: notes are channel art in every skin here, so the Note Colors setting and
+	 * the red tint a hurt note puts on itself both keep working.
+	 */
+	public static function skinWantsStrumRGB(skin:String):Bool
+	{
+		if(skin == null) return true;
+		if(strumRGBBySkin.exists(skin)) return strumRGBBySkin.get(skin);
+
+		var allowed:Bool = true;
+		var path:String = 'images/$skin.json';
+		if(Paths.fileExists(path, TEXT))
+		{
+			try
+			{
+				var value:Dynamic = Reflect.field(haxe.Json.parse(Paths.getTextFromFile(path)), 'rgbStrums');
+				if(value != null) allowed = (value == true);
+			}
+			catch(e:Dynamic) trace('StrumNote: could not read $path ($e)');
+		}
+
+		strumRGBBySkin.set(skin, allowed);
+		return allowed;
+	}
 	public function new(x:Float, y:Float, leData:Int, player:Int) {
 		animation = new PsychAnimationController(this);
 
@@ -114,6 +153,8 @@ class StrumNote extends FlxSprite
 	{
 		var lastAnim:String = null;
 		if(animation.curAnim != null) lastAnim = animation.curAnim.name;
+
+		skinRGB = skinWantsStrumRGB(texture);
 
 		if(PlayState.isPixelStage)
 		{
@@ -318,6 +359,6 @@ class StrumNote extends FlxSprite
 			centerOffsets();
 			centerOrigin();
 		}
-		if(useRGBShader) rgbShader.enabled = (animation.curAnim != null && animation.curAnim.name != 'static');
+		if(useRGBShader) rgbShader.enabled = (skinRGB && animation.curAnim != null && animation.curAnim.name != 'static');
 	}
 }

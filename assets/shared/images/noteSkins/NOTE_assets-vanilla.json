@@ -1,0 +1,18 @@
+{
+	"_readme": [
+		"Settings for the Vanilla note skin. A skin only needs one of these if it wants something",
+		"other than the defaults; every other skin here ships without one.",
+		"",
+		"rgbStrums says whether the colour shader may recolour this skin's strums. The shader works",
+		"by multiplying the sheet's red, green and blue channels by the three colours in the Note",
+		"Colors setting, so a skin's strums have to be drawn in those three channels for it to come",
+		"out right. This skin's notes and holds are; its press and confirm art is not - it is drawn",
+		"in finished colours that no mix of those three reaches, so the shader washed it out. With",
+		"this off the strums are drawn as they are.",
+		"",
+		"The notes themselves are unaffected: they are channel art like every other skin, so the",
+		"Note Colors setting and the red tint on hurt notes both still work."
+	],
+
+	"rgbStrums": false
+}
