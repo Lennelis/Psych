@@ -1,5 +1,7 @@
 package mobile.objects;
 
+import mobile.backend.WidescreenScaleMode;
+
 import flixel.FlxG;
 import flixel.group.FlxSpriteGroup.FlxTypedSpriteGroup;
 import flixel.util.FlxColor;
@@ -55,6 +57,11 @@ class VirtualPad extends FlxTypedSpriteGroup<TouchButton>
 		actionMode = action;
 
 		scrollFactor.set();
+
+		// The device is asked here rather than trusted from the last window resize, which on a
+		// phone may have happened before there was a view to ask.
+		WidescreenScaleMode.refreshNotch();
+
 		buildDPad(dPad);
 		buildActions(action);
 	}
@@ -63,8 +70,12 @@ class VirtualPad extends FlxTypedSpriteGroup<TouchButton>
 	{
 		final size:Int = buttonSize;
 		final step:Int = size + GAP;
-		final left:Float = MARGIN;
-		final bottom:Float = FlxG.height - MARGIN - size;
+
+		// Held clear of whatever the device takes out of its own screen. A phone in landscape
+		// puts its cutout on one of the short edges, which is exactly where the two clusters
+		// live, and a d-pad half under a punch hole is a d-pad you cannot see to aim at.
+		final left:Float = MARGIN + WidescreenScaleMode.notchLeft;
+		final bottom:Float = FlxG.height - MARGIN - size - WidescreenScaleMode.notchBottom;
 
 		switch (mode)
 		{
@@ -93,8 +104,8 @@ class VirtualPad extends FlxTypedSpriteGroup<TouchButton>
 	{
 		final size:Int = buttonSize;
 		final step:Int = size + GAP;
-		final right:Float = FlxG.width - MARGIN - size;
-		final bottom:Float = FlxG.height - MARGIN - size;
+		final right:Float = FlxG.width - MARGIN - size - WidescreenScaleMode.notchRight;
+		final bottom:Float = FlxG.height - MARGIN - size - WidescreenScaleMode.notchBottom;
 
 		switch (mode)
 		{

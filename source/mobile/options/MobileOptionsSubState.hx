@@ -59,6 +59,27 @@ class MobileOptionsSubState extends BaseOptionsMenu
 			BOOL);
 		addOption(option);
 
+		var option:Option = new Option('Note Vibration',
+			"If checked, hitting a note buzzes too. A chord buzzes harder than a single note.\nNeeds Vibration on.",
+			'noteVibration',
+			BOOL);
+		addOption(option);
+
+		var option:Option = new Option('Vibration Strength',
+			'How long each buzz lasts, against the normal length.',
+			'vibrationStrength',
+			PERCENT);
+		option.minValue = 0.0;
+		option.maxValue = 2.0;
+		option.scrollSpeed = 1.0;
+		addOption(option);
+
+		var option:Option = new Option('Keep Screen Awake',
+			"If checked, the screen won't dim or lock while a song is playing.",
+			'keepScreenOn',
+			BOOL);
+		addOption(option);
+
 		#if android
 		// Not a preference: the checkbox shows whether the mods folder in shared storage
 		// is reachable, and pressing it asks Android for it again. Option reads its value

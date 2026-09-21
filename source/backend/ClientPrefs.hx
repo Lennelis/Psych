@@ -98,6 +98,9 @@ import states.TitleState;
 	public var hitboxType:String = 'Gradient';
 	public var controlsAlpha:Float = 0.6;
 	public var vibration:Bool = true;
+	public var vibrationStrength:Float = 1;
+	public var noteVibration:Bool = false;
+	public var keepScreenOn:Bool = true;
 	// Fill a screen wider than 16:9 instead of sitting in pillarbox bars.
 	public var widescreen:Bool = true;
 	#end

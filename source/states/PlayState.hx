@@ -697,6 +697,13 @@ class PlayState extends MusicBeatState
 		super.create();
 		Paths.clearUnusedMemory();
 
+		#if mobile
+		// A song is minutes of holding still and watching, which is exactly the shape of
+		// "nobody is using this" to a phone. Put back in `destroy`, so the menus are allowed
+		// to let it sleep as usual.
+		if (ClientPrefs.data.keepScreenOn) lime.system.System.allowScreenTimeout = false;
+		#end
+
 		cacheCountdown();
 		cachePopUpScore();
 
@@ -3777,6 +3784,12 @@ class PlayState extends MusicBeatState
 		if (note.hitsoundVolume > 0 && !note.hitsoundDisabled)
 			FlxG.sound.play(Paths.sound(note.hitsound), note.hitsoundVolume);
 
+		#if TOUCH_CONTROLS_ALLOWED
+		// Only the note at the head. A sustain arrives a step at a time, and buzzing for each
+		// of those turns a long note into a rattle rather than a hold.
+		if (!isSus && !cpuControlled) TouchUtil.vibrateNote();
+		#end
+
 		if(!note.hitCausesMiss) //Common notes
 		{
 			if(!note.noAnimation)
@@ -3927,6 +3940,10 @@ class PlayState extends MusicBeatState
 	}
 
 	override function destroy() {
+		#if mobile
+		lime.system.System.allowScreenTimeout = true;
+		#end
+
 		if (psychlua.CustomSubstate.instance != null)
 		{
 			closeSubState();
