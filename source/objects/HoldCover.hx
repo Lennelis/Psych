@@ -19,17 +19,29 @@ import backend.animation.PsychAnimationController;
  */
 class HoldCover extends FlxSprite
 {
-	/** Sheets live at this path plus the colour name, e.g. `holdCovers/holdCoverPurple`. */
+	/**
+	 * Sheets live at this path plus the colour name and the skin, e.g.
+	 * `holdCovers/holdCoverPurple-vanilla`.
+	 *
+	 * Which skin is a cover's is the Note Splashes setting: a hold cover and a splash are the
+	 * same piece of feedback drawn at two moments, and a set drawn for one is wrong next to the
+	 * other. That also means a splash skin with no covers of its own simply shows none, rather
+	 * than borrowing a set that does not match it.
+	 */
 	public static var defaultPath(default, never):String = 'holdCovers/holdCover';
 
 	/**
-	 * One sheet for every lane on a pixel stage.
+	 * One sheet for every lane on a pixel stage, again with the skin on the end.
 	 *
 	 * The pixel cover is a handful of white sparks with nothing colour about it, so
 	 * V-Slice ships a single sheet rather than four. Per-colour `-pixel` sheets still
 	 * win where they exist.
 	 */
 	public static var pixelPath(default, never):String = 'holdCovers/pixelNoteHoldCover';
+
+	/** The suffix the current skin puts on every path here - `-vanilla`, or nothing. */
+	public static function skinPostfix():String
+		return NoteSplash.getSplashSkinPostfix();
 
 	/**
 	 * Prefixes tried in order, most specific first. COLOR stands in for the title cased
@@ -42,9 +54,10 @@ class HoldCover extends FlxSprite
 	static var HOLD_PREFIXES(default, never):Array<String> = ["holdCover$COLOR", "holdCoverHold$COLOR", "holdCoverHold", "hold cover hold $COLOR", "hold cover $COLOR", "hold cover hold", "hold", "loop"];
 	static var END_PREFIXES(default, never):Array<String> = ["holdCoverEnd$COLOR", "holdCoverEnd", "hold cover end $COLOR", "hold cover end", "end", "explode"];
 
-	/** Parsed `images/holdCovers/holdCover.json`, kept between songs. Cached even when absent. */
+	/** Parsed `images/holdCovers/holdCover<skin>.json`, kept between songs. Cached even when absent. */
 	static var config:Dynamic = null;
 	static var configLoaded:Bool = false;
+	static var configSkin:String = null;
 
 	public var strum:StrumNote;
 	public var noteData(default, null):Int = 0;
@@ -93,11 +106,12 @@ class HoldCover extends FlxSprite
 		var color:String = colorName(noteData);
 		if (color.length < 1) return null;
 
-		var base:String = defaultPath + color;
+		var skin:String = skinPostfix();
+		var base:String = defaultPath + color + skin;
 		if (PlayState.isPixelStage)
 		{
 			if (sheetExists(base + '-pixel')) return base + '-pixel';
-			if (sheetExists(pixelPath)) return pixelPath;
+			if (sheetExists(pixelPath + skin)) return pixelPath + skin;
 		}
 
 		return sheetExists(base) ? base : null;
@@ -114,7 +128,7 @@ class HoldCover extends FlxSprite
 		frames = Paths.getSparrowAtlas(texture);
 		if (frames == null) return;
 
-		usingPixel = (texture == pixelPath || texture.endsWith('-pixel'));
+		usingPixel = (texture == pixelPath + skinPostfix() || texture.endsWith('-pixel'));
 
 		var color:String = colorName(noteData);
 		var conf:Dynamic = getConfig();
@@ -260,16 +274,21 @@ class HoldCover extends FlxSprite
 	{
 		config = null;
 		configLoaded = false;
+		configSkin = null;
 	}
 
 	static function getConfig():Dynamic
 	{
-		if (configLoaded) return config;
+		// Keyed on the skin as well as loaded once: the covers are picked by the Note Splashes
+		// setting, and that can be changed between songs without anything else clearing this.
+		var skin:String = skinPostfix();
+		if (configLoaded && configSkin == skin) return config;
 
 		configLoaded = true;
+		configSkin = skin;
 		config = null;
 
-		var path:String = 'images/$defaultPath.json';
+		var path:String = 'images/$defaultPath$skin.json';
 		if (!Paths.fileExists(path, TEXT)) return null;
 
 		try

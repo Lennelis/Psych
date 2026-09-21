@@ -96,8 +96,13 @@ class StrumNote extends FlxSprite
 		if(PlayState.SONG != null && PlayState.SONG.arrowSkin != null && PlayState.SONG.arrowSkin.length > 1) skin = PlayState.SONG.arrowSkin;
 		else skin = Note.defaultNoteSkin;
 
+		// Looked for under pixelUI on a pixel stage, which is where `reloadNote` goes on to read
+		// it from. Checking the plain path there said yes to a skin that only exists off the
+		// pixel stages, and the strum then tried to load a sheet that was never there. Nothing
+		// noticed while every skin shipped a pixel variant; a skin without one is the case.
 		var customSkin:String = skin + Note.getNoteSkinPostfix();
-		if(Paths.fileExists('images/$customSkin.png', IMAGE)) skin = customSkin;
+		var path:String = PlayState.isPixelStage ? 'pixelUI/' : '';
+		if(Paths.fileExists('images/$path$customSkin.png', IMAGE)) skin = customSkin;
 
 		texture = skin; //Load texture and anims
 		scrollFactor.set();
