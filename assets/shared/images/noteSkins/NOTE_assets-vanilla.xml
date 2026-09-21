@@ -48,20 +48,20 @@
   <SubTexture name="up press0001" x="1898" y="303" width="144" height="142" frameX="-6" frameY="-4" frameWidth="154" frameHeight="151" />
   <SubTexture name="up press0002" x="158" y="398" width="154" height="151" />
   <SubTexture name="up press0003" x="158" y="398" width="154" height="151" />
-  <SubTexture name="confirmHoldLeft0000" x="0" y="593" width="217" height="217" frameX="-6" frameY="-8" frameWidth="232" frameHeight="236" />
-  <SubTexture name="confirmHoldLeft0001" x="0" y="593" width="217" height="217" frameX="-6" frameY="-8" frameWidth="232" frameHeight="236" />
-  <SubTexture name="confirmHoldLeft0002" x="219" y="593" width="223" height="224" frameX="-3" frameY="-4" frameWidth="232" frameHeight="236" />
-  <SubTexture name="confirmHoldLeft0003" x="444" y="593" width="223" height="224" frameX="-3" frameY="-4" frameWidth="232" frameHeight="236" />
-  <SubTexture name="confirmHoldDown0000" x="669" y="593" width="210" height="210" frameX="-10" frameY="-9" frameWidth="235" frameHeight="230" />
-  <SubTexture name="confirmHoldDown0001" x="669" y="593" width="210" height="210" frameX="-10" frameY="-9" frameWidth="235" frameHeight="230" />
-  <SubTexture name="confirmHoldDown0002" x="881" y="593" width="217" height="216" frameX="-7" frameY="-6" frameWidth="235" frameHeight="230" />
-  <SubTexture name="confirmHoldDown0003" x="1100" y="593" width="217" height="216" frameX="-7" frameY="-6" frameWidth="235" frameHeight="230" />
-  <SubTexture name="confirmHoldUp0000" x="1319" y="593" width="206" height="206" frameX="-14" frameY="-13" frameWidth="238" frameHeight="235" />
-  <SubTexture name="confirmHoldUp0001" x="1319" y="593" width="206" height="206" frameX="-14" frameY="-13" frameWidth="238" frameHeight="235" />
-  <SubTexture name="confirmHoldUp0002" x="1527" y="593" width="213" height="212" frameX="-11" frameY="-10" frameWidth="238" frameHeight="235" />
-  <SubTexture name="confirmHoldUp0003" x="1742" y="593" width="213" height="212" frameX="-11" frameY="-10" frameWidth="238" frameHeight="235" />
-  <SubTexture name="confirmHoldRight0000" x="0" y="819" width="218" height="218" frameX="-5" frameY="-8" frameWidth="233" frameHeight="236" />
-  <SubTexture name="confirmHoldRight0001" x="0" y="819" width="218" height="218" frameX="-5" frameY="-8" frameWidth="233" frameHeight="236" />
-  <SubTexture name="confirmHoldRight0002" x="220" y="819" width="224" height="224" frameX="-2" frameY="-5" frameWidth="233" frameHeight="236" />
-  <SubTexture name="confirmHoldRight0003" x="446" y="819" width="224" height="224" frameX="-2" frameY="-5" frameWidth="233" frameHeight="236" />
+  <SubTexture name="confirmHoldLeft0000" x="0" y="593" width="217" height="217" frameX="-6" frameY="-6" frameWidth="232" frameHeight="236" />
+  <SubTexture name="confirmHoldLeft0001" x="0" y="593" width="217" height="217" frameX="-6" frameY="-6" frameWidth="232" frameHeight="236" />
+  <SubTexture name="confirmHoldLeft0002" x="219" y="593" width="223" height="224" frameX="-3" frameY="-2" frameWidth="232" frameHeight="236" />
+  <SubTexture name="confirmHoldLeft0003" x="444" y="593" width="223" height="224" frameX="-3" frameY="-2" frameWidth="232" frameHeight="236" />
+  <SubTexture name="confirmHoldDown0000" x="669" y="593" width="210" height="210" frameX="-6" frameY="-11" frameWidth="235" frameHeight="230" />
+  <SubTexture name="confirmHoldDown0001" x="669" y="593" width="210" height="210" frameX="-6" frameY="-11" frameWidth="235" frameHeight="230" />
+  <SubTexture name="confirmHoldDown0002" x="881" y="593" width="217" height="216" frameX="-3" frameY="-8" frameWidth="235" frameHeight="230" />
+  <SubTexture name="confirmHoldDown0003" x="1100" y="593" width="217" height="216" frameX="-3" frameY="-8" frameWidth="235" frameHeight="230" />
+  <SubTexture name="confirmHoldUp0000" x="1319" y="593" width="206" height="206" frameX="-14" frameY="-12" frameWidth="238" frameHeight="235" />
+  <SubTexture name="confirmHoldUp0001" x="1319" y="593" width="206" height="206" frameX="-14" frameY="-12" frameWidth="238" frameHeight="235" />
+  <SubTexture name="confirmHoldUp0002" x="1527" y="593" width="213" height="212" frameX="-11" frameY="-9" frameWidth="238" frameHeight="235" />
+  <SubTexture name="confirmHoldUp0003" x="1742" y="593" width="213" height="212" frameX="-11" frameY="-9" frameWidth="238" frameHeight="235" />
+  <SubTexture name="confirmHoldRight0000" x="0" y="819" width="218" height="218" frameX="-5" frameY="-6" frameWidth="233" frameHeight="236" />
+  <SubTexture name="confirmHoldRight0001" x="0" y="819" width="218" height="218" frameX="-5" frameY="-6" frameWidth="233" frameHeight="236" />
+  <SubTexture name="confirmHoldRight0002" x="220" y="819" width="224" height="224" frameX="-2" frameY="-3" frameWidth="233" frameHeight="236" />
+  <SubTexture name="confirmHoldRight0003" x="446" y="819" width="224" height="224" frameX="-2" frameY="-3" frameWidth="233" frameHeight="236" />
 </TextureAtlas>
