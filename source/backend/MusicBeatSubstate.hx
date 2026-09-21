@@ -35,23 +35,21 @@ class MusicBeatSubstate extends FlxSubState
 	public var virtualPad:VirtualPad;
 	public var virtualPadCamera:FlxCamera;
 
-	/** Set when we hid the pad belonging to the state underneath, so we know to put it back. */
+	/** Set when we hid the controls belonging to the state underneath, so we know to put them back. */
 	var hidStatePad:Bool = false;
 
 	/**
-	 * Gives this substate its own pad, hiding the one belonging to the state
-	 * underneath so two pads can't stack up on screen.
+	 * Gives this substate its own pad, hiding the controls belonging to the state
+	 * underneath so two sets can't stack up on screen.
 	 */
 	public function addVirtualPad(dPad:VirtualPadDPad = FULL, action:VirtualPadAction = A_B):VirtualPad
 	{
 		removeVirtualPad();
 
 		final state:MusicBeatState = Std.isOfType(FlxG.state, MusicBeatState) ? cast FlxG.state : null;
-		if (state != null && state.virtualPad != null && state.virtualPad.visible)
+		if (state != null && state.touchControlsShowing)
 		{
-			state.virtualPad.releaseAll();
-			state.virtualPad.visible = false;
-			state.virtualPad.active = false;
+			state.showTouchControls(false);
 			hidStatePad = true;
 		}
 
@@ -96,12 +94,7 @@ class MusicBeatSubstate extends FlxSubState
 		{
 			hidStatePad = false;
 			final state:MusicBeatState = Std.isOfType(FlxG.state, MusicBeatState) ? cast FlxG.state : null;
-			if (state != null && state.virtualPad != null)
-			{
-				state.virtualPad.releaseAll();
-				state.virtualPad.visible = true;
-				state.virtualPad.active = true;
-			}
+			if (state != null) state.showTouchControls(true);
 		}
 	}
 

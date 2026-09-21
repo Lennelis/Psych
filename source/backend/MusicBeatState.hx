@@ -32,6 +32,9 @@ class MusicBeatState extends FlxState
 	/** The on-screen pad for this state, if it asked for one. */
 	public var virtualPad:VirtualPad;
 	public var virtualPadCamera:FlxCamera;
+
+	/** The extra buttons this state put on screen beside the pad. */
+	public var touchButtons:Array<TouchButton> = [];
 	#end
 
 	public var variables:Map<String, Dynamic> = new Map<String, Dynamic>();
@@ -112,7 +115,51 @@ class MusicBeatState extends FlxState
 		button.onDown.add(function(_) onPress());
 		button.cameras = [(virtualPadCamera != null) ? virtualPadCamera : camera];
 		add(button);
+		touchButtons.push(button);
 		return button;
+	}
+
+	/** True while any of this state's on-screen controls are showing. */
+	public var touchControlsShowing(get, never):Bool;
+
+	function get_touchControlsShowing():Bool
+	{
+		if (virtualPad != null && virtualPad.visible) return true;
+
+		for (button in touchButtons)
+			if (button != null && button.visible) return true;
+
+		return false;
+	}
+
+	/**
+	 * Shows or hides everything this state put on screen, pad and extra buttons together.
+	 *
+	 * They go as a set because they are one set to whoever is looking at them. Hiding the pad
+	 * on its own used to leave the extra buttons behind - drawn on the pad's camera, which is
+	 * the last one added and so sits over everything a substate puts up, and dead to the touch
+	 * because the state underneath has stopped updating.
+	 *
+	 * Fingers are dropped on the way either way: the tap that opened a substate must not still
+	 * be on a button when the state comes back, or it reads as a press nobody made.
+	 */
+	public function showTouchControls(show:Bool):Void
+	{
+		if (virtualPad != null)
+		{
+			virtualPad.releaseAll();
+			virtualPad.visible = show;
+			virtualPad.active = show;
+		}
+
+		for (button in touchButtons)
+		{
+			if (button == null) continue;
+
+			button.release();
+			button.visible = show;
+			button.active = show;
+		}
 	}
 
 	public function removeVirtualPad():Void
@@ -137,6 +184,8 @@ class MusicBeatState extends FlxState
 		#if TOUCH_CONTROLS_ALLOWED
 		// the tap that opened the substate shouldn't also be read by the substate
 		if (virtualPad != null) virtualPad.releaseAll();
+		for (button in touchButtons)
+			if (button != null) button.release();
 		#end
 		super.openSubState(SubState);
 	}
@@ -144,12 +193,7 @@ class MusicBeatState extends FlxState
 	override function closeSubState():Void
 	{
 		#if TOUCH_CONTROLS_ALLOWED
-		if (virtualPad != null)
-		{
-			virtualPad.releaseAll();
-			virtualPad.visible = true;
-			virtualPad.active = true;
-		}
+		showTouchControls(true);
 		#end
 		super.closeSubState();
 	}
@@ -158,6 +202,7 @@ class MusicBeatState extends FlxState
 	{
 		#if TOUCH_CONTROLS_ALLOWED
 		removeVirtualPad();
+		touchButtons = [];
 		#end
 		super.destroy();
 	}
