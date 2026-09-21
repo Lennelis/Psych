@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextureAtlas imagePath="letterstuff.png">
+	<SubTexture name="a bold0000" x="0" y="0" width="86" height="84"/>
+	<SubTexture name="b bold0000" x="86" y="0" width="84" height="84"/>
+	<SubTexture name="c bold0000" x="170" y="0" width="81" height="84"/>
+	<SubTexture name="d bold0000" x="251" y="0" width="86" height="84"/>
+	<SubTexture name="e bold0000" x="337" y="0" width="75" height="84"/>
+	<SubTexture name="f bold0000" x="412" y="0" width="78" height="84"/>
+	<SubTexture name="g bold0000" x="490" y="0" width="80" height="84"/>
+	<SubTexture name="h bold0000" x="570" y="0" width="87" height="84"/>
+	<SubTexture name="i bold0000" x="657" y="0" width="87" height="84"/>
+	<SubTexture name="j bold0000" x="744" y="0" width="85" height="84"/>
+	<SubTexture name="k bold0000" x="829" y="0" width="84" height="84"/>
+	<SubTexture name="l bold0000" x="913" y="0" width="77" height="84"/>
+	<SubTexture name="m bold0000" x="990" y="0" width="89" height="84"/>
+	<SubTexture name="n bold0000" x="1079" y="0" width="85" height="84"/>
+	<SubTexture name="o bold0000" x="1164" y="0" width="83" height="84"/>
+	<SubTexture name="p bold0000" x="1247" y="0" width="85" height="84"/>
+	<SubTexture name="q bold0000" x="1332" y="0" width="93" height="84"/>
+	<SubTexture name="r bold0000" x="1425" y="0" width="91" height="84"/>
+	<SubTexture name="s bold0000" x="1516" y="0" width="84" height="84"/>
+	<SubTexture name="t bold0000" x="1600" y="0" width="90" height="84"/>
+	<SubTexture name="u bold0000" x="1690" y="0" width="82" height="84"/>
+	<SubTexture name="v bold0000" x="1772" y="0" width="85" height="84"/>
+	<SubTexture name="w bold0000" x="1857" y="0" width="90" height="84"/>
+	<SubTexture name="x bold0000" x="1947" y="0" width="90" height="84"/>
+	<SubTexture name="y bold0000" x="0" y="84" width="94" height="84"/>
+	<SubTexture name="z bold0000" x="94" y="84" width="92" height="84"/>
+</TextureAtlas>

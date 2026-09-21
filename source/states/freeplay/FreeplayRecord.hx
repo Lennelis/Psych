@@ -1,7 +1,7 @@
 package states.freeplay;
 
 import backend.WeekData;
-import states.freeplay.OutlineText.OutlineFitMode;
+import states.freeplay.LetterstuffText.LetterstuffFitMode;
 import states.freeplay.VSliceFreeplayState.ExitMoverData;
 
 /**
@@ -16,15 +16,15 @@ import states.freeplay.VSliceFreeplayState.ExitMoverData;
  * song is one `color` assignment instead of a pass over the pixels. The artwork was cut into
  * the two pieces for exactly that.
  *
- * The name is set in Letterstuff, which is an outline face - see `OutlineText` for how it gets
- * filled in, and for the fitting, which a week name badly needs: they run from `PICO` to
+ * The name is set in Letterstuff, out of a drawn sheet - see `LetterstuffText` for how it is
+ * laid out, and for the fitting, which a week name badly needs: they run from `PICO` to
  * `hating simulator ft. moawling`.
  */
 class FreeplayRecord extends FlxSpriteGroup
 {
 	public var record:FlxSprite;
 	public var label:FlxSprite;
-	public var weekName:OutlineText;
+	public var weekName:LetterstuffText;
 
 	public var settings(default, null):RecordSettings;
 
@@ -57,16 +57,14 @@ class FreeplayRecord extends FlxSpriteGroup
 			piece.visible = settings.showRecord;
 		}
 
-		weekName = new OutlineText(Paths.font('Letterstuff.ttf'), {
+		weekName = new LetterstuffText({
 			mode: settings.mode,
 			budget: settings.budget,
 			size: settings.size,
 			floorSize: settings.floorSize,
-			linePercent: settings.linePercent,
-			outlineWeight: settings.outlineWeight,
-			fill: settings.fill,
-			outline: settings.outline
+			linePercent: settings.linePercent
 		});
+		weekName.antialiasing = ClientPrefs.data.antialiasing;
 		weekName.visible = false;
 
 		add(record);
@@ -96,9 +94,9 @@ class FreeplayRecord extends FlxSpriteGroup
 		var color:FlxColor = song.color;
 		label.color = color;
 
-		// White leaves the fill as drawn; the song colour multiplies the white through to the
-		// colour and leaves the black outline where it is, so no bitmap has to be rebuilt.
-		weekName.color = settings.fillTakesSongColor ? color : FlxColor.WHITE;
+		// The letters are drawn white inside a black outline, so a tint multiplies through to
+		// the insides and leaves the outline where it is.
+		weekName.color = settings.fillTakesSongColor ? color : settings.fill;
 	}
 
 	/**
@@ -184,7 +182,7 @@ class FreeplayRecord extends FlxSpriteGroup
 	{
 		var loaded:RecordSettings = {
 			mode: WRAP_THEN_SHRINK, budget: 315, size: 62, floorSize: 30, linePercent: 0.92,
-			outlineWeight: 1, fill: FlxColor.WHITE, outline: FlxColor.BLACK, fillTakesSongColor: false,
+			fill: FlxColor.WHITE, fillTakesSongColor: false,
 			centreX: 1062, recordY: 360, gapUnderRecord: 176, recordSize: 300, showRecord: true, spinRpm: 14
 		};
 
@@ -229,12 +227,10 @@ class FreeplayRecord extends FlxSpriteGroup
 			// Written as a percentage in the file because that is how it was tuned; the text
 			// wants it as a share of the size.
 			loaded.linePercent = number('linePercent', loaded.linePercent * 100) / 100;
-			loaded.outlineWeight = number('outlineWeight', loaded.outlineWeight * 100) / 100;
 
 			// Shared with the background's reader: the freeplay files all write colours the
 			// same way, and FlxColor.fromString cannot be used for any of them.
 			loaded.fill = FreeplayBackdrop.parseColor(text('fill', null), loaded.fill);
-			loaded.outline = FreeplayBackdrop.parseColor(text('outline', null), loaded.outline);
 			loaded.fillTakesSongColor = flag('fillTakesSongColor', loaded.fillTakesSongColor);
 
 			loaded.centreX = number('centreX', loaded.centreX);
@@ -254,14 +250,12 @@ class FreeplayRecord extends FlxSpriteGroup
 /** What `images/freeplay/record.json` is allowed to change. */
 typedef RecordSettings =
 {
-	var mode:OutlineFitMode;
+	var mode:LetterstuffFitMode;
 	var budget:Float;
 	var size:Int;
 	var floorSize:Int;
 	var linePercent:Float;
-	var outlineWeight:Float;
 	var fill:FlxColor;
-	var outline:FlxColor;
 	var fillTakesSongColor:Bool;
 
 	var centreX:Float;
