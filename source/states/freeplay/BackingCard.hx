@@ -61,7 +61,11 @@ class BackingCard extends FlxSpriteGroup
 		confirmTextGlow.blend = BlendMode.ADD;
 		confirmTextGlow.visible = false;
 
-		pinkBack = new FlxSprite().loadGraphic(Paths.image('freeplay/pinkBack'));
+		// Asked for off the GPU path on purpose. The slab is the mask for the orange strip in
+		// `build`, and masking is a CPU pixel read - but `cacheOnGPU`, which defaults on for
+		// mobile, uploads the texture and then frees the CPU-side bitmap behind it. On Android
+		// that made the mask read a null image and took the whole menu down on the way in.
+		pinkBack = new FlxSprite().loadGraphic(Paths.image('freeplay/pinkBack', null, false));
 		pinkBack.color = 0xFFFFD4E9; // sets it to pink!
 
 		// Stretched to cover the extra width, like V-Slice does. The diagonal on its
@@ -102,7 +106,10 @@ class BackingCard extends FlxSpriteGroup
 
 		// The orange strip is only allowed to show where the pink slab is, so the slab is
 		// used as its mask - which is what keeps it from running off the side of the card.
-		FlxSpriteUtil.alphaMaskFlxSprite(orangeBackShit, pinkBack, orangeBackShit);
+		// Skipped rather than attempted if the slab is not readable, so a graphic that ended up
+		// on the GPU anyway costs an unclipped strip instead of a crash.
+		if (readableOnCPU(pinkBack))
+			FlxSpriteUtil.alphaMaskFlxSprite(orangeBackShit, pinkBack, orangeBackShit);
 		orangeBackShit.visible = false;
 		alsoOrangeLOL.visible = false;
 
@@ -111,6 +118,19 @@ class BackingCard extends FlxSpriteGroup
 		add(confirmTextGlow);
 		add(backingTextYeah);
 		add(cardGlow);
+	}
+
+	/**
+	 * Whether a sprite's bitmap is still held on the CPU, where the pixel operations can reach it.
+	 *
+	 * `readable` is not the thing to ask: Psych sets it back to true after handing the bitmap to
+	 * the GPU, so that drawing carries on working. The image is what actually goes away.
+	 */
+	static function readableOnCPU(sprite:FlxSprite):Bool
+	{
+		if (sprite == null || sprite.graphic == null || sprite.graphic.bitmap == null) return false;
+
+		return sprite.graphic.bitmap.image != null;
 	}
 
 	/**
