@@ -449,10 +449,14 @@ class VSliceFreeplayState extends MusicBeatState
 		addVirtualPad(FULL, A_B);
 		addVirtualPadCamera();
 
-		// CTRL has no equivalent on a touchscreen, so the modifiers menu had no way in at all.
-		// Between the d-pad on the left and the action buttons on the right, which is the one
-		// part of the bottom edge the pad leaves alone.
-		modsButton = addTouchButton('MODS', (FlxG.width - 180) / 2, FlxG.height - 94, 180, 70, openModifiers);
+		// CTRL and space have no equivalent on a touchscreen, so the modifiers menu had no way
+		// in at all and no song could be listened to. Both go between the d-pad on the left and
+		// the action buttons on the right, which is the one part of the bottom edge the pad
+		// leaves alone.
+		var buttonRow:Float = (FlxG.width - (BUTTON_WIDTH * 2 + BUTTON_GAP)) / 2;
+		listenButton = addTouchButton('LISTEN', buttonRow, FlxG.height - 94, BUTTON_WIDTH, 70, togglePreview);
+		modsButton = addTouchButton('MODS', buttonRow + BUTTON_WIDTH + BUTTON_GAP, FlxG.height - 94, BUTTON_WIDTH, 70,
+			openModifiers);
 		#end
 
 		// The menu's own track, in place of whatever the main menu left playing.
@@ -1007,10 +1011,10 @@ class VSliceFreeplayState extends MusicBeatState
 
 		if (grpCapsules.countLiving() > 0 && canInteract())
 		{
-			// Moving off a song you were listening to puts the menu's own track back. Hovering
-			// never starts one now: opening an instrumental per capsule is what made scrolling
-			// the list stutter, and Psych's own freeplay has always waited to be asked.
-			if (previewing) playMenuMusic();
+			// A preview carries on through the rest of the list rather than stopping the moment
+			// you scroll off it. Hovering never starts one: opening an instrumental per capsule
+			// is what made scrolling the list stutter, and Psych's own freeplay has always
+			// waited to be asked.
 			currentCapsule.selected = true;
 		}
 	}
@@ -1147,8 +1151,28 @@ class VSliceFreeplayState extends MusicBeatState
 		return closestIndex;
 	}
 
-	/** True while a song preview has taken the menu track's place. */
-	var previewing:Bool = false;
+	/**
+	 * The song a preview is playing for, or null when the menu's own track is on.
+	 *
+	 * The song rather than a flag, because a preview outlives the cursor that started it:
+	 * scrolling on carries on listening, and LISTEN only stops the one it started.
+	 */
+	var previewingSong:FreeplaySongData = null;
+
+	/**
+	 * Whether a preview is playing for this song.
+	 *
+	 * By name and folder rather than by identity, because a filter or difficulty change
+	 * rebuilds the list and hands back a different object for the same song - and the music
+	 * carries straight on through that, so the button has to as well.
+	 */
+	function isPreviewing(song:FreeplaySongData):Bool
+	{
+		return previewingSong != null
+			&& song != null
+			&& previewingSong.songName == song.songName
+			&& previewingSong.folder == song.folder;
+	}
 
 	/** The track this visit settled on. Random is rolled once here, not on every keypress. */
 	var menuTrack:String = null;
@@ -1164,7 +1188,7 @@ class VSliceFreeplayState extends MusicBeatState
 	 */
 	function playMenuMusic():Void
 	{
-		previewing = false;
+		previewingSong = null;
 
 		if (menuTrack == null)
 		{
@@ -1185,20 +1209,26 @@ class VSliceFreeplayState extends MusicBeatState
 		FlxG.sound.music.fadeIn(FADE_IN_DURATION, 0, FADE_IN_END_VOLUME);
 	}
 
-	/** Space: listen to the song under the cursor, or drop back to the menu track. */
+	/**
+	 * LISTEN, or space: put the song under the cursor on, or take off the one already playing.
+	 *
+	 * Asking again for the song you are listening to stops it; asking for any other song
+	 * swaps to that one. So the button reads as a toggle where you started the preview and
+	 * as "listen to this one instead" everywhere else, which is what a list you can scroll
+	 * while it plays needs.
+	 */
 	function togglePreview():Void
 	{
-		if (previewing)
+		var capsule:SongMenuItem = currentCapsule;
+		// RANDOM has no song behind it, so there is nothing to listen to.
+		if (capsule == null || capsule.freeplayData == null) return;
+
+		if (isPreviewing(capsule.freeplayData))
 		{
 			playMenuMusic();
 			return;
 		}
 
-		var capsule:SongMenuItem = currentCapsule;
-		// RANDOM has no song behind it, so there is nothing to listen to.
-		if (capsule == null || capsule.freeplayData == null) return;
-
-		previewing = true;
 		playCurSongPreview(capsule);
 	}
 
@@ -1212,7 +1242,7 @@ class VSliceFreeplayState extends MusicBeatState
 	 */
 	function clearPreviews():Void
 	{
-		previewing = false;
+		previewingSong = null;
 	}
 
 	function playCurSongPreview(daSongCapsule:SongMenuItem):Void
@@ -1232,6 +1262,7 @@ class VSliceFreeplayState extends MusicBeatState
 			{
 				FlxG.sound.playMusic(inst, 0, false);
 				FlxG.sound.music.fadeIn(FADE_IN_DURATION, FADE_IN_START_VOLUME, FADE_IN_END_VOLUME);
+				previewingSong = song;
 			}
 		}
 		catch (e:Dynamic)
@@ -1517,6 +1548,10 @@ class VSliceFreeplayState extends MusicBeatState
 	}
 
 	#if TOUCH_CONTROLS_ALLOWED
+	static inline var BUTTON_WIDTH:Int = 180;
+	static inline var BUTTON_GAP:Int = 20;
+
+	var listenButton:TouchButton;
 	var modsButton:TouchButton;
 
 	/**
@@ -1532,6 +1567,7 @@ class VSliceFreeplayState extends MusicBeatState
 		if (virtualPadCamera == null) return;
 
 		if (virtualPad != null) virtualPad.cameras = [virtualPadCamera];
+		if (listenButton != null) listenButton.cameras = [virtualPadCamera];
 		if (modsButton != null) modsButton.cameras = [virtualPadCamera];
 	}
 	#end
