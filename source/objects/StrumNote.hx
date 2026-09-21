@@ -149,12 +149,31 @@ class StrumNote extends FlxSprite
 		playAnim('static');
 	}
 
+	/**
+	 * Adds an animation only when the sheet actually has frames for its prefix.
+	 *
+	 * `addByPrefix` warns when it finds nothing, and most skins have nothing to find here.
+	 */
+	function addIfPresent(name:String, prefix:String, frameRate:Float, looped:Bool):Bool
+	{
+		var found:Array<flixel.graphics.frames.FlxFrame> = [];
+		@:privateAccess
+		animation.findByPrefix(found, prefix, false);
+		if(found.length < 1) return false;
+
+		animation.addByPrefix(name, prefix, frameRate, looped);
+		return true;
+	}
+
 	public function reloadNote()
 	{
 		var lastAnim:String = null;
 		if(animation.curAnim != null) lastAnim = animation.curAnim.name;
 
 		skinRGB = skinWantsStrumRGB(texture);
+
+		// The sheet prefix for this lane's own hold glow, set only for a non-pixel sheet.
+		var holdGlow:String = null;
 
 		if(PlayState.isPixelStage)
 		{
@@ -207,26 +226,38 @@ class StrumNote extends FlxSprite
 					animation.addByPrefix('static', 'arrowLEFT');
 					animation.addByPrefix('pressed', 'left press', 24, false);
 					animation.addByPrefix('confirm', 'left confirm', 24, false);
+					holdGlow = 'confirmHoldLeft';
 				case 1:
 					animation.addByPrefix('static', 'arrowDOWN');
 					animation.addByPrefix('pressed', 'down press', 24, false);
 					animation.addByPrefix('confirm', 'down confirm', 24, false);
+					holdGlow = 'confirmHoldDown';
 				case 2:
 					animation.addByPrefix('static', 'arrowUP');
 					animation.addByPrefix('pressed', 'up press', 24, false);
 					animation.addByPrefix('confirm', 'up confirm', 24, false);
+					holdGlow = 'confirmHoldUp';
 				case 3:
 					animation.addByPrefix('static', 'arrowRIGHT');
 					animation.addByPrefix('pressed', 'right press', 24, false);
 					animation.addByPrefix('confirm', 'right confirm', 24, false);
+					holdGlow = 'confirmHoldRight';
 			}
 		}
-		// The second pass of the glow, which a hold freezes on. Same frames as 'confirm'
-		// either way, exactly as V-Slice's note style points 'confirm-hold' back at the
-		// confirm frames - taken from the animation itself so a skin only has to define
-		// the one, pixel and otherwise.
-		var confirmAnim:flixel.animation.FlxAnimation = animation.getByName('confirm');
-		if(confirmAnim != null) animation.add('confirm-hold', confirmAnim.frames.copy(), confirmAnim.frameRate, false);
+
+		// The second pass of the glow, the one a hold sits on.
+		//
+		// A skin can draw its own and gets it if it does: V-Slice's sheet carries
+		// confirmHold<Dir>, a glow that swells a second time rather than freezing where the
+		// tap left it. Neither of V-Slice's own note styles wires those frames up - both point
+		// ConfirmHold back at the confirm prefix - so a skin without them falls back to the
+		// confirm frames over again, which is what those styles do and what every other skin
+		// here still gets.
+		if(holdGlow == null || !addIfPresent('confirm-hold', holdGlow, 24, false))
+		{
+			var confirmAnim:flixel.animation.FlxAnimation = animation.getByName('confirm');
+			if(confirmAnim != null) animation.add('confirm-hold', confirmAnim.frames.copy(), confirmAnim.frameRate, false);
+		}
 
 		updateHitbox();
 
