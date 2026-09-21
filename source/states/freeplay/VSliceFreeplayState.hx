@@ -450,7 +450,15 @@ class VSliceFreeplayState extends MusicBeatState
 		addVirtualPadCamera();
 		#end
 
-		if (dj != null && dj.loaded)
+		if (queuedRankAnim != null)
+		{
+			// Coming back from a song with a rank to show, the menu arrives already built and
+			// the rank animation is the first thing on screen. Waiting on the DJ and then
+			// flying the list in put the whole menu up for about a second before the animation
+			// covered it over again, which is the flash of freeplay before the rank.
+			onDJIntroDone(true);
+		}
+		else if (dj != null && dj.loaded)
 		{
 			// The menu opens when the DJ finishes his intro, which is V-Slice's own cue - and
 			// anyway if he hasn't managed it in time. V-Slice can take its DJ for granted; this
@@ -574,15 +582,17 @@ class VSliceFreeplayState extends MusicBeatState
 		backingImage.visible = !USE_MENU_BACKGROUND;
 		backingCard.introDone();
 
-		// Last, so the menu is fully arrived and the capsules are where they belong before one
-		// of them gets picked up. A short beat after, because landing a rank on the same frame
-		// the list settles reads as a glitch rather than a flourish.
+		// Last, so the capsules are where they belong before one of them gets picked up. No
+		// beat in front of it any more: the wait was there so the rank would not land on the
+		// same frame the list settled, and with the entrance skipped above the list has been
+		// settled since the menu opened. The animation puts its own backdrop up on its first
+		// frame, so nothing of the menu is on screen in front of it.
 		if (queuedRankAnim != null)
 		{
 			var params:RankAnimParams = queuedRankAnim;
 			queuedRankAnim = null;
 			uiState = RankAnimating;
-			new FlxTimer().start(0.3, function(_) rankAnimStart(params));
+			rankAnimStart(params);
 		}
 	}
 
@@ -1361,8 +1371,15 @@ class VSliceFreeplayState extends MusicBeatState
 
 		rankVignette = new FlxSprite().loadGraphic(Paths.image('freeplay/rankVignette'));
 		rankVignette.scrollFactor.set();
-		rankVignette.scale.set(2, 2);
+
+		// The art is 640x360 and V-Slice doubles it, which is exactly 1280x720 and exactly the
+		// screen it was drawn for. On anything wider it stopped dead partway across and left
+		// the rest of the menu un-dimmed, with a hard vertical edge down the middle of it.
+		// Scaled to cover instead, and centred: on a 1280 screen that still works out at 2.
+		var vignetteScale:Float = Math.max(FlxG.width / rankVignette.frameWidth, FlxG.height / rankVignette.frameHeight);
+		rankVignette.scale.set(vignetteScale, vignetteScale);
 		rankVignette.updateHitbox();
+		rankVignette.screenCenter();
 		rankVignette.blend = BlendMode.ADD;
 		rankVignette.alpha = 0;
 		rankVignette.cameras = [funnyCam];
@@ -1371,7 +1388,11 @@ class VSliceFreeplayState extends MusicBeatState
 		sparks = new FlxSprite();
 		sparks.frames = Paths.getSparrowAtlas('freeplay/sparks');
 		sparks.animation.addByPrefix('sparks', 'sparks', 24, false);
-		sparks.setPosition(517, 134);
+		// V-Slice's own numbers, kept as an offset from the middle of the screen rather than
+		// as absolute ones. The capsule they burst around is centred with FlxG.width, so on a
+		// screen wider than the 1280 these were written for they would have sat off to its
+		// left. On a 1280 screen this is still 517, 134.
+		sparks.setPosition((FlxG.width / 2) - 123, (FlxG.height / 2) - 226);
 		sparks.scale.set(0.5, 0.5);
 		sparks.blend = BlendMode.ADD;
 		sparks.visible = false;
@@ -1381,7 +1402,7 @@ class VSliceFreeplayState extends MusicBeatState
 		sparksAdd = new FlxSprite();
 		sparksAdd.frames = Paths.getSparrowAtlas('freeplay/sparksadd');
 		sparksAdd.animation.addByPrefix('sparks add', 'sparks add', 24, false);
-		sparksAdd.setPosition(498, 116);
+		sparksAdd.setPosition((FlxG.width / 2) - 142, (FlxG.height / 2) - 244);
 		sparksAdd.scale.set(0.5, 0.5);
 		sparksAdd.blend = BlendMode.ADD;
 		sparksAdd.visible = false;
