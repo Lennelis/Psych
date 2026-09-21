@@ -221,15 +221,10 @@ class StrumNote extends FlxSprite
 					animation.addByPrefix('confirm', 'right confirm', 24, false);
 			}
 		}
-
 		// The second pass of the glow, which a hold freezes on. Same frames as 'confirm'
 		// either way, exactly as V-Slice's note style points 'confirm-hold' back at the
 		// confirm frames - taken from the animation itself so a skin only has to define
 		// the one, pixel and otherwise.
-		//
-		// Every skin gets this, the Vanilla one included. Its sheet does carry a hold glow of
-		// its own, but wiring that up made it the only skin whose strums behaved differently
-		// during a sustain, which is not worth the art.
 		var confirmAnim:flixel.animation.FlxAnimation = animation.getByName('confirm');
 		if(confirmAnim != null) animation.add('confirm-hold', confirmAnim.frames.copy(), confirmAnim.frameRate, false);
 
