@@ -63,6 +63,7 @@ class VSliceFreeplayState extends MusicBeatState
 	 * way past and a stutter for each one. Long enough now that only resting on a song pays
 	 * for it.
 	 */
+	/** Kept for skins and scripts that read it; nothing in here waits to start a preview. */
 	public static final FADE_IN_DELAY:Float = 0.5;
 
 	/**
@@ -123,7 +124,6 @@ class VSliceFreeplayState extends MusicBeatState
 	var intendedScore:Int = 0;
 	var grpDifficulties:FlxTypedSpriteGroup<DifficultySprite>;
 
-	var previewTimers:Array<FlxTimer> = [];
 
 	/** Bit of a utility var to get the currently displayed DifficultySprite. */
 	var currentDifficultySprite(get, never):DifficultySprite;
@@ -449,6 +449,9 @@ class VSliceFreeplayState extends MusicBeatState
 		addVirtualPad(FULL, A_B);
 		addVirtualPadCamera();
 		#end
+
+		// The menu's own track, in place of whatever the main menu left playing.
+		playMenuMusic();
 
 		if (queuedRankAnim != null)
 		{
@@ -854,9 +857,13 @@ class VSliceFreeplayState extends MusicBeatState
 
 		if (controls.ACCEPT && currentCapsule != null && currentCapsule.onConfirm != null) currentCapsule.onConfirm();
 
+		// Space listens to the highlighted song, which is the key Psych's own freeplay uses
+		// for it and what its tip line has always told people to press.
+		if (FlxG.keys.justPressed.SPACE) togglePreview();
+
 		// Psych's modifiers, on the key Psych's own freeplay uses for them. V-Slice has no
 		// equivalent menu to copy the binding from, and anyone coming from Psych will already
-		// reach for CTRL here. Previews keep playing underneath, since the substate does not
+		// reach for CTRL here. A preview keeps playing underneath, since the substate does not
 		// touch the music and stopping it would restart the song on the way back.
 		if (FlxG.keys.justPressed.CONTROL)
 		{
@@ -987,8 +994,10 @@ class VSliceFreeplayState extends MusicBeatState
 
 		if (grpCapsules.countLiving() > 0 && canInteract())
 		{
-			if (FlxG.sound.music != null) FlxG.sound.music.pause();
-			queuePreview();
+			// Moving off a song you were listening to puts the menu's own track back. Hovering
+			// never starts one now: opening an instrumental per capsule is what made scrolling
+			// the list stutter, and Psych's own freeplay has always waited to be asked.
+			if (previewing) playMenuMusic();
 			currentCapsule.selected = true;
 		}
 	}
@@ -1125,34 +1134,72 @@ class VSliceFreeplayState extends MusicBeatState
 		return closestIndex;
 	}
 
+	/** True while a song preview has taken the menu track's place. */
+	var previewing:Bool = false;
+
+	/** The track this visit settled on. Random is rolled once here, not on every keypress. */
+	var menuTrack:String = null;
+
+	/** What Random draws from. Every one of these formats to a file that ships. */
+	static final MENU_TRACKS:Array<String> = ['Ludum Dare Prototype', 'Tea Time', 'Breakfast', 'Breakfast (Pico)'];
+
 	/**
-	 * Starts the song's instrumental playing quietly under the menu.
+	 * Puts the menu's own track on, in place of whatever was playing.
 	 *
-	 * Held back a moment on purpose: scrolling through ten songs shouldn't open ten
-	 * files, so nothing loads until the selection has settled, and even then only if
-	 * the capsule that asked for it is still the selected one.
+	 * One track for the whole menu rather than an instrumental per capsule. Pressing space
+	 * borrows the music for a song and this takes it back.
 	 */
-	function queuePreview():Void
+	function playMenuMusic():Void
 	{
-		clearPreviews();
+		previewing = false;
 
-		// A rank animation opens on silence and starts the preview itself at the end. Without
-		// this the song that was just finished starts playing the moment the menu settles, then
-		// gets cut a third of a second later when the animation takes over - which is the song
-		// briefly playing again on the way back from a run.
-		if (queuedRankAnim != null || uiState == RankAnimating) return;
+		if (menuTrack == null)
+		{
+			menuTrack = ClientPrefs.data.freeplayMusic;
+			if (menuTrack == 'Random') menuTrack = FlxG.random.getObject(MENU_TRACKS);
+		}
 
-		var capsule:SongMenuItem = currentCapsule;
-		previewTimers.push(new FlxTimer().start(FADE_IN_DELAY, function(_) playCurSongPreview(capsule)));
+		if (menuTrack == 'None')
+		{
+			if (FlxG.sound.music != null) FlxG.sound.music.stop();
+			return;
+		}
+
+		var track = Paths.music(Paths.formatToSongPath(menuTrack));
+		if (track == null) return;
+
+		FlxG.sound.playMusic(track, 0, true);
+		FlxG.sound.music.fadeIn(FADE_IN_DURATION, 0, FADE_IN_END_VOLUME);
 	}
 
+	/** Space: listen to the song under the cursor, or drop back to the menu track. */
+	function togglePreview():Void
+	{
+		if (previewing)
+		{
+			playMenuMusic();
+			return;
+		}
+
+		var capsule:SongMenuItem = currentCapsule;
+		// RANDOM has no song behind it, so there is nothing to listen to.
+		if (capsule == null || capsule.freeplayData == null) return;
+
+		previewing = true;
+		playCurSongPreview(capsule);
+	}
+
+	/**
+	 * Gives up any preview in progress.
+	 *
+	 * This used to cancel a pending timer, because a preview was something the menu started
+	 * on its own after a delay. Now it is something the player asks for, so all there is to
+	 * undo is the flag - the callers that confirm, exit or start a rank animation each deal
+	 * with the music themselves.
+	 */
 	function clearPreviews():Void
 	{
-		while (previewTimers.length > 0)
-		{
-			var timer:FlxTimer = previewTimers.pop();
-			if (timer != null) timer.cancel();
-		}
+		previewing = false;
 	}
 
 	function playCurSongPreview(daSongCapsule:SongMenuItem):Void
@@ -1720,7 +1767,10 @@ class VSliceFreeplayState extends MusicBeatState
 		restoreRankedCapsule();
 		capsule.sparkle.alpha = 0.7;
 
-		playCurSongPreview(capsule);
+		// rankAnimStart took the volume to nothing; this is what gives it back. It used to
+		// start the finished song playing instead, which is exactly the thing the menu no
+		// longer does on its own.
+		playMenuMusic();
 	}
 
 	/** The thud as the badge lands. V-Slice keys this off the new rank, not the old. */

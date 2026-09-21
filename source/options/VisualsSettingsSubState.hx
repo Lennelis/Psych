@@ -168,6 +168,13 @@ class VisualsSettingsSubState extends BaseOptionsMenu
 		addOption(option);
 		option.onChange = onChangePauseMusic;
 		
+		var option:Option = new Option('Freeplay Music:',
+			"What plays while you are browsing songs? Random picks one of them each visit.",
+			'freeplayMusic',
+			STRING,
+			['Ludum Dare Prototype', 'Tea Time', 'Breakfast', 'Breakfast (Pico)', 'Random', 'None']);
+		addOption(option);
+		
 		#if CHECK_FOR_UPDATES
 		var option:Option = new Option('Check for Updates',
 			'On Release builds, turn this on to check for updates when you start the game.',

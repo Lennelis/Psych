@@ -52,6 +52,7 @@ import states.TitleState;
 	public var smoothHealthBar:Bool = true;
 	public var hitsoundVolume:Float = 0;
 	public var pauseMusic:String = 'Tea Time';
+	public var freeplayMusic:String = 'Ludum Dare Prototype';
 	public var checkForUpdates:Bool = true;
 	public var comboStacking:Bool = true;
 	public var freeplayStyle:String = 'Classic';
