@@ -51,6 +51,13 @@ class GameplaySettingsSubState extends BaseOptionsMenu
 			BOOL);
 		addOption(option);
 
+		var option:Option = new Option('Scoring System:',
+			"Psych scores a note by its judgement.\nV-Slice scores the timing itself on a curve,\nand pays for held sustains by the second.\nJudgement windows are the same either way.\n\nScores from the two are not comparable, so\na saved high score set under one will read\noddly beside the other.",
+			'scoringSystem',
+			STRING,
+			['Psych', 'V-Slice']);
+		addOption(option);
+
 		var option:Option = new Option('Hitsound Volume',
 			'Funny notes does \"Tick!\" when you hit them.',
 			'hitsoundVolume',

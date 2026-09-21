@@ -5,6 +5,7 @@ import backend.StageData;
 import backend.WeekData;
 import backend.Song;
 import backend.Rating;
+import backend.Scoring;
 
 import flixel.FlxBasic;
 import flixel.FlxObject;
@@ -244,6 +245,17 @@ class PlayState extends MusicBeatState
 	public var cameraSpeed:Float = 1;
 
 	public var songScore:Int = 0;
+
+	/**
+	 * Song milliseconds of sustain held, and what has been paid out for them so far.
+	 *
+	 * Rounding a step's worth of hold to a whole point and adding that up loses about 1.6% of
+	 * the rate at some tempos, always downwards. Paying the difference between what the whole
+	 * held time is worth and what has already been paid keeps it exact at any step length.
+	 */
+	var holdTimeHeld:Float = 0;
+
+	var holdScorePaid:Int = 0;
 	public var songHits:Int = 0;
 	public var songMisses:Int = 0;
 	public var scoreTxt:FlxText;
@@ -2978,7 +2990,12 @@ class PlayState extends MusicBeatState
 		note.ratingMod = daRating.ratingMod;
 		if(!note.ratingDisabled) daRating.hits++;
 		note.rating = daRating.name;
-		score = daRating.score;
+
+		// Psych pays a judgement's flat value; V-Slice pays the timing itself, on a curve, so
+		// two sicks 40ms apart are not worth the same. Accuracy is left on Psych's rating
+		// weights either way - it is what the saved percentage and the freeplay rank are read
+		// out of, and changing it would move every rank already earned.
+		score = Scoring.usingVSlice ? Scoring.scoreNote(noteDiff / playbackRate) : daRating.score;
 
 		if(daRating.noteSplash && !note.noteSplashData.disabled)
 			spawnNoteSplashOnNote(note);
@@ -3623,10 +3640,39 @@ class PlayState extends MusicBeatState
 		var lastCombo:Int = combo;
 		combo = 0;
 
+		// V-Slice charges the three ways of losing a note differently, where Psych charges 10
+		// points for all of them. A miss is 100 and 4% of the bar; tapping an empty lane is 10
+		// and the same 4%; and letting go of a hold costs 125 points a second of what was left
+		// on it and no health at all, and counts as a combo break rather than as a miss. Psych's
+		// sustain damage - 12.5% of the bar a piece, and under `guitarHeroSustains` multiplied
+		// by the length of the whole hold - is a death sentence the original never hands out.
+		var scoreLost:Int = 10;
+		var countsAsMiss:Bool = true;
+
+		if (Scoring.usingVSlice)
+		{
+			if (note != null && note.isSustainNote)
+			{
+				subtract = 0;
+				scoreLost = -Scoring.scoreHoldPieceDrop();
+				countsAsMiss = false;
+			}
+			else
+			{
+				subtract = -Scoring.HEALTH_MISS_PENALTY;
+				scoreLost = (note == null) ? -Scoring.GHOST_MISS_SCORE : -Scoring.MISS_SCORE;
+
+				// A hold whose head was missed goes with it under `guitarHeroSustains`, and is
+				// charged once as the drop it is instead of once per piece.
+				if (note != null && guitarHeroSustains && note.tail.length > 0)
+					scoreLost += -Scoring.scoreHoldDrop(Scoring.holdPieceLength() * note.tail.length);
+			}
+		}
+
 		health -= subtract * healthLoss;
-		songScore -= 10;
-		if(!endingSong) songMisses++;
-		totalPlayed++;
+		songScore -= scoreLost;
+		if(!endingSong && countsAsMiss) songMisses++;
+		if(countsAsMiss) totalPlayed++;
 		RecalculateRating(true);
 
 		// play character anims
@@ -3802,7 +3848,36 @@ class PlayState extends MusicBeatState
 			}
 			var gainHealth:Bool = true; // prevent health gain, *if* sustains are treated as a singular note
 			if (guitarHeroSustains && note.isSustainNote) gainHealth = false;
-			if (gainHealth) health += note.hitHealth * healthGain;
+
+			if (Scoring.usingVSlice)
+			{
+				// A hold is worth something here, which it is not under Psych's scoring: the
+				// head note pays for itself, and every step of sustain behind it pays for the
+				// step it covers.
+				//
+				// `gainHealth` is not consulted for the sustain. It is off whenever
+				// `guitarHeroSustains` is, which is Psych saying a hold should be worth one
+				// note however long it is - the opposite of what V-Slice pays for, and the
+				// setting is on by default, so honouring it here would leave holds worth
+				// nothing again. What the flag actually changes is whether a tail can be hit
+				// without its head, which happens before this and is left alone.
+				if (note.isSustainNote)
+				{
+					health += Scoring.healthHoldPiece() * healthGain;
+
+					if (!cpuControlled && !note.ratingDisabled)
+					{
+						holdTimeHeld += Scoring.holdPieceLength();
+
+						var owed:Int = Math.round(Scoring.SCORE_HOLD_BONUS_PER_SECOND * holdTimeHeld / 1000);
+						songScore += owed - holdScorePaid;
+						holdScorePaid = owed;
+					}
+				}
+				else
+					health += Scoring.healthForJudgement(note.rating) * healthGain;
+			}
+			else if (gainHealth) health += note.hitHealth * healthGain;
 
 		}
 		else //Notes that count as a miss if you hit them (Hurt notes for example)

@@ -2,6 +2,7 @@ package states.editors.content;
 
 import backend.Song;
 import backend.Rating;
+import backend.Scoring;
 
 import objects.Note;
 import objects.NoteSplash;
@@ -543,7 +544,9 @@ class EditorPlayState extends MusicBeatSubstate
 		note.ratingMod = daRating.ratingMod;
 		if(!note.ratingDisabled) daRating.hits++;
 		note.rating = daRating.name;
-		score = daRating.score;
+
+		// Same scoring the real thing uses, so a playtest's numbers mean what they will mean.
+		score = Scoring.usingVSlice ? Scoring.scoreNote(noteDiff / playbackRate) : daRating.score;
 
 		if(daRating.noteSplash && !note.noteSplashData.disabled)
 			spawnNoteSplashOnNote(note);

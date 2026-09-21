@@ -85,6 +85,8 @@ import states.TitleState;
 	public var badWindow:Float = 135.0;
 	public var safeFrames:Float = 10.0;
 	public var guitarHeroSustains:Bool = true;
+	// 'Psych' or 'V-Slice'. See backend/Scoring.
+	public var scoringSystem:String = 'Psych';
 	public var discordRPC:Bool = true;
 	public var loadingScreen:Bool = true;
 	public var language:String = 'en-US';
