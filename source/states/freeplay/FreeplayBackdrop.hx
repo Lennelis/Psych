@@ -261,12 +261,15 @@ class FreeplayBackdrop extends FlxSpriteGroup
 	/**
 	 * AARRGGBB, as the rest of the freeplay's files write colours.
 	 *
+	 * Public because `record.json` writes colours the same way and needs the same care with
+	 * them; one reader for the convention beats two that can drift apart.
+	 *
 	 * One byte at a time, and deliberately not through FlxColor.fromString. That takes the whole
 	 * string to Std.parseInt, and a colour with its alpha byte set is larger than a signed
 	 * 32-bit Int holds. What comes back is saturated rather than wrapped, so every opaque colour
 	 * arrives as white.
 	 */
-	static function parseColor(value:String, fallback:FlxColor):FlxColor
+	public static function parseColor(value:String, fallback:FlxColor):FlxColor
 	{
 		if (value == null) return fallback;
 

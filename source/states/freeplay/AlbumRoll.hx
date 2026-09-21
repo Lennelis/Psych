@@ -266,7 +266,7 @@ class AlbumRoll extends FlxSpriteGroup
 	/**
 	 * The name for the OST associated with the album.
 	 */
-	public function getOSTNameOverride():String
+	public static function getOSTNameOverride():String
 		return "Friday Night Funkin'";
 }
 

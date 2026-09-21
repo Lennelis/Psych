@@ -167,6 +167,15 @@ class VSliceFreeplayState extends MusicBeatState
 
 	var freeplayBackdrop:FreeplayBackdrop;
 
+	/**
+	 * What sits in the bottom right. True is the record with the week's name under it; false
+	 * hands it back to V-Slice's album roll, which shows the same Volume 1 cover for every song
+	 * because Psych has no album metadata to tell them apart.
+	 */
+	static inline var USE_RECORD:Bool = true;
+
+	var freeplayRecord:FreeplayRecord;
+
 	/** The backing card that has the toned dots. */
 	public var backingImage:FlxSprite;
 
@@ -237,13 +246,13 @@ class VSliceFreeplayState extends MusicBeatState
 
 		// Everything below is built in V-Slice's order, because that order is what the
 		// menu's layering is: the card, then the art, then the capsules, then the bars.
-		albumRoll = new AlbumRoll();
+		if (!USE_RECORD) albumRoll = new AlbumRoll();
 		letterSort = new LetterSort((CUTOUT_WIDTH * SONGS_POS_MULTI) + 400, 75);
 		fpScoreDisplay = new FreeplayScore(FlxG.width - 353, 60, 7, 0);
 		grpCapsules = new FlxTypedGroup<SongMenuItem>();
 		grpDifficulties = new FlxTypedSpriteGroup<DifficultySprite>(-300, 80);
 		txtCompletion = new FlxText(FlxG.width - 95, 82, 0, '0', 32);
-		ostName = new FlxText(8, 8, FlxG.width - 16, albumRoll.getOSTNameOverride(), 48);
+		ostName = new FlxText(8, 8, FlxG.width - 16, AlbumRoll.getOSTNameOverride(), 48);
 
 		// Behind everything, and added before the card so it stays there. The V-Slice backdrop
 		// this replaces is hidden rather than removed - the card carries the confirm glow and
@@ -310,10 +319,19 @@ class VSliceFreeplayState extends MusicBeatState
 			grpDifficulties.add(diffSprite);
 		}
 
-		albumRoll.albumId = null;
-		albumRoll.visible = false;
-		albumRoll.applyExitMovers(exitMovers);
-		add(albumRoll);
+		if (USE_RECORD)
+		{
+			freeplayRecord = new FreeplayRecord();
+			freeplayRecord.applyExitMovers(exitMovers);
+			add(freeplayRecord);
+		}
+		else
+		{
+			albumRoll.albumId = null;
+			albumRoll.visible = false;
+			albumRoll.applyExitMovers(exitMovers);
+			add(albumRoll);
+		}
 
 		overhangStuff = new FlxSprite().makeGraphic(FlxG.width, 164, FlxColor.BLACK);
 		overhangStuff.y -= overhangStuff.height;
@@ -542,8 +560,16 @@ class VSliceFreeplayState extends MusicBeatState
 			});
 		}
 
-		albumRoll.playIntro();
-		albumRoll.albumId = albumIdFor(currentCapsule.freeplayData);
+		if (USE_RECORD)
+		{
+			freeplayRecord.setSong(currentCapsule.freeplayData);
+			freeplayRecord.playIntro();
+		}
+		else
+		{
+			albumRoll.playIntro();
+			albumRoll.albumId = albumIdFor(currentCapsule.freeplayData);
+		}
 
 		backingImage.visible = !USE_MENU_BACKGROUND;
 		backingCard.introDone();
@@ -939,7 +965,9 @@ class VSliceFreeplayState extends MusicBeatState
 			if (slot < curSelected) capsule.targetPos.y -= 100; // another 100 for good measure
 		}
 
-		if (daSong != null)
+		if (USE_RECORD)
+			freeplayRecord.setSong(daSong);
+		else if (daSong != null)
 		{
 			albumRoll.albumId = albumIdFor(daSong);
 			albumRoll.setDifficultyStars(daSong.getDifficultyRating(currentDifficulty));
