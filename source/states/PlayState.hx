@@ -6,6 +6,7 @@ import backend.WeekData;
 import backend.Song;
 import backend.Rating;
 import backend.Scoring;
+import backend.VSliceVisuals;
 
 import flixel.FlxBasic;
 import flixel.FlxObject;
@@ -170,6 +171,9 @@ class PlayState extends MusicBeatState
 	public var playerStrums:FlxTypedGroup<StrumNote> = new FlxTypedGroup<StrumNote>();
 	public var grpNoteSplashes:FlxTypedGroup<NoteSplash> = new FlxTypedGroup<NoteSplash>();
 	public var grpHoldCovers:FlxTypedGroup<HoldCover> = new FlxTypedGroup<HoldCover>();
+
+	/** The dark columns behind the strumlines, when V-Slice's strumline background is on. */
+	public var grpStrumBacks:FlxTypedGroup<FlxSprite> = new FlxTypedGroup<FlxSprite>();
 
 	public var camZooming:Bool = false;
 	public var camZoomingMult:Float = 1;
@@ -555,6 +559,7 @@ class PlayState extends MusicBeatState
 		uiGroup.add(timeBar);
 		uiGroup.add(timeTxt);
 
+		noteGroup.add(grpStrumBacks);
 		noteGroup.add(strumLineNotes);
 
 		if(ClientPrefs.data.timeBarType == 'Song Name')
@@ -814,8 +819,13 @@ class PlayState extends MusicBeatState
 	#end
 
 	public function reloadHealthBarColors() {
-		healthBar.setColors(FlxColor.fromRGB(dad.healthColorArray[0], dad.healthColorArray[1], dad.healthColorArray[2]),
-			FlxColor.fromRGB(boyfriend.healthColorArray[0], boyfriend.healthColorArray[1], boyfriend.healthColorArray[2]));
+		// Psych's bar takes the two characters' own icon colours, which is a Psych idea - V-Slice
+		// has one red and one green whoever is singing.
+		if (VSliceVisuals.healthBarColors)
+			healthBar.setColors(VSliceVisuals.HEALTH_BAR_RED, VSliceVisuals.HEALTH_BAR_GREEN);
+		else
+			healthBar.setColors(FlxColor.fromRGB(dad.healthColorArray[0], dad.healthColorArray[1], dad.healthColorArray[2]),
+				FlxColor.fromRGB(boyfriend.healthColorArray[0], boyfriend.healthColorArray[1], boyfriend.healthColorArray[2]));
 	}
 
 	public function addCharacterToList(newCharacter:String, type:Int) {
@@ -1072,6 +1082,7 @@ class PlayState extends MusicBeatState
 			canPause = true;
 			generateStaticArrows(0);
 			generateStaticArrows(1);
+			buildStrumBackgrounds();
 			for (i in 0...playerStrums.length) {
 				setOnScripts('defaultPlayerStrumX' + i, playerStrums.members[i].x);
 				setOnScripts('defaultPlayerStrumY' + i, playerStrums.members[i].y);
@@ -1173,8 +1184,11 @@ class PlayState extends MusicBeatState
 		spr.screenCenter();
 		spr.antialiasing = antialias;
 		insert(members.indexOf(noteGroup), spr);
+		var countdownEase:Float->Float = VSliceVisuals.fadeEase(PlayState.isPixelStage, 8);
+		if (countdownEase == null) countdownEase = FlxEase.cubeInOut;
+
 		FlxTween.tween(spr, {/*y: spr.y + 100,*/ alpha: 0}, Conductor.crochet / 1000, {
-			ease: FlxEase.cubeInOut,
+			ease: countdownEase,
 			onComplete: function(twn:FlxTween)
 			{
 				remove(spr);
@@ -1248,6 +1262,15 @@ class PlayState extends MusicBeatState
 
 	public dynamic function updateScoreText()
 	{
+		if (VSliceVisuals.scoreCounter)
+		{
+			// V-Slice puts the score up on its own, grouped in threes, and nothing else. The
+			// misses and the rating are Psych's - it is the one place the HUD says how you are
+			// doing rather than just what you have.
+			scoreTxt.text = Language.getPhrase('score_text_vslice', 'Score: {1}', [flixel.util.FlxStringUtil.formatMoney(songScore, false, true)]);
+			return;
+		}
+
 		var str:String = Language.getPhrase('rating_$ratingName', ratingName);
 		if(totalPlayed != 0)
 		{
@@ -1430,6 +1453,18 @@ class PlayState extends MusicBeatState
 
 		notes = new FlxTypedGroup<Note>();
 		noteGroup.add(notes);
+
+		// V-Slice draws a strumline back to front: arrows, sustains, notes, hold covers, then
+		// splashes. Psych adds the covers and splashes while the state is being built and the
+		// notes here, which leaves the note stream on top of both - so a splash can end up half
+		// behind the next note arriving, which is exactly when you are looking at it.
+		if (VSliceVisuals.strumline)
+		{
+			noteGroup.remove(grpHoldCovers, true);
+			noteGroup.remove(grpNoteSplashes, true);
+			noteGroup.add(grpHoldCovers);
+			noteGroup.add(grpNoteSplashes);
+		}
 
 		try
 		{
@@ -1632,11 +1667,69 @@ class PlayState extends MusicBeatState
 		callOnScripts('onEventPushed', [subEvent.event, subEvent.value1 != null ? subEvent.value1 : '', subEvent.value2 != null ? subEvent.value2 : '', subEvent.strumTime]);
 	}
 
+
+	/**
+	 * A dark column behind each strumline, to read the notes against.
+	 *
+	 * V-Slice gives every strumline one of these, full screen height, sixteen pixels wider than
+	 * the arrows on each side, and has its opacity as a setting of its own - at nothing it is
+	 * simply not there, which is why it is not folded into a group switch.
+	 *
+	 * Built from the strums rather than from the numbers, so it lands correctly whether or not
+	 * the strumlines have been nudged, and on middlescroll where there is only one to draw.
+	 */
+	function buildStrumBackgrounds():Void
+	{
+		grpStrumBacks.clear();
+
+		var opacity:Float = ClientPrefs.data.strumlineBackground;
+		if (opacity <= 0) return;
+
+		for (strums in [opponentStrums, playerStrums])
+		{
+			if (strums == null || strums.length < 1) continue;
+
+			// Hidden strumlines get no column: on middlescroll the opponent's are at 0.35 alpha
+			// off to the side, and with opponent strums off they are not drawn at all.
+			var visible:Bool = false;
+			var left:Float = Math.POSITIVE_INFINITY;
+			var right:Float = Math.NEGATIVE_INFINITY;
+
+			for (strum in strums)
+			{
+				if (strum == null) continue;
+
+				if (strum.alpha > 0.5) visible = true;
+				left = Math.min(left, strum.x);
+				right = Math.max(right, strum.x + strum.width);
+			}
+
+			if (!visible) continue;
+
+			var back:FlxSprite = new FlxSprite(left - STRUM_BACK_PAD, 0)
+				.makeGraphic(Std.int(right - left + STRUM_BACK_PAD * 2), FlxG.height, FlxColor.BLACK);
+			back.alpha = opacity;
+			back.scrollFactor.set();
+			back.cameras = [camHUD];
+			grpStrumBacks.add(back);
+		}
+	}
+
+	/** How far past the arrows a strumline background reaches, V-Slice's `BACKGROUND_PAD`. */
+	public static inline var STRUM_BACK_PAD:Int = 16;
+
 	public var skipArrowStartTween:Bool = false; //for lua
 	private function generateStaticArrows(player:Int):Void
 	{
 		var strumLineX:Float = ClientPrefs.data.middleScroll ? STRUM_X_MIDDLESCROLL : STRUM_X;
 		var strumLineY:Float = ClientPrefs.data.downScroll ? (FlxG.height - 150) : 50;
+
+		// V-Slice's strumlines sit a good way left of Psych's - the note spacing and the 0.7
+		// they are both drawn at are the same, so the whole difference is this one nudge. Not
+		// applied on middlescroll, which has already moved them somewhere else entirely and
+		// centred them on purpose.
+		if (VSliceVisuals.strumline && !ClientPrefs.data.middleScroll)
+			strumLineX += VSliceVisuals.STRUM_X_NUDGE;
 		for (i in 0...4)
 		{
 			// FlxG.log.add(i);
@@ -1649,11 +1742,22 @@ class PlayState extends MusicBeatState
 
 			var babyArrow:StrumNote = new StrumNote(strumLineX, strumLineY, i, player);
 			babyArrow.downScroll = ClientPrefs.data.downScroll;
-			if (!isStoryMode && !skipArrowStartTween)
+			// Story mode used to skip the arrival entirely; V-Slice plays it either way, so the
+			// Transitions group takes the story exemption off as well as putting the lift back.
+			if ((!isStoryMode || VSliceVisuals.transitions) && !skipArrowStartTween)
 			{
-				//babyArrow.y -= 10;
 				babyArrow.alpha = 0;
-				FlxTween.tween(babyArrow, {/*y: babyArrow.y + 10,*/ alpha: targetAlpha}, 1, {ease: FlxEase.circOut, startDelay: 0.5 + (0.2 * i)});
+
+				if (VSliceVisuals.transitions)
+				{
+					// The arrow rises into place as it fades. Psych has this exact motion in
+					// its source with both halves commented out.
+					babyArrow.y -= VSliceVisuals.ARROW_RISE;
+					FlxTween.tween(babyArrow, {y: babyArrow.y + VSliceVisuals.ARROW_RISE, alpha: targetAlpha}, 1,
+						{ease: FlxEase.circOut, startDelay: 0.5 + (0.2 * i)});
+				}
+				else
+					FlxTween.tween(babyArrow, {alpha: targetAlpha}, 1, {ease: FlxEase.circOut, startDelay: 0.5 + (0.2 * i)});
 			}
 			else babyArrow.alpha = targetAlpha;
 
@@ -2040,8 +2144,29 @@ class PlayState extends MusicBeatState
 	}
 
 	// Health icon updaters
+	/** Seconds since the icons last popped, for the bop that lands rather than eases forever. */
+	var iconBopTime:Float = 0;
+
 	public dynamic function updateIconsScale(elapsed:Float)
 	{
+		if (VSliceVisuals.icons)
+		{
+			// V-Slice tweens the bop back to exactly its resting size over a fixed time, where
+			// Psych's exponential ease is still four percent oversized after the same stretch
+			// and technically never arrives. Same 20% pop either way; this one lands.
+			iconBopTime += elapsed;
+
+			var duration:Float = Math.min(Conductor.stepCrochet * 0.002, VSliceVisuals.ICON_BOP_MAX) / playbackRate;
+			var along:Float = (duration <= 0) ? 1 : Math.min(1, iconBopTime / duration);
+			var mult:Float = ICON_BOP_SCALE + (1 - ICON_BOP_SCALE) * along;
+
+			iconP1.scale.set(mult, mult);
+			iconP1.updateHitbox();
+			iconP2.scale.set(mult, mult);
+			iconP2.updateHitbox();
+			return;
+		}
+
 		var mult:Float = FlxMath.lerp(1, iconP1.scale.x, Math.exp(-elapsed * 9 * playbackRate));
 		iconP1.scale.set(mult, mult);
 		iconP1.updateHitbox();
@@ -2050,6 +2175,9 @@ class PlayState extends MusicBeatState
 		iconP2.scale.set(mult, mult);
 		iconP2.updateHitbox();
 	}
+
+	/** How far an icon swells on the beat. V-Slice's `BOP_SCALE` of 0.2, over a base of 1. */
+	public static inline var ICON_BOP_SCALE:Float = 1.2;
 
 	/**
 	 * Slides the displayed health toward the real value.
@@ -2797,6 +2925,36 @@ class PlayState extends MusicBeatState
 
 
 	public var transitioning = false;
+
+	/** How long the notes take to leave on a restart, and V-Slice's own `vwooshTime`. */
+	public static inline var VWOOSH_TIME:Float = 0.5;
+
+	/**
+	 * Flies every note on screen off the way it came, for a restart.
+	 *
+	 * V-Slice does this either side of rebuilding the song - out, a pause, then the new chart
+	 * in - and skips it coming back from a death, where the game over screen already covered
+	 * the change. Only the leaving half is here: Psych restarts by resetting the whole state,
+	 * so there is no moment where the old notes are gone and the new ones are waiting.
+	 *
+	 * Returns whether anything actually left, so a restart with an empty screen does not sit
+	 * through half a second of nothing.
+	 */
+	public function vwooshNotesOut():Bool
+	{
+		var moved:Bool = false;
+
+		notes.forEachAlive(function(note:Note)
+		{
+			var targetY:Float = ClientPrefs.data.downScroll ? note.y - FlxG.height : FlxG.height + note.y;
+			FlxTween.cancelTweensOf(note);
+			FlxTween.tween(note, {y: targetY}, VWOOSH_TIME, {ease: FlxEase.expoIn});
+			moved = true;
+		});
+
+		return moved;
+	}
+
 	public function endSong()
 	{
 		//Should kill you if you tried to cheat
@@ -2822,6 +2980,19 @@ class PlayState extends MusicBeatState
 		timeTxt.visible = false;
 		canPause = false;
 		endingSong = true;
+
+		// V-Slice sends the arrows back up as the song finishes, the reverse of the way they
+		// arrived. Psych simply leaves them sitting there until the state changes.
+		if (VSliceVisuals.transitions)
+		{
+			for (strum in strumLineNotes)
+			{
+				if (strum == null) continue;
+
+				FlxTween.cancelTweensOf(strum);
+				FlxTween.tween(strum, {y: strum.y - VSliceVisuals.ARROW_RISE, alpha: 0}, 0.5, {ease: FlxEase.circIn});
+			}
+		}
 		camZooming = false;
 		inCutscene = false;
 		updateTime = false;
@@ -2970,6 +3141,80 @@ class PlayState extends MusicBeatState
 			Paths.image(uiFolder + 'num' + i + uiPostfix);
 	}
 
+
+	/**
+	 * The flying combo digits, on their own.
+	 *
+	 * Their own method because V-Slice pops a zero when you break a combo of ten or more, and
+	 * that is these without anything else: no judgement beside them, no score, no splash - all
+	 * of which `popUpScore` is also responsible for.
+	 *
+	 * Returns how far right the last digit reached, which is where Psych hangs the COMBO word.
+	 */
+	function spawnComboDigits(value:Int, placement:Float, uiFolder:String, uiPostfix:String, antialias:Bool, show:Bool):Float
+	{
+		var daLoop:Int = 0;
+		var xThing:Float = 0;
+
+		var separatedScore:String = Std.string(value).lpad('0', 3);
+		for (i in 0...separatedScore.length)
+		{
+			var numScore:FlxSprite = new FlxSprite().loadGraphic(Paths.image(uiFolder + 'num' + Std.parseInt(separatedScore.charAt(i)) + uiPostfix));
+			numScore.screenCenter();
+
+			var comboScale:Float = !PlayState.isPixelStage ? 0.5 : daPixelZoom;
+			if (VSliceVisuals.popups)
+				comboScale = !PlayState.isPixelStage ? VSliceVisuals.COMBO_SCALE : VSliceVisuals.PIXEL_POPUP_SCALE;
+
+			if (VSliceVisuals.popups)
+			{
+				// V-Slice lays its digits out from the right at a fixed 36px pitch whatever the
+				// note style, and builds the number least significant first - so the place this
+				// digit sits is counted from the end of the string rather than the start.
+				//
+				// Half the drawn size is added back for the same reason the judgement needs it:
+				// `updateHitbox` moves x and y to the top left of the scaled art, and V-Slice's
+				// numbers are for a full size frame box with the art centred in it.
+				numScore.x = FlxG.width * 0.507 - 36 * (separatedScore.length - i) - 65
+					+ (numScore.width * (1 - comboScale)) / 2 + ClientPrefs.data.comboOffset[2];
+				numScore.y = FlxG.height * 0.44 + (numScore.height * (1 - comboScale)) / 2
+					- ClientPrefs.data.comboOffset[3];
+			}
+			else
+			{
+				numScore.x = placement + (43 * daLoop) - 90 + ClientPrefs.data.comboOffset[2];
+				numScore.y += 80 - ClientPrefs.data.comboOffset[3];
+			}
+
+			numScore.setGraphicSize(Std.int(numScore.width * comboScale));
+			numScore.updateHitbox();
+
+			// V-Slice throws its digits a little harder and a little less high than Psych does.
+			numScore.acceleration.y = VSliceVisuals.popups ? FlxG.random.int(250, 300) * playbackRate * playbackRate
+				: FlxG.random.int(200, 300) * playbackRate * playbackRate;
+			numScore.velocity.y -= (VSliceVisuals.popups ? FlxG.random.int(130, 150) : FlxG.random.int(140, 160)) * playbackRate;
+			numScore.velocity.x = FlxG.random.float(-5, 5) * playbackRate;
+			numScore.visible = !ClientPrefs.data.hideHud;
+			numScore.antialiasing = antialias;
+
+			if(show)
+				comboGroup.add(numScore);
+
+			FlxTween.tween(numScore, {alpha: 0}, 0.2 / playbackRate, {
+				ease: VSliceVisuals.fadeEase(PlayState.isPixelStage, 2),
+				onComplete: function(tween:FlxTween)
+				{
+					numScore.destroy();
+				},
+				startDelay: Conductor.crochet * 0.002 / playbackRate
+			});
+
+			daLoop++;
+			if(numScore.x > xThing) xThing = numScore.x;
+		}
+		return xThing;
+	}
+
 	private function popUpScore(note:Note = null):Void
 	{
 		var noteDiff:Float = Math.abs(note.strumTime - Conductor.songPosition + ClientPrefs.data.ratingOffset);
@@ -3034,8 +3279,32 @@ class PlayState extends MusicBeatState
 
 		rating.loadGraphic(Paths.image(uiFolder + daRating.image + uiPostfix));
 		rating.screenCenter();
-		rating.x = placement - 40;
-		rating.y -= 60;
+
+		// V-Slice's note styles draw these a touch smaller than Psych does - 0.65 against 0.7,
+		// and on a pixel stage 4.2 against Psych's 5.1, where it also stops scaling the digits
+		// apart from the judgement. Worked out here rather than at the `setGraphicSize` below,
+		// because the placement needs to know how big the art ends up.
+		var judgementScale:Float = !PlayState.isPixelStage ? 0.7 : daPixelZoom * 0.85;
+		if (VSliceVisuals.popups)
+			judgementScale = !PlayState.isPixelStage ? VSliceVisuals.JUDGEMENT_SCALE : VSliceVisuals.PIXEL_POPUP_SCALE;
+
+		if (VSliceVisuals.popups)
+		{
+			// Centred on 47.4% of the width, where Psych hangs the left edge off a placement
+			// 35% along - about 58px apart, and the thing that reads as "not the same menu"
+			// before any of the rest of it does.
+			//
+			// Half the drawn size is taken off because `updateHitbox` below makes x and y the
+			// top left of the scaled art. V-Slice never calls it, so its own numbers are for
+			// a frame box that stayed full size with the art drawn centred inside it.
+			rating.x = FlxG.width * 0.474 - (rating.width * judgementScale) / 2;
+			rating.y = FlxG.height * 0.45 - 60 - (rating.height * judgementScale) / 2;
+		}
+		else
+		{
+			rating.x = placement - 40;
+			rating.y -= 60;
+		}
 		rating.acceleration.y = 550 * playbackRate * playbackRate;
 		rating.velocity.y -= FlxG.random.int(140, 175) * playbackRate;
 		rating.velocity.x -= FlxG.random.int(0, 10) * playbackRate;
@@ -3057,64 +3326,33 @@ class PlayState extends MusicBeatState
 		comboSpr.velocity.x += FlxG.random.int(1, 10) * playbackRate;
 		comboGroup.add(rating);
 
-		if (!PlayState.isPixelStage)
-		{
-			rating.setGraphicSize(Std.int(rating.width * 0.7));
-			comboSpr.setGraphicSize(Std.int(comboSpr.width * 0.7));
-		}
-		else
-		{
-			rating.setGraphicSize(Std.int(rating.width * daPixelZoom * 0.85));
-			comboSpr.setGraphicSize(Std.int(comboSpr.width * daPixelZoom * 0.85));
-		}
+		rating.setGraphicSize(Std.int(rating.width * judgementScale));
+		comboSpr.setGraphicSize(Std.int(comboSpr.width * judgementScale));
 
 		comboSpr.updateHitbox();
 		rating.updateHitbox();
 
-		var daLoop:Int = 0;
 		var xThing:Float = 0;
-		if (showCombo)
+
+		// V-Slice never draws the word at all - `combo.png` ships with it and nothing in its
+		// gameplay loads it - and shows no number until a combo of ten.
+		var wantsWord:Bool = showCombo && !VSliceVisuals.popups;
+		var wantsDigits:Bool = showComboNum && (!VSliceVisuals.popups || combo >= VSliceVisuals.COMBO_MIN);
+
+		if (wantsWord)
 			comboGroup.add(comboSpr);
+		else
+			comboSpr.visible = false;
 
-		var separatedScore:String = Std.string(combo).lpad('0', 3);
-		for (i in 0...separatedScore.length)
-		{
-			var numScore:FlxSprite = new FlxSprite().loadGraphic(Paths.image(uiFolder + 'num' + Std.parseInt(separatedScore.charAt(i)) + uiPostfix));
-			numScore.screenCenter();
-			numScore.x = placement + (43 * daLoop) - 90 + ClientPrefs.data.comboOffset[2];
-			numScore.y += 80 - ClientPrefs.data.comboOffset[3];
-
-			if (!PlayState.isPixelStage) numScore.setGraphicSize(Std.int(numScore.width * 0.5));
-			else numScore.setGraphicSize(Std.int(numScore.width * daPixelZoom));
-			numScore.updateHitbox();
-
-			numScore.acceleration.y = FlxG.random.int(200, 300) * playbackRate * playbackRate;
-			numScore.velocity.y -= FlxG.random.int(140, 160) * playbackRate;
-			numScore.velocity.x = FlxG.random.float(-5, 5) * playbackRate;
-			numScore.visible = !ClientPrefs.data.hideHud;
-			numScore.antialiasing = antialias;
-
-			//if (combo >= 10 || combo == 0)
-			if(showComboNum)
-				comboGroup.add(numScore);
-
-			FlxTween.tween(numScore, {alpha: 0}, 0.2 / playbackRate, {
-				onComplete: function(tween:FlxTween)
-				{
-					numScore.destroy();
-				},
-				startDelay: Conductor.crochet * 0.002 / playbackRate
-			});
-
-			daLoop++;
-			if(numScore.x > xThing) xThing = numScore.x;
-		}
+		xThing = spawnComboDigits(combo, placement, uiFolder, uiPostfix, antialias, wantsDigits);
 		comboSpr.x = xThing + 50;
 		FlxTween.tween(rating, {alpha: 0}, 0.2 / playbackRate, {
+			ease: VSliceVisuals.fadeEase(PlayState.isPixelStage, 2),
 			startDelay: Conductor.crochet * 0.001 / playbackRate
 		});
 
 		FlxTween.tween(comboSpr, {alpha: 0}, 0.2 / playbackRate, {
+			ease: VSliceVisuals.fadeEase(PlayState.isPixelStage, 2),
 			onComplete: function(tween:FlxTween)
 			{
 				comboSpr.destroy();
@@ -3647,6 +3885,16 @@ class PlayState extends MusicBeatState
 		var lastCombo:Int = combo;
 		combo = 0;
 
+		// V-Slice punctuates a broken combo with a zero where the number was, for the same ten
+		// it needed to show a number in the first place. Only the digits - no judgement beside
+		// them, which is why they are their own method.
+		if (VSliceVisuals.popups && lastCombo >= VSliceVisuals.COMBO_MIN && showComboNum && !ClientPrefs.data.hideHud)
+		{
+			var uiFolder:String = (stageUI != "normal") ? uiPrefix + "UI/" : "";
+			var antialias:Bool = (stageUI != "normal") ? !isPixelStage : ClientPrefs.data.antialiasing;
+			spawnComboDigits(0, FlxG.width * 0.35, uiFolder, uiPostfix, antialias, true);
+		}
+
 		// V-Slice charges the three ways of losing a note differently, where Psych charges 10
 		// points for all of them. A miss is 100 and 4% of the bar; tapping an empty lane is 10
 		// and the same 4%; and letting go of a hold costs 125 points a second of what was left
@@ -4097,8 +4345,9 @@ class PlayState extends MusicBeatState
 		if (generatedMusic)
 			notes.sort(FlxSort.byY, ClientPrefs.data.downScroll ? FlxSort.ASCENDING : FlxSort.DESCENDING);
 
-		iconP1.scale.set(1.2, 1.2);
-		iconP2.scale.set(1.2, 1.2);
+		iconP1.scale.set(ICON_BOP_SCALE, ICON_BOP_SCALE);
+		iconP2.scale.set(ICON_BOP_SCALE, ICON_BOP_SCALE);
+		iconBopTime = 0;
 
 		iconP1.updateHitbox();
 		iconP2.updateHitbox();

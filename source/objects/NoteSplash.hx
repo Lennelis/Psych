@@ -324,6 +324,12 @@ class NoteSplash extends FlxSprite
 		alpha = ClientPrefs.data.splashAlpha;
 		if (note != null) alpha = note.noteSplashData.a;
 
+		// V-Slice's note styles carry their own opacity, and the two disagree: 0.8 on the
+		// default one, full on the pixel one. Applied only where nothing has asked for
+		// something else, so a note type or a script that set its own still gets it.
+		if (backend.VSliceVisuals.popups && (note == null || note.noteSplashData.a == ClientPrefs.data.splashAlpha))
+			alpha = PlayState.isPixelStage ? backend.VSliceVisuals.PIXEL_SPLASH_ALPHA : backend.VSliceVisuals.SPLASH_ALPHA;
+
 		antialiasing = ClientPrefs.data.antialiasing;
 		if (note != null) antialiasing = note.noteSplashData.antialiasing;
 		if (PlayState.isPixelStage && config.allowPixel) antialiasing = false;

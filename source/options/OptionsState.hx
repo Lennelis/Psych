@@ -11,7 +11,8 @@ class OptionsState extends MusicBeatState
 		'Adjust Delay and Combo',
 		'Graphics',
 		'Visuals',
-		'Gameplay'
+		'Gameplay',
+		'V-Slice'
 		#if TOUCH_CONTROLS_ALLOWED , 'Mobile' #end
 		#if TRANSLATIONS_ALLOWED , 'Language' #end
 	];
@@ -33,6 +34,8 @@ class OptionsState extends MusicBeatState
 				openSubState(new options.VisualsSettingsSubState());
 			case 'Gameplay':
 				openSubState(new options.GameplaySettingsSubState());
+			case 'V-Slice':
+				openSubState(new options.VSliceSettingsSubState());
 			case 'Adjust Delay and Combo':
 				MusicBeatState.switchState(new options.NoteOffsetState());
 			case 'Language':

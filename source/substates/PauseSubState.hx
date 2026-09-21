@@ -420,6 +420,19 @@ class PauseSubState extends MusicBeatSubstate
 			FlxTransitionableState.skipNextTransIn = true;
 			FlxTransitionableState.skipNextTransOut = true;
 		}
+
+		// V-Slice sends the notes off the screen before it rebuilds the song rather than
+		// cutting straight to the countdown. The menu is hidden rather than closed: closing it
+		// would hand the song back its music and its update, and the notes are only being
+		// drawn here, not played.
+		if (ClientPrefs.data.restartAnimation && PlayState.instance.vwooshNotesOut())
+		{
+			if (PlayState.instance.subState != null) PlayState.instance.subState.visible = false;
+
+			new FlxTimer().start(PlayState.VWOOSH_TIME, function(_) MusicBeatState.resetState());
+			return;
+		}
+
 		MusicBeatState.resetState();
 	}
 

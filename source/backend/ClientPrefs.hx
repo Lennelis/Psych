@@ -87,6 +87,16 @@ import states.TitleState;
 	public var guitarHeroSustains:Bool = true;
 	// 'Psych' or 'V-Slice'. See backend/Scoring.
 	public var scoringSystem:String = 'Psych';
+
+	// V-Slice's gameplay look, in groups. See backend/VSliceVisuals.
+	public var vslicePopups:Bool = false;
+	public var vsliceStrumline:Bool = false;
+	public var vsliceIcons:Bool = false;
+	public var vsliceTransitions:Bool = false;
+	public var vsliceHealthBar:Bool = false;
+	public var vsliceScoreCounter:Bool = false;
+	public var strumlineBackground:Float = 0;
+	public var restartAnimation:Bool = false;
 	public var discordRPC:Bool = true;
 	public var loadingScreen:Bool = true;
 	public var language:String = 'en-US';
