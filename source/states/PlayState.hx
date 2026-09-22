@@ -4247,7 +4247,7 @@ class PlayState extends MusicBeatState
 	}
 
 	/**
-	 * Keeps a mesh standing in for every hold on screen.
+	 * Keeps a trail standing in for every hold on screen.
 	 *
 	 * Done as a pass over the notes rather than hooked into where they spawn, because a hold's
 	 * head is destroyed the instant it is hit while the hold itself carries on - so there is no
@@ -4257,7 +4257,7 @@ class PlayState extends MusicBeatState
 	 *
 	 * The pieces are not removed, only hidden. Everything that decides whether a hold was held -
 	 * the input, the miss cascade, the covers, the scoring - reads those notes, and none of it
-	 * needs to know a mesh is being drawn instead.
+	 * needs to know a trail is being drawn instead.
 	 */
 	function updateSustainTrails(songSpeed:Float):Void
 	{
@@ -4301,7 +4301,15 @@ class PlayState extends MusicBeatState
 		// way Psych always did, rather than turning invisible.
 		notes.forEachAlive(function(note:Note)
 		{
-			if (note.isSustainNote) note.visible = (trailCovering(note) == null);
+			if (!note.isSustainNote) return;
+
+			var trail:SustainTrail = trailCovering(note);
+			note.visible = (trail == null);
+
+			// A dropped hold is dimmed rather than left solid, the way Psych dims the pieces the
+			// trail is standing in for. Any surviving piece carries the mark - the miss cascade
+			// sets it on the whole tail at once.
+			if (trail != null && note.missed) trail.faded = true;
 		});
 	}
 
