@@ -165,6 +165,6 @@
   "weekBefore": "",
   "startUnlocked": true,
   "difficulties": "Erect, Nightmare",
-  "hideStoryMode": false,
+  "hideStoryMode": true,
   "hideFreeplay": false
 }
