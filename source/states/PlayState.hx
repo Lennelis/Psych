@@ -1475,8 +1475,13 @@ class PlayState extends MusicBeatState
 		{
 			if (songData.needsVoices)
 			{
+				// A song with one combined track has no postfix at all, and `Paths.voices` only
+				// leaves the dash off when it is handed null - an empty string still spells
+				// `Voices-`, which is nothing. So the plain case stays null rather than ''.
+				var soloPostfix:String = (audioSuffix.length > 0) ? audioSuffix.substr(1) : null;
+
 				var playerVocals = Paths.voices(songData.song, ((boyfriend.vocalsFile == null || boyfriend.vocalsFile.length < 1) ? 'Player' : boyfriend.vocalsFile) + audioSuffix);
-				vocals.loadEmbedded(playerVocals != null ? playerVocals : Paths.voices(songData.song, audioSuffix.substr(1)));
+				vocals.loadEmbedded(playerVocals != null ? playerVocals : Paths.voices(songData.song, soloPostfix));
 				
 				var oppVocals = Paths.voices(songData.song, ((dad.vocalsFile == null || dad.vocalsFile.length < 1) ? 'Opponent' : dad.vocalsFile) + audioSuffix);
 				if(oppVocals != null && oppVocals.length > 0) opponentVocals.loadEmbedded(oppVocals);
