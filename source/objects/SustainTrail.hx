@@ -92,15 +92,6 @@ class SustainTrail extends FlxSpriteGroup
 
 	var clip:FlxRect;
 
-	/**
-	 * TEMPORARY. The numbers behind the last layout, for reading off a device.
-	 *
-	 * The joint between the body and the cap comes out a few pixels apart on hardware where the
-	 * arithmetic here says it is exactly zero, and two rounds of reading it off screenshots got
-	 * the mechanism wrong both times. This prints what the maths actually produced.
-	 */
-	public var report:String = '';
-
 	public function new()
 	{
 		super();
@@ -258,11 +249,21 @@ class SustainTrail extends FlxSpriteGroup
 		var capLength:Float = Math.min(capHeight, trailLength);
 		var bodyLength:Float = Math.max(0, trailLength - capLength);
 
+		// The body's outermost row is a half transparent edge in the art, and it is the row that
+		// lands against the cap - Psych flips the piece on downscroll, which puts the soft row at
+		// whichever end is the far one. Stretched, that half pixel becomes a fade as wide as the
+		// stretch factor, which is why it grew with the length of the hold and closed up as the
+		// hold was eaten. So the body runs on underneath the cap far enough to bury it, the way
+		// Psych's own pieces overlap each other by the 1.05 in their height.
+		var stretch:Float = (body.frameHeight > 0) ? bodyLength / body.frameHeight : 0;
+		var overlap:Float = (bodyLength > 0) ? Math.min(stretch * 2, capHeight * 0.5) : 0;
+		var reach:Float = bodyLength + overlap;
+
 		// The body runs from the strum out to where the cap starts; the cap closes off the far
 		// end. Both are measured as a distance from the anchor, along whichever way the notes
 		// are travelling, so the two scroll directions only differ in one sign.
-		place(body, strum.x + bodyOffsetX, anchor, bodyLength, bodyLength, down,
-			(body.frameHeight > 0) ? bodyLength / body.frameHeight : 0, null);
+		place(body, strum.x + bodyOffsetX, anchor, reach, reach, down,
+			(body.frameHeight > 0) ? reach / body.frameHeight : 0, null);
 
 		// The cap is always drawn at the size its art was made, and cut back from the near end
 		// when the hold has been eaten into it. The cut is the same rectangle either way round:
@@ -278,22 +279,7 @@ class SustainTrail extends FlxSpriteGroup
 
 		visible = true;
 		body.visible = bodyLength > 0;
-
-		// TEMPORARY, with the field above.
-		report = 'trail ' + Std.int(trailLength) + 'px'
-			+ ' | body len ' + fmt(bodyLength) + ' scaleY ' + fmt(body.scale.y) + ' fh ' + body.frameHeight
-			+ ' -> y ' + fmt(body.y) + ' h ' + fmt(body.height) + ' off ' + fmt(body.offset.y)
-			+ '\ncap len ' + fmt(capLength) + '/' + fmt(capHeight) + ' scaleY ' + fmt(cap.scale.y)
-			+ ' fh ' + cap.frameHeight + ' -> y ' + fmt(cap.y) + ' h ' + fmt(cap.height)
-			+ ' off ' + fmt(cap.offset.y) + ' flipY ' + cap.flipY
-			+ '\nbody top ' + fmt(down ? body.y : body.y + body.height)
-			+ ' vs cap edge ' + fmt(down ? cap.y + cap.height : cap.y)
-			+ ' | anchor ' + fmt(anchor) + ' clip ' + (cap.clipRect != null ? 'yes' : 'no');
 	}
-
-	/** TEMPORARY. Two decimals, so a fractional scale is not rounded out of sight. */
-	static function fmt(v:Float):String
-		return '' + Math.round(v * 100) / 100;
 
 	/**
 	 * Puts one piece with its far edge `far` pixels out from the strum, standing `height` tall.
@@ -324,20 +310,15 @@ class SustainTrail extends FlxSpriteGroup
 	{
 		if (!bound) return;
 
-		standing = 0;
 		for (piece in pieces)
 		{
 			if (piece == null || !piece.exists) continue;
 
-			standing++;
 			piece.visible = false;
 			if (piece.missed) faded = true;
 			restyle(piece);
 		}
 	}
-
-	/** TEMPORARY. How many of the pieces are still around, for the readout. */
-	public var standing:Int = 0;
 
 	/**
 	 * Takes the colour from a piece the trail is standing in for.
