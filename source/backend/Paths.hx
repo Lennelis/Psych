@@ -223,8 +223,19 @@ class Paths
 	inline static public function music(key:String, ?modsAllowed:Bool = true):Sound
 		return returnSound('music/$key', modsAllowed);
 
-	inline static public function inst(song:String, ?modsAllowed:Bool = true):Sound
-		return returnSound('${formatToSongPath(song)}/Inst', 'songs', modsAllowed);
+	/**
+	 * The instrumental, optionally a named variant of it.
+	 *
+	 * The Erect remixes are the same song with a different recording, so they live beside the
+	 * original as `Inst-erect` rather than as a separate song folder - which is how V-Slice
+	 * stores them too, and it keeps one set of charts, icons and week entries per song.
+	 */
+	inline static public function inst(song:String, variant:String = null, ?modsAllowed:Bool = true):Sound
+	{
+		var songKey:String = '${formatToSongPath(song)}/Inst';
+		if(variant != null && variant.length > 0) songKey += variant;
+		return returnSound(songKey, 'songs', modsAllowed);
+	}
 
 	inline static public function voices(song:String, postfix:String = null, ?modsAllowed:Bool = true):Sound
 	{

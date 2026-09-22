@@ -180,6 +180,9 @@ class PlayState extends MusicBeatState
 	/** One trail per hold, standing in for its pieces when V-Slice's sustains are on. */
 	public var grpSustainTrails:FlxTypedGroup<SustainTrail> = new FlxTypedGroup<SustainTrail>();
 
+	/** Appended to the three audio track names, so one song can carry more than one recording. */
+	public var audioSuffix:String = '';
+
 	public var camZooming:Bool = false;
 	public var camZoomingMult:Float = 1;
 	public var camZoomingDecay:Float = 1;
@@ -1459,16 +1462,23 @@ class PlayState extends MusicBeatState
 
 		curSong = songData.song;
 
+		// A chart can name a different recording of the same song - the Erect remixes do, and
+		// they sit beside the original as `Inst-erect` rather than in a folder of their own. A
+		// chart that says nothing gets the plain tracks, which is every chart Psych already had.
+		audioSuffix = '';
+		var declaredSuffix:Dynamic = Reflect.field(songData, 'audioSuffix');
+		if(declaredSuffix != null && Std.isOfType(declaredSuffix, String)) audioSuffix = cast declaredSuffix;
+
 		vocals = new FlxSound();
 		opponentVocals = new FlxSound();
 		try
 		{
 			if (songData.needsVoices)
 			{
-				var playerVocals = Paths.voices(songData.song, (boyfriend.vocalsFile == null || boyfriend.vocalsFile.length < 1) ? 'Player' : boyfriend.vocalsFile);
-				vocals.loadEmbedded(playerVocals != null ? playerVocals : Paths.voices(songData.song));
+				var playerVocals = Paths.voices(songData.song, ((boyfriend.vocalsFile == null || boyfriend.vocalsFile.length < 1) ? 'Player' : boyfriend.vocalsFile) + audioSuffix);
+				vocals.loadEmbedded(playerVocals != null ? playerVocals : Paths.voices(songData.song, audioSuffix.substr(1)));
 				
-				var oppVocals = Paths.voices(songData.song, (dad.vocalsFile == null || dad.vocalsFile.length < 1) ? 'Opponent' : dad.vocalsFile);
+				var oppVocals = Paths.voices(songData.song, ((dad.vocalsFile == null || dad.vocalsFile.length < 1) ? 'Opponent' : dad.vocalsFile) + audioSuffix);
 				if(oppVocals != null && oppVocals.length > 0) opponentVocals.loadEmbedded(oppVocals);
 			}
 		}
@@ -1484,7 +1494,7 @@ class PlayState extends MusicBeatState
 		inst = new FlxSound();
 		try
 		{
-			inst.loadEmbedded(Paths.inst(songData.song));
+			inst.loadEmbedded(Paths.inst(songData.song, audioSuffix));
 		}
 		catch (e:Dynamic) {}
 		FlxG.sound.list.add(inst);
