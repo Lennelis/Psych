@@ -99,11 +99,20 @@ class VSliceVisuals
 	/**
 	 * How far left of Psych's the strumlines sit.
 	 *
-	 * Psych puts a strum at `STRUM_X + 50 + 112 * lane`; V-Slice puts it at `48 + 112 * lane`
-	 * less an `INITIAL_OFFSET` of `-0.275 * 104`. The note spacing and the 0.7 both scale by
-	 * are the same, and both take `x` as the left edge, so the whole difference is this.
+	 * Psych puts a strum at `STRUM_X + 50 + 112 * lane`, so 92 for the first one; V-Slice puts
+	 * its strumline at `STRUMLINE_X_OFFSET`, which is 48. The lane spacing is the same number
+	 * on both sides - Psych's `swagWidth` is 160 * 0.7 and V-Slice's `NOTE_SPACING` is 104 + 8,
+	 * both 112 - and both scale their arrows by 0.7 and take `x` as the left edge. So the whole
+	 * difference is 48 - 92.
+	 *
+	 * This also carried `INITIAL_OFFSET`, a further -28.6 that V-Slice's `Strumline` adds to
+	 * each receptor on top of the strumline's own x. Reading the source that is real, but the
+	 * game does not draw it that way: measured against a V-Slice screenshot, its arrows sit
+	 * 28.6 px to the right of where that sum puts them - which is the offset exactly, so the
+	 * build being matched is not applying it to its receptors. The picture wins over the
+	 * arithmetic here.
 	 */
-	public static final STRUM_X_NUDGE:Float = -72.6;
+	public static final STRUM_X_NUDGE:Float = -44;
 
 	/** The lift on an arrow as it fades in, and on the way out at the end of a song. */
 	public static final ARROW_RISE:Float = 10;
