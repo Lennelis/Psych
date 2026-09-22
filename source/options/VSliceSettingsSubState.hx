@@ -13,6 +13,16 @@ class VSliceSettingsSubState extends BaseOptionsMenu
 		title = Language.getPhrase('vslice_menu', 'V-Slice Settings');
 		rpcTitle = 'V-Slice Settings Menu'; //for Discord Rich Presence
 
+		// Lives here rather than under Gameplay, where it was first put and promptly lost: the
+		// hold scoring it switches on is the thing people come looking for, and they come
+		// looking in the V-Slice menu.
+		var option:Option = new Option('Scoring',
+			"Psych scores a note by its judgement. V-Slice scores the timing itself on a curve,\nand pays 250 a second for a hold, which Psych pays nothing at all for.\nHealth follows the judgement too, instead of a flat amount for anything you touch.\n\nJudgement windows are the same either way, but the totals are not comparable -\na high score set under one will read oddly beside the other.",
+			'scoringSystem',
+			STRING,
+			['Psych', 'V-Slice']);
+		addOption(option);
+
 		var option:Option = new Option('Popups',
 			"V-Slice's judgement and combo art: no COMBO word, no number until a combo of ten,\na zero popped when you break one, and its own sizes and placement.\n\nLeft alone on a mod with its own UI art, which was drawn for Psych's placement.",
 			'vslicePopups',

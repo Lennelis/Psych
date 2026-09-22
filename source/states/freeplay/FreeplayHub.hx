@@ -15,8 +15,17 @@ class FreeplayHub
 {
 	public static function menu():MusicBeatState
 	{
-		if (ClientPrefs.data.freeplayStyle == 'V-Slice') return new VSliceFreeplayState();
+		if (usingVSlice()) return new VSliceFreeplayState();
 
 		return new FreeplayState();
 	}
+
+	/**
+	 * Which of the two is going to open.
+	 *
+	 * Worth asking before switching to it: the V-Slice one brings its own music and its own
+	 * arrival, so whatever is sending the player there should not be starting either.
+	 */
+	public static function usingVSlice():Bool
+		return ClientPrefs.data.freeplayStyle == 'V-Slice';
 }

@@ -7,6 +7,7 @@ import backend.Song;
 import backend.Rating;
 import backend.Scoring;
 import backend.VSliceVisuals;
+import flixel.text.FlxBitmapText;
 
 import flixel.FlxBasic;
 import flixel.FlxObject;
@@ -263,6 +264,9 @@ class PlayState extends MusicBeatState
 	public var songHits:Int = 0;
 	public var songMisses:Int = 0;
 	public var scoreTxt:FlxText;
+
+	/** V-Slice's score counter, drawn in place of `scoreTxt` when its group is on. */
+	public var vsliceScoreTxt:FlxBitmapText;
 	var timeTxt:FlxText;
 	var scoreTxtTween:FlxTween;
 
@@ -619,6 +623,31 @@ class PlayState extends MusicBeatState
 		scoreTxt.borderSize = 1.25;
 		scoreTxt.visible = !ClientPrefs.data.hideHud;
 		uiGroup.add(scoreTxt);
+
+		// V-Slice sets its score in a bitmap rendering of the same VCR - the ttf is byte for
+		// byte the one Psych ships - at its native 16px, tucked under the right hand end of the
+		// health bar rather than centred beneath it.
+		//
+		// A second object rather than a reskin of the first, because `scoreTxt` is an FlxText
+		// that scripts reach for by name. It goes on being written to and simply stops being
+		// drawn, so anything reading it still gets the score.
+		vsliceScoreTxt = new FlxBitmapText(0, 0, '',
+			flixel.graphics.frames.FlxBitmapFont.fromAngelCode(Paths.font('vcr-bmp.png'), Paths.font('vcr-bmp.fnt')));
+		vsliceScoreTxt.x = healthBar.x + healthBar.width - 190;
+		vsliceScoreTxt.y = healthBar.y + 30;
+		vsliceScoreTxt.alignment = RIGHT;
+		vsliceScoreTxt.borderStyle = OUTLINE;
+		vsliceScoreTxt.borderColor = FlxColor.BLACK;
+		vsliceScoreTxt.letterSpacing = -1;
+		vsliceScoreTxt.scrollFactor.set();
+		vsliceScoreTxt.visible = false;
+		uiGroup.add(vsliceScoreTxt);
+
+		if (VSliceVisuals.scoreCounter)
+		{
+			scoreTxt.visible = false;
+			vsliceScoreTxt.visible = !ClientPrefs.data.hideHud;
+		}
 
 		botplayTxt = new FlxText(400, healthBar.y - 90, FlxG.width - 800, Language.getPhrase("Botplay").toUpperCase(), 32);
 		botplayTxt.setFormat(Paths.font("vcr.ttf"), 32, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
@@ -1267,7 +1296,11 @@ class PlayState extends MusicBeatState
 			// V-Slice puts the score up on its own, grouped in threes, and nothing else. The
 			// misses and the rating are Psych's - it is the one place the HUD says how you are
 			// doing rather than just what you have.
-			scoreTxt.text = Language.getPhrase('score_text_vslice', 'Score: {1}', [flixel.util.FlxStringUtil.formatMoney(songScore, false, true)]);
+			var vsliceScore:String = Language.getPhrase('score_text_vslice', 'Score: {1}',
+				[flixel.util.FlxStringUtil.formatMoney(songScore, false, true)]);
+
+			scoreTxt.text = vsliceScore;
+			if (vsliceScoreTxt != null) vsliceScoreTxt.text = vsliceScore;
 			return;
 		}
 
@@ -1706,8 +1739,17 @@ class PlayState extends MusicBeatState
 
 			if (!visible) continue;
 
-			var back:FlxSprite = new FlxSprite(left - STRUM_BACK_PAD, 0)
-				.makeGraphic(Std.int(right - left + STRUM_BACK_PAD * 2), FlxG.height, FlxColor.BLACK);
+			// A single white pixel stretched, rather than a full screen rectangle of its own.
+			// Flixel keys a made graphic by its size and colour and throws it away when the last
+			// sprite using it goes, so the second song asked for a key that was still in the
+			// cache with its bitmap already disposed - which is why this worked once and then
+			// stopped. A 1x1 is shared with half of flixel and told to stay either way.
+			var back:FlxSprite = new FlxSprite(left - STRUM_BACK_PAD, 0);
+			back.makeGraphic(1, 1, FlxColor.WHITE);
+			back.graphic.destroyOnNoUse = false;
+			back.scale.set(right - left + STRUM_BACK_PAD * 2, FlxG.height);
+			back.updateHitbox();
+			back.color = FlxColor.BLACK;
 			back.alpha = opacity;
 			back.scrollFactor.set();
 			back.cameras = [camHUD];
@@ -3096,7 +3138,13 @@ class PlayState extends MusicBeatState
 
 				canResync = false;
 				MusicBeatState.switchState(states.freeplay.FreeplayHub.menu());
-				FlxG.sound.playMusic(Paths.music('freakyMenu'));
+
+				// The V-Slice menu picks its own track the moment it is built, so starting the
+				// main menu's here only means hearing it under the transition and then being
+				// cut off. The classic menu has nothing of its own and still wants it.
+				if (!states.freeplay.FreeplayHub.usingVSlice())
+					FlxG.sound.playMusic(Paths.music('freakyMenu'));
+
 				changedDifficulty = false;
 			}
 			transitioning = true;
@@ -3909,8 +3957,25 @@ class PlayState extends MusicBeatState
 			if (note != null && note.isSustainNote)
 			{
 				subtract = 0;
-				scoreLost = -Scoring.scoreHoldPieceDrop();
 				countsAsMiss = false;
+
+				// Charged for the whole of what is left, not for the one piece that happened to
+				// go past. Under `guitarHeroSustains` - which is on by default - the block above
+				// has just marked the rest of the tail missed, and every one of those returns
+				// before reaching here, so this is the only chance to bill for them. Letting go
+				// of a two second hold was costing sixteen points instead of two hundred and
+				// fifty, which is why it read as nothing happening at all.
+				if (guitarHeroSustains)
+				{
+					var remaining:Int = 1;
+					if (note.parent != null)
+						for (child in note.parent.tail)
+							if (child != note && !child.wasGoodHit && child.strumTime > note.strumTime) remaining++;
+
+					scoreLost = -Scoring.scoreHoldDrop(Scoring.holdPieceLength() * remaining);
+				}
+				else
+					scoreLost = -Scoring.scoreHoldPieceDrop();
 			}
 			else
 			{

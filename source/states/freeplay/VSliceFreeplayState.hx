@@ -459,8 +459,10 @@ class VSliceFreeplayState extends MusicBeatState
 			openModifiers);
 		#end
 
-		// The menu's own track, in place of whatever the main menu left playing.
-		playMenuMusic();
+		// The menu's own track, in place of whatever the main menu left playing - unless a rank
+		// animation is about to cover the screen, which has its own sound and should not have
+		// the menu playing underneath it. `rankAnimFinish` starts the track when it is over.
+		if (queuedRankAnim == null) playMenuMusic();
 
 		if (queuedRankAnim != null)
 		{
