@@ -95,6 +95,7 @@ import states.TitleState;
 	public var vsliceTransitions:Bool = false;
 	public var vsliceHealthBar:Bool = false;
 	public var vsliceScoreCounter:Bool = false;
+	public var vsliceSustains:Bool = false;
 	public var strumlineBackground:Float = 0;
 	public var restartAnimation:Bool = false;
 	public var discordRPC:Bool = true;

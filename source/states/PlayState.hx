@@ -7,6 +7,7 @@ import backend.Song;
 import backend.Rating;
 import backend.Scoring;
 import backend.VSliceVisuals;
+import objects.SustainTrail;
 import flixel.text.FlxBitmapText;
 
 import flixel.FlxBasic;
@@ -175,6 +176,9 @@ class PlayState extends MusicBeatState
 
 	/** The dark columns behind the strumlines, when V-Slice's strumline background is on. */
 	public var grpStrumBacks:FlxTypedGroup<FlxSprite> = new FlxTypedGroup<FlxSprite>();
+
+	/** One mesh per hold, standing in for its pieces when V-Slice's sustains are on. */
+	public var grpSustainTrails:FlxTypedGroup<SustainTrail> = new FlxTypedGroup<SustainTrail>();
 
 	public var camZooming:Bool = false;
 	public var camZoomingMult:Float = 1;
@@ -565,6 +569,7 @@ class PlayState extends MusicBeatState
 
 		noteGroup.add(grpStrumBacks);
 		noteGroup.add(strumLineNotes);
+		noteGroup.add(grpSustainTrails);
 
 		if(ClientPrefs.data.timeBarType == 'Song Name')
 		{
@@ -2180,6 +2185,10 @@ class PlayState extends MusicBeatState
 			holdStateFresh = false;
 		}
 		updateHoldCovers(playerHoldsDriven);
+
+		// After the notes have been placed for this frame, so a trail lines up with the head it
+		// was built from rather than lagging it by one.
+		updateSustainTrails(songSpeed);
 
 		setOnScripts('botPlay', cpuControlled);
 		callOnScripts('onUpdatePost', [elapsed]);
@@ -4235,6 +4244,73 @@ class PlayState extends MusicBeatState
 		var result:Dynamic = callOnLuas('goodNoteHit', [notes.members.indexOf(note), leData, leType, isSus]);
 		if(result != LuaUtils.Function_Stop && result != LuaUtils.Function_StopHScript && result != LuaUtils.Function_StopAll) callOnHScript('goodNoteHit', [note]);
 		if(!note.isSustainNote) invalidateNote(note);
+	}
+
+	/**
+	 * Keeps a mesh standing in for every hold on screen.
+	 *
+	 * Done as a pass over the notes rather than hooked into where they spawn, because a hold's
+	 * head is destroyed the instant it is hit while the hold itself carries on - so there is no
+	 * single moment that owns a trail's whole life. A trail is made when a head with a tail
+	 * turns up, keeps going off what it copied from that head, and retires when the hold's time
+	 * is up.
+	 *
+	 * The pieces are not removed, only hidden. Everything that decides whether a hold was held -
+	 * the input, the miss cascade, the covers, the scoring - reads those notes, and none of it
+	 * needs to know a mesh is being drawn instead.
+	 */
+	function updateSustainTrails(songSpeed:Float):Void
+	{
+		if (!VSliceVisuals.sustains) return;
+
+		grpSustainTrails.forEachAlive(function(trail:SustainTrail)
+		{
+			if (trail.spent)
+			{
+				trail.release();
+				trail.kill();
+				return;
+			}
+
+			var strums:FlxTypedGroup<StrumNote> = trail.mustPress ? playerStrums : opponentStrums;
+			trail.refresh((trail.noteData >= 0 && trail.noteData < strums.length) ? strums.members[trail.noteData] : null, songSpeed);
+		});
+
+		notes.forEachAlive(function(note:Note)
+		{
+			if (note.isSustainNote)
+			{
+				note.visible = false;
+				return;
+			}
+
+			if (note.tail == null || note.tail.length < 1 || hasTrailFor(note)) return;
+
+			var trail:SustainTrail = grpSustainTrails.recycle(SustainTrail);
+			if (!trail.bindTo(note))
+			{
+				trail.kill();
+				return;
+			}
+
+			// `recycle` has already put it in the group.
+			trail.cameras = noteGroup.cameras;
+
+			// Laid out at once rather than waiting for the next frame, or it would draw one
+			// frame's worth behind the note it was just built from.
+			var strums:FlxTypedGroup<StrumNote> = trail.mustPress ? playerStrums : opponentStrums;
+			trail.refresh((trail.noteData >= 0 && trail.noteData < strums.length) ? strums.members[trail.noteData] : null, songSpeed);
+		});
+	}
+
+	function hasTrailFor(note:Note):Bool
+	{
+		for (trail in grpSustainTrails)
+			if (trail != null && trail.alive && !trail.spent && trail.noteData == note.noteData
+				&& trail.mustPress == note.mustPress && Math.abs(trail.strumTime - note.strumTime) < 1)
+				return true;
+
+		return false;
 	}
 
 	public function invalidateNote(note:Note):Void {

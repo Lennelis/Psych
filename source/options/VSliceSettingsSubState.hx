@@ -35,6 +35,12 @@ class VSliceSettingsSubState extends BaseOptionsMenu
 			BOOL);
 		addOption(option);
 
+		var option:Option = new Option('Sustains',
+			"Draws a hold as one solid stretched piece with a rounded end, the way V-Slice does,\ninstead of a sprite per step of the chart at 60% opacity.\n\nUses whichever note skin is loaded - it reads the hold art off the notes themselves.",
+			'vsliceSustains',
+			BOOL);
+		addOption(option);
+
 		var option:Option = new Option('Icons',
 			"The health icons land their bop instead of easing out of it forever.",
 			'vsliceIcons',

@@ -53,6 +53,12 @@ class VSliceVisuals
 	static function get_scoreCounter():Bool
 		return ClientPrefs.data.vsliceScoreCounter;
 
+	/** Holds drawn as one stretched mesh, solid, instead of a sprite per step at 0.6 alpha. */
+	public static var sustains(get, never):Bool;
+
+	static function get_sustains():Bool
+		return ClientPrefs.data.vsliceSustains;
+
 	/**
 	 * True when the song is using art V-Slice has a note style for, rather than a mod's own.
 	 *
