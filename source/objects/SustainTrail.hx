@@ -148,6 +148,12 @@ class SustainTrail extends FlxSpriteGroup
 		target.animation.copyFrom(source.animation);
 		target.animation.play(source.animation.curAnim.name, true);
 
+		// All four lanes share one rect in the atlas - every note skin Psych ships draws its
+		// holds colourless and lets a palette shader do the colour. Taking the shader off the
+		// piece rather than looking one up gets a note type's own palette and a mod's, and gets
+		// null when the chart turned note RGB off, which is exactly what the piece would draw.
+		target.shader = source.shader;
+
 		target.scale.set(source.scale.x, source.scale.y);
 		target.updateHitbox();
 
@@ -241,6 +247,21 @@ class SustainTrail extends FlxSpriteGroup
 
 		piece.x = left;
 		piece.y = down ? anchor - far : anchor + far - height;
+	}
+
+	/**
+	 * Takes the colour from a piece the trail is standing in for.
+	 *
+	 * Done every frame rather than once at bind, because a palette is cloned the moment anything
+	 * changes it - a note type, or a script recolouring a hold in flight - and the piece is
+	 * handed the new shader while whoever copied the old one keeps drawing the old colour.
+	 */
+	public function restyle(piece:Note):Void
+	{
+		if (!bound || piece == null || body.shader == piece.shader) return;
+
+		body.shader = piece.shader;
+		cap.shader = piece.shader;
 	}
 
 	/**

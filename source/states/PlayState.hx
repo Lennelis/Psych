@@ -4306,10 +4306,14 @@ class PlayState extends MusicBeatState
 			var trail:SustainTrail = trailCovering(note);
 			note.visible = (trail == null);
 
-			// A dropped hold is dimmed rather than left solid, the way Psych dims the pieces the
-			// trail is standing in for. Any surviving piece carries the mark - the miss cascade
-			// sets it on the whole tail at once.
-			if (trail != null && note.missed) trail.faded = true;
+			if (trail == null) return;
+
+			// The pieces are the trail's only handle on how the hold should look. A dropped one
+			// is dimmed the way Psych dims them - any surviving piece carries the mark, since
+			// the miss cascade sets it on the whole tail at once - and the colour is taken from
+			// them here rather than at bind, so a palette swapped mid-hold is followed.
+			trail.restyle(note);
+			if (note.missed) trail.faded = true;
 		});
 	}
 
