@@ -2188,7 +2188,7 @@ class PlayState extends MusicBeatState
 
 		// After the notes have been placed for this frame, so a trail lines up with the head it
 		// was built from rather than lagging it by one.
-		updateSustainTrails(songSpeed);
+		updateSustainTrails(songSpeed / playbackRate);
 
 		setOnScripts('botPlay', cpuControlled);
 		callOnScripts('onUpdatePost', [elapsed]);
@@ -4263,7 +4263,8 @@ class PlayState extends MusicBeatState
 	{
 		if (!VSliceVisuals.sustains) return;
 
-		// Retire what is finished, and lay out what is left.
+		// Retire what is finished, and lay out what is left. Concealing is the trail's own job:
+		// it holds the pieces it stands in for, so nothing has to be matched back up by hand.
 		grpSustainTrails.forEachAlive(function(trail:SustainTrail)
 		{
 			if (trail.spent)
@@ -4273,16 +4274,16 @@ class PlayState extends MusicBeatState
 				return;
 			}
 
+			trail.conceal();
 			placeTrail(trail, songSpeed);
 		});
 
-		// A head with a tail and nobody drawing it yet gets one. Done before anything is hidden,
-		// so a trail made this frame is already covering its own pieces by the time they are
-		// asked about.
+		// A head with a tail and nobody drawing it yet gets one, and hides its pieces the moment
+		// it has them - so a hold never draws itself and a trail for one frame.
 		notes.forEachAlive(function(note:Note)
 		{
 			if (note.isSustainNote || note.tail == null || note.tail.length < 1) return;
-			if (trailCovering(note) != null) return;
+			if (trailCovering(note.tail[0]) != null) return;
 
 			var trail:SustainTrail = grpSustainTrails.recycle(SustainTrail);
 			if (!trail.bindTo(note))
@@ -4293,28 +4294,13 @@ class PlayState extends MusicBeatState
 
 			// `recycle` has already put it in the group.
 			trail.cameras = noteGroup.cameras;
+			trail.conceal();
 			placeTrail(trail, songSpeed);
 		});
 
-		// Only a piece someone is actually drawing for gets hidden. A hold whose trail could not
-		// be built - or whose head was gone before it ever spawned - goes on drawing itself the
-		// way Psych always did, rather than turning invisible.
-		notes.forEachAlive(function(note:Note)
-		{
-			if (!note.isSustainNote) return;
-
-			var trail:SustainTrail = trailCovering(note);
-			note.visible = (trail == null);
-
-			if (trail == null) return;
-
-			// The pieces are the trail's only handle on how the hold should look. A dropped one
-			// is dimmed the way Psych dims them - any surviving piece carries the mark, since
-			// the miss cascade sets it on the whole tail at once - and the colour is taken from
-			// them here rather than at bind, so a palette swapped mid-hold is followed.
-			trail.restyle(note);
-			if (note.missed) trail.faded = true;
-		});
+		// Nothing hides a piece but the trail that holds it, so a hold whose trail could not be
+		// built - or whose head was thrown away before it ever spawned - goes on drawing itself
+		// the way Psych always did.
 	}
 
 	/** Hangs a trail off the strum its lane belongs to. */
@@ -4326,7 +4312,7 @@ class PlayState extends MusicBeatState
 		trail.refresh(strum, songSpeed);
 	}
 
-	/** The live trail drawing this note's hold, if there is one. */
+	/** The live trail drawing this exact piece, if there is one. */
 	function trailCovering(note:Note):SustainTrail
 	{
 		for (trail in grpSustainTrails)

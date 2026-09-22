@@ -40,6 +40,15 @@ class SustainTrail extends FlxSpriteGroup
 	public var lengthMs(default, null):Float = 0;
 
 	/**
+	 * The pieces this trail is drawing instead of.
+	 *
+	 * Held rather than matched by lane and time. The pieces are the only thing that knows where
+	 * a hold really is, and a window around the head's time was always going to let one through
+	 * - which it did: the end piece went on drawing itself over the trail's cap.
+	 */
+	var pieces:Array<Note> = [];
+
+	/**
 	 * Set once the hold has been dropped, to dim it the way Psych dims the pieces it stands in
 	 * for. PlayState sets it off the pieces rather than working out the miss here, because the
 	 * miss cascade is its business and a hold can be lost in more than one way.
@@ -50,9 +59,25 @@ class SustainTrail extends FlxSpriteGroup
 	public var spent(get, never):Bool;
 
 	function get_spent():Bool
-		return !bound || Conductor.songPosition > strumTime + lengthMs;
+	{
+		if (!bound) return true;
+		if (Conductor.songPosition <= strumTime + lengthMs) return false;
+
+		// Psych keeps a piece around for `noteKillOffset` past its time. Retiring on the clock
+		// alone would hand those back their visibility while they are still on screen.
+		for (piece in pieces)
+			if (piece != null && piece.exists) return false;
+
+		return true;
+	}
 
 	var bound:Bool = false;
+
+	/** Head to the last piece, which is where the cap starts. */
+	var bodyMs:Float = 0;
+
+	/** The per-note scroll multiplier, which `followStrumNote` folds in and scripts can change. */
+	var multSpeed:Float = 1;
 
 	var body:FlxSprite;
 	var cap:FlxSprite;
@@ -100,6 +125,7 @@ class SustainTrail extends FlxSpriteGroup
 	 */
 	public function bindTo(note:Note):Bool
 	{
+		reveal(); // Whatever this one was drawing before goes back to drawing itself.
 		bound = false;
 		faded = false;
 
@@ -118,8 +144,12 @@ class SustainTrail extends FlxSpriteGroup
 		// measured off the pieces rather than asked of the conductor, because they were spaced
 		// at the tempo in force where they sit, which is not necessarily the tempo now.
 		var step:Float = (note.tail.length > 1) ? (note.tail[1].strumTime - note.tail[0].strumTime) : Conductor.stepCrochet;
-		lengthMs = (tip.strumTime - note.strumTime) + step;
+		bodyMs = tip.strumTime - note.strumTime;
+		lengthMs = bodyMs + step;
 		if (lengthMs <= 0) return false;
+
+		multSpeed = (note.multSpeed != 0) ? note.multSpeed : 1;
+		pieces = note.tail.copy();
 
 		wear(body, source);
 		wear(cap, tip);
@@ -129,6 +159,10 @@ class SustainTrail extends FlxSpriteGroup
 		// is less left than that, it gets cut back instead, so the rounded tip keeps its shape.
 		capScaleY = (tip.scale.y != 0) ? Math.abs(tip.scale.y) : 1;
 		capHeight = cap.frameHeight * capScaleY;
+
+		// The hold reaches a fixed number of pixels past the last piece - the height of the art -
+		// not a step's worth of time. Those are different numbers, and treating the cap as a step
+		// left the trail's end sitting short of where Psych draws the piece it replaces.
 
 		// Psych walks a sustain across its lane with `offsetX`, which lands differently for a
 		// pixel skin and for a mod's own; reading it off the pieces gets all of those for free.
@@ -177,8 +211,17 @@ class SustainTrail extends FlxSpriteGroup
 		}
 
 		var elapsed:Float = Conductor.songPosition - strumTime;
-		var remainingMs:Float = lengthMs - Math.max(0, elapsed);
-		if (remainingMs <= 0)
+
+		// `followStrumNote` folds the note's own multiplier into the scroll speed, so a script
+		// that speeds one note up moves its hold with it.
+		var pixelsPerMs:Float = 0.45 * songSpeed * multSpeed;
+
+		// The hold runs from the head to the last piece as a stretch of time, and then the cap's
+		// own height in pixels beyond it. Those two do not convert into each other - the cap is a
+		// fixed piece of art, not a step - and measuring it as a step is what left the trail's end
+		// sitting short of Psych's.
+		var trailLength:Float = (bodyMs * pixelsPerMs + capHeight) - Math.max(0, elapsed) * pixelsPerMs;
+		if (trailLength <= 0)
 		{
 			visible = false;
 			return;
@@ -196,9 +239,7 @@ class SustainTrail extends FlxSpriteGroup
 		}
 		alpha = shade;
 
-		var pixelsPerMs:Float = 0.45 * songSpeed;
 		var approach:Float = Math.max(0, -elapsed) * pixelsPerMs;
-		var trailLength:Float = remainingMs * pixelsPerMs;
 
 		// Measured out from the middle of the receptor, which is the point Psych itself treats
 		// as the strum's centre when it decides how much of a sustain is left to clip.
@@ -250,6 +291,26 @@ class SustainTrail extends FlxSpriteGroup
 	}
 
 	/**
+	 * Hides the pieces this trail is drawing instead of, and takes their look while it is there.
+	 *
+	 * Called every frame. A piece Psych destroyed is skipped rather than remembered as gone, so
+	 * a hold that outlives some of its own pieces - which every hold does - goes on working.
+	 */
+	public function conceal():Void
+	{
+		if (!bound) return;
+
+		for (piece in pieces)
+		{
+			if (piece == null || !piece.exists) continue;
+
+			piece.visible = false;
+			if (piece.missed) faded = true;
+			restyle(piece);
+		}
+	}
+
+	/**
 	 * Takes the colour from a piece the trail is standing in for.
 	 *
 	 * Done every frame rather than once at bind, because a palette is cloned the moment anything
@@ -265,26 +326,41 @@ class SustainTrail extends FlxSpriteGroup
 	}
 
 	/**
-	 * Whether this trail is drawing the hold a given piece belongs to.
+	 * Whether this trail is drawing this exact piece.
 	 *
-	 * Asked by lane and time rather than through the piece's `parent`, because that points at
-	 * the head note - which Psych destroys the moment the hold is hit, long before the pieces
-	 * behind it are done.
+	 * Asked of the pieces themselves rather than through `parent`, which points at the head note
+	 * Psych destroys the moment the hold is hit, and rather than by lane and time, which is a
+	 * guess that let the end piece through.
 	 */
 	public function covers(note:Note):Bool
 	{
-		return bound
-			&& note != null
-			&& note.noteData == noteData
-			&& note.mustPress == mustPress
-			&& note.strumTime >= strumTime - 1
-			&& note.strumTime <= strumTime + lengthMs + 1;
+		if (!bound || note == null) return false;
+
+		for (piece in pieces)
+			if (piece == note) return true;
+
+		return false;
 	}
 
 	public function release():Void
 	{
+		reveal();
 		bound = false;
 		faded = false;
 		visible = false;
+	}
+
+	/**
+	 * Hands every piece still standing back its own visibility.
+	 *
+	 * A piece outlives the trail whenever a hold is dropped or the song is scrubbed, and one left
+	 * hidden by a trail that is no longer there would never draw again.
+	 */
+	function reveal():Void
+	{
+		for (piece in pieces)
+			if (piece != null && piece.exists) piece.visible = true;
+
+		pieces = [];
 	}
 }
