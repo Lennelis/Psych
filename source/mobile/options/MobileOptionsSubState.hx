@@ -21,7 +21,7 @@ class MobileOptionsSubState extends BaseOptionsMenu
 		rpcTitle = 'Mobile Settings Menu';
 
 		var option:Option = new Option('Gameplay Controls',
-			"How you hit notes during a song.\nHitbox is four columns filling the screen, Pad is four buttons on one side.\nKeyboard hides them, for playing with a bluetooth keyboard or a controller.",
+			"How you hit notes during a song.\nHitbox is four columns filling the screen, Arrows is four buttons standing in the note lanes,\nPad is four buttons on one side. Keyboard hides them, for a bluetooth keyboard or a controller.",
 			'gameplayControls',
 			STRING,
 			MobileControls.MODES);

@@ -1,8 +1,10 @@
 package mobile.objects;
 
+import backend.VSliceVisuals;
 import flixel.FlxG;
 import flixel.group.FlxSpriteGroup;
 import flixel.util.FlxColor;
+import objects.Note;
 
 /**
  * The gameplay control layer: whichever of the touch layouts the player picked,
@@ -14,7 +16,7 @@ import flixel.util.FlxColor;
  */
 class MobileControls extends FlxSpriteGroup
 {
-	public static final MODES:Array<String> = ['Hitbox', 'Pad-Right', 'Pad-Left', 'Keyboard'];
+	public static final MODES:Array<String> = ['Hitbox', 'Arrows', 'Pad-Right', 'Pad-Left', 'Keyboard'];
 
 	public var noteButtons(default, null):Array<TouchButton> = [];
 	public var hitbox(default, null):Hitbox;
@@ -31,6 +33,7 @@ class MobileControls extends FlxSpriteGroup
 
 		switch (ClientPrefs.data.gameplayControls)
 		{
+			case 'Arrows': buildArrows();
 			case 'Pad-Right': buildPad(true);
 			case 'Pad-Left': buildPad(false);
 			case 'Keyboard': // player is on a bluetooth keyboard or a controller, give them a clean screen
@@ -45,6 +48,45 @@ class MobileControls extends FlxSpriteGroup
 
 		for (i in 0...Hitbox.ACTIONS.length)
 			noteButtons.push(hitbox.getLane(i));
+	}
+
+	/**
+	 * Four arrow buttons standing in the player's own note columns, which is what V-Slice's
+	 * Arrows scheme is: its hit zones sit on the receptors rather than off to one side, so the
+	 * thing being tapped is the thing being aimed at.
+	 *
+	 * The columns are worked out the way `StrumNote.playerPosition` works them out, so they line
+	 * up with the receptors whether middlescroll is on or off, and they are exactly one note wide
+	 * so the four tile the lane grid without any two of them sharing a finger.
+	 *
+	 * The row sits near the bottom rather than on the strumline itself, because upscroll puts the
+	 * receptors at the top of the screen where no thumb reaches. On downscroll it lands on them,
+	 * which is the V-Slice arrangement.
+	 */
+	function buildArrows():Void
+	{
+		final width:Int = Std.int(Note.swagWidth);
+		final height:Int = Std.int(Note.swagWidth * 1.25);
+
+		// StrumNote: x = strumLineX + 50 + (FlxG.width / 2) * player, then swagWidth per column.
+		var left:Float = (ClientPrefs.data.middleScroll ? PlayState.STRUM_X_MIDDLESCROLL : PlayState.STRUM_X) + 50 + FlxG.width / 2;
+		if (VSliceVisuals.strumline && !ClientPrefs.data.middleScroll) left += VSliceVisuals.STRUM_X_NUDGE;
+
+		final top:Float = FlxG.height - height - 26;
+		final symbols:Array<String> = ['left', 'down', 'up', 'right'];
+
+		for (i in 0...symbols.length)
+		{
+			final button:TouchButton = new TouchButton(left + Note.swagWidth * i, top, [Hitbox.ACTIONS[i]]);
+			button.setGraphic(symbols[i], width, height, noteColor(i));
+			button.allowSlideIn = true; // rolls are played by sliding a thumb across, same as the lanes
+			button.idleAlpha = ClientPrefs.data.controlsAlpha;
+			button.pressedAlpha = Math.min(1, ClientPrefs.data.controlsAlpha + 0.35);
+			button.alpha = button.idleAlpha;
+			button.antialiasing = ClientPrefs.data.antialiasing;
+			add(button);
+			noteButtons.push(button);
+		}
 	}
 
 	function buildPad(rightSide:Bool):Void

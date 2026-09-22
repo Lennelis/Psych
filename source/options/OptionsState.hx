@@ -8,6 +8,7 @@ class OptionsState extends MusicBeatState
 	var options:Array<String> = [
 		'Note Colors',
 		'Controls',
+		'Calibrate Offset',
 		'Adjust Delay and Combo',
 		'Graphics',
 		'Visuals',
@@ -36,6 +37,8 @@ class OptionsState extends MusicBeatState
 				openSubState(new options.GameplaySettingsSubState());
 			case 'V-Slice':
 				openSubState(new options.VSliceSettingsSubState());
+			case 'Calibrate Offset':
+				MusicBeatState.switchState(new options.CalibrationState());
 			case 'Adjust Delay and Combo':
 				MusicBeatState.switchState(new options.NoteOffsetState());
 			case 'Language':
