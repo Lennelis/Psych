@@ -95,10 +95,18 @@ def note_data(d):
 
 
 def tween_value(v):
-    """`duration, ease` for Psych, or a bare 0 where V-Slice wanted no tween at all."""
+    """
+    `duration, ease` for Psych.
+
+    CLASSIC and INSTANT are not the same thing and must not collapse together: CLASSIC
+    moves the follow point and lets the camera drift after it, INSTANT cuts. Both ignore
+    the duration, so the difference is carried entirely by the name.
+    """
     ease = v.get('ease', 'CLASSIC')
-    if ease in ('CLASSIC', 'INSTANT'):
-        return '0'
+    if ease == 'CLASSIC':
+        return '0, classic'
+    if ease == 'INSTANT':
+        return '0, instant'
     return '%s, %s%s' % (v.get('duration', 4), ease, v.get('easeDir', ''))
 
 

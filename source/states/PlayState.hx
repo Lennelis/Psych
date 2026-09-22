@@ -2610,12 +2610,18 @@ class PlayState extends MusicBeatState
 
 				if(focusTween.classic)
 				{
-					// V-Slice's CLASSIC: snap, and don't hold onto the camera afterwards.
+					// V-Slice's CLASSIC moves the follow point and leaves the camera to glide
+					// after it under its own lerp - `cameraFollowPoint.setPosition`, nothing
+					// else - which is the same drift Psych gives a mustHitSection change. It is
+					// INSTANT that snaps, and that arrives below as a zero length tween.
+					//
+					// This used to snap as well, on a misreading of the name. The two eases are
+					// only told apart by which of them moves the camera gently, so getting it
+					// wrong made every classic cut in every ported chart a hard cut.
 					cancelCameraFollowTween();
-					isCameraOnForcedPos = false;
+					isCameraOnForcedPos = true;
 					camFollow.setPosition(targetX, targetY);
 					FlxG.camera.target = camFollow;
-					FlxG.camera.snapToTarget();
 					return;
 				}
 

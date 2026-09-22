@@ -552,7 +552,7 @@ class FreeplayState extends MusicBeatState
 		
 		Mods.currentModDirectory = songs[curSelected].folder;
 		PlayState.storyWeek = songs[curSelected].week;
-		Difficulty.loadFromWeek();
+		Difficulty.copyFrom(Difficulty.listForSong(songs[curSelected].songName));
 		
 		var savedDiff:String = songs[curSelected].lastDifficulty;
 		var lastDiff:Int = Difficulty.list.indexOf(lastDifficultyName);

@@ -56,7 +56,8 @@ class CameraEvents
 	 *
 	 * `duration` is in steps, like V-Slice. `ease` is any name `LuaUtils.getTweenEaseByString`
 	 * knows, plus `instant` (snap, duration ignored) and - for Focus Camera - `classic`, which
-	 * snaps *and* hands the camera back to the section logic the way charts behaved before.
+	 * moves the follow point and lets the camera drift after it, the way it does for a
+	 * mustHitSection change. Both ignore the duration; only `instant` is a hard cut.
 	 */
 	public static function parseTween(value2:String):CameraTween
 	{

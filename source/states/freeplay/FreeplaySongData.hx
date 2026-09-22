@@ -182,8 +182,13 @@ class FreeplaySongData
 				var colors:Array<Int> = song[2];
 				if (colors == null || colors.length < 3) colors = [146, 113, 253];
 
+				// The week's list is the floor; a song that carries its own Erect chart says so
+				// here rather than being listed a second time under a week of its own.
+				var songDifficulties:Array<String> = Difficulty.listForSong(song[0], week);
+				if (songDifficulties.length < 1) songDifficulties = difficulties;
+
 				result.push(new FreeplaySongData(song[0], i, WeekData.weeksList[i], song[1], FlxColor.fromRGB(colors[0], colors[1], colors[2]),
-					Mods.currentModDirectory != null ? Mods.currentModDirectory : '', difficulties));
+					Mods.currentModDirectory != null ? Mods.currentModDirectory : '', songDifficulties));
 			}
 		}
 
