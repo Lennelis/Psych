@@ -2,12 +2,18 @@
 """
 Turns a V-Slice chart into a Psych one.
 
-V-Slice keeps a flat list of notes with absolute times and an absolute idea of whose
-note it is - data 0-3 is the player, 4-7 the opponent. Psych keeps notes in sections
-and decides whose they are relative to that section's `mustHitSection`, so the same
-note is 0-3 in one section and 4-7 in the next. That flip is most of the work here,
-and getting it backwards mirrors an entire chart without erroring, so the direction
-is taken from `SongNoteData.getStrumlineIndex` rather than assumed.
+Both engines number notes the same way: data 0-3 is the player, 4-7 the opponent,
+whatever section the note lands in. Psych decides it with
+`gottaHitNote = (songNotes[1] < totalColumns)` and never consults `mustHitSection`
+for it - that field only picks which character the camera watches and feeds
+`gfNote`. So note data passes through untouched.
+
+An earlier version of this converter flipped the data against `mustHitSection`,
+on the belief that Psych read it the older, section-relative way. It does not, and
+the flip mirrored every opponent section - a whole chart wrong with nothing to
+error on. The rule is now checked against the engine's own expression and against
+the charts Psych ships, where `mustHitSection: true` sections hold data 0-3 and
+`false` ones hold 4-7.
 
 Camera events map straight across: Psych's `Focus Camera`, `Zoom Camera` and
 `Set Camera Bop` already take V-Slice's own vocabulary, and both engines measure
@@ -83,12 +89,9 @@ def build_sections(time_changes, end_ms):
     return sections
 
 
-def note_data(d, must_hit):
-    """V-Slice's absolute side, expressed the way the section it lands in expects."""
-    lane, player = d % 4, d < 4
-    if must_hit:
-        return lane if player else lane + 4
-    return lane + 4 if player else lane
+def note_data(d):
+    """Unchanged - both engines read 0-3 as the player and 4-7 as the opponent."""
+    return d
 
 
 def tween_value(v):
@@ -153,9 +156,10 @@ def convert(chart, meta, difficulty, song_id, audio_suffix=''):
     sections = build_sections(time_changes, end)
     focus = focus_timeline(events)
 
-    # Whose section it is follows the camera where the chart says, and the notes
-    # themselves where it does not - a chart with no camera events still has to put
-    # the player on the right side of the screen.
+    # Whose section it is only picks which character the camera watches when no event
+    # is steering it - the notes carry their own side. Taken from the chart's camera
+    # events where there are any, and from where the notes actually are where there
+    # are not, which is what Psych's own charts do.
     for s in sections:
         if focus:
             char = 0
@@ -178,7 +182,7 @@ def convert(chart, meta, difficulty, song_id, audio_suffix=''):
         rows = []
         while index < total and ordered[index]['t'] < s['end']:
             n = ordered[index]
-            rows.append([n['t'], note_data(n['d'], s['mustHit']), n.get('l', 0)])
+            rows.append([n['t'], note_data(n['d']), n.get('l', 0)])
             index += 1
 
         section = {'sectionNotes': rows, 'sectionBeats': 4, 'mustHitSection': s['mustHit'],
@@ -192,7 +196,7 @@ def convert(chart, meta, difficulty, song_id, audio_suffix=''):
     # go somewhere, or it is silently dropped.
     if index < total:
         out_sections[-1]['sectionNotes'].extend(
-            [n['t'], note_data(n['d'], sections[-1]['mustHit']), n.get('l', 0)] for n in ordered[index:])
+            [n['t'], note_data(n['d']), n.get('l', 0)] for n in ordered[index:])
 
     return {'song': {
         'song': song_id,
