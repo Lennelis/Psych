@@ -91,6 +91,7 @@ class SustainTrail extends FlxSpriteGroup
 	var capOffsetX:Float = 0;
 
 	var clip:FlxRect;
+	var bodyTrim:FlxRect;
 
 	public function new()
 	{
@@ -102,6 +103,7 @@ class SustainTrail extends FlxSpriteGroup
 		directAlpha = true;
 
 		clip = new FlxRect();
+		bodyTrim = new FlxRect();
 
 		body = new FlxSprite();
 		cap = new FlxSprite();
@@ -192,7 +194,7 @@ class SustainTrail extends FlxSpriteGroup
 		target.updateHitbox();
 
 		target.antialiasing = source.antialiasing;
-		target.flipY = source.flipY;
+		// Which way up it goes is decided per frame from the scroll, not copied - see `refresh`.
 	}
 
 	/**
@@ -249,21 +251,39 @@ class SustainTrail extends FlxSpriteGroup
 		var capLength:Float = Math.min(capHeight, trailLength);
 		var bodyLength:Float = Math.max(0, trailLength - capLength);
 
-		// The body's outermost row is a half transparent edge in the art, and it is the row that
-		// lands against the cap - Psych flips the piece on downscroll, which puts the soft row at
-		// whichever end is the far one. Stretched, that half pixel becomes a fade as wide as the
-		// stretch factor, which is why it grew with the length of the hold and closed up as the
-		// hold was eaten. So the body runs on underneath the cap far enough to bury it, the way
-		// Psych's own pieces overlap each other by the 1.05 in their height.
-		var stretch:Float = (body.frameHeight > 0) ? bodyLength / body.frameHeight : 0;
-		var overlap:Float = (bodyLength > 0) ? Math.min(stretch * 2, capHeight * 0.5) : 0;
-		var reach:Float = bodyLength + overlap;
+		// Which way round the art goes is taken from the scroll rather than from the piece it was
+		// copied off, so the trim below always lands on the end it is meant to.
+		body.flipY = down;
+		cap.flipY = down;
+
+		// The body frame's outermost row is a half transparent edge in the art, and the flip puts
+		// it at whichever end is the far one - against the cap. Stretched, that half pixel became
+		// a fade as wide as the stretch factor.
+		//
+		// Running the body on underneath the cap buried it, but two translucent sprites stacked
+		// read as one more opaque one, so the overlap surfaced as a band the moment the HUD
+		// dimmed. Cutting the row off instead leaves a hard edge meeting the cap's own hard edge,
+		// with nothing drawn twice at any opacity.
+		//
+		// One row goes for being half transparent; a second goes when the art is smoothed, since
+		// bilinear sampling at the edge would otherwise still reach into it. A frame too small to
+		// spare them keeps them - a pixel skin is not smoothed and has nothing to trim.
+		var trim:Float = body.antialiasing ? 2 : 1;
+		if (trim > body.frameHeight * 0.25) trim = 0;
+
+		var usable:Float = body.frameHeight - trim;
+		var bodyScale:Float = (usable > 0) ? bodyLength / usable : 0;
+
+		// Clipping does not resize the frame, so the box still counts the rows that were cut -
+		// which is what puts the art that is left exactly against the cap.
+		var bodySpan:Float = body.frameHeight * bodyScale;
+		var bodyClip:FlxRect = (trim > 0 && bodyLength > 0)
+			? bodyTrim.set(0, 0, body.frameWidth, usable) : null;
 
 		// The body runs from the strum out to where the cap starts; the cap closes off the far
 		// end. Both are measured as a distance from the anchor, along whichever way the notes
 		// are travelling, so the two scroll directions only differ in one sign.
-		place(body, strum.x + bodyOffsetX, anchor, reach, reach, down,
-			(body.frameHeight > 0) ? reach / body.frameHeight : 0, null);
+		place(body, strum.x + bodyOffsetX, anchor, bodySpan, bodySpan, down, bodyScale, bodyClip);
 
 		// The cap is always drawn at the size its art was made, and cut back from the near end
 		// when the hold has been eaten into it. The cut is the same rectangle either way round:
