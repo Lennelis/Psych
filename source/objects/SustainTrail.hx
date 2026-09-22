@@ -112,13 +112,18 @@ class SustainTrail extends FlxStrip
 		frames = note.frames;
 
 		// The pieces are spaced a step apart and the last one closes the hold off, so the hold
-		// runs from its head to the last piece plus that piece's own worth of time.
-		lengthMs = (cap.strumTime - note.strumTime) + Conductor.stepCrochet;
+		// runs from its head to the last piece plus that piece's own worth of time. The step is
+		// measured off the pieces rather than asked of the conductor, because they were spaced
+		// at the tempo in force where they sit, which is not necessarily the tempo now.
+		var step:Float = (note.tail.length > 1) ? (note.tail[1].strumTime - note.tail[0].strumTime) : Conductor.stepCrochet;
+		lengthMs = (cap.strumTime - note.strumTime) + step;
 
 		// Psych stretches every piece but the last to a step's height; the last keeps the size
 		// the art was drawn at, which is the cap's real height.
 		trailWidth = body.width;
 		capHeight = cap.height;
+
+		if (graphic == null || graphic.width <= 0 || graphic.height <= 0) return false;
 
 		readUV(body.frame, true);
 		readUV(cap.frame, false);
@@ -135,7 +140,6 @@ class SustainTrail extends FlxStrip
 	{
 		var sheetWidth:Float = graphic.width;
 		var sheetHeight:Float = graphic.height;
-		if (sheetWidth <= 0 || sheetHeight <= 0) return;
 
 		var u1:Float = source.frame.x / sheetWidth;
 		var v1:Float = source.frame.y / sheetHeight;
@@ -247,6 +251,23 @@ class SustainTrail extends FlxStrip
 		uvtData[(at + 2) * 2 + 1] = v2;
 		uvtData[(at + 3) * 2] = u2;
 		uvtData[(at + 3) * 2 + 1] = v2;
+	}
+
+	/**
+	 * Whether this trail is drawing the hold a given piece belongs to.
+	 *
+	 * Asked by lane and time rather than through the piece's `parent`, because that points at
+	 * the head note - which Psych destroys the moment the hold is hit, long before the pieces
+	 * behind it are done.
+	 */
+	public function covers(note:Note):Bool
+	{
+		return bound
+			&& note != null
+			&& note.noteData == noteData
+			&& note.mustPress == mustPress
+			&& note.strumTime >= strumTime - 1
+			&& note.strumTime <= strumTime + lengthMs + 1;
 	}
 
 	public function release():Void

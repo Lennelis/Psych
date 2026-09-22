@@ -4263,6 +4263,7 @@ class PlayState extends MusicBeatState
 	{
 		if (!VSliceVisuals.sustains) return;
 
+		// Retire what is finished, and lay out what is left.
 		grpSustainTrails.forEachAlive(function(trail:SustainTrail)
 		{
 			if (trail.spent)
@@ -4272,19 +4273,16 @@ class PlayState extends MusicBeatState
 				return;
 			}
 
-			var strums:FlxTypedGroup<StrumNote> = trail.mustPress ? playerStrums : opponentStrums;
-			trail.refresh((trail.noteData >= 0 && trail.noteData < strums.length) ? strums.members[trail.noteData] : null, songSpeed);
+			placeTrail(trail, songSpeed);
 		});
 
+		// A head with a tail and nobody drawing it yet gets one. Done before anything is hidden,
+		// so a trail made this frame is already covering its own pieces by the time they are
+		// asked about.
 		notes.forEachAlive(function(note:Note)
 		{
-			if (note.isSustainNote)
-			{
-				note.visible = false;
-				return;
-			}
-
-			if (note.tail == null || note.tail.length < 1 || hasTrailFor(note)) return;
+			if (note.isSustainNote || note.tail == null || note.tail.length < 1) return;
+			if (trailCovering(note) != null) return;
 
 			var trail:SustainTrail = grpSustainTrails.recycle(SustainTrail);
 			if (!trail.bindTo(note))
@@ -4295,22 +4293,35 @@ class PlayState extends MusicBeatState
 
 			// `recycle` has already put it in the group.
 			trail.cameras = noteGroup.cameras;
+			placeTrail(trail, songSpeed);
+		});
 
-			// Laid out at once rather than waiting for the next frame, or it would draw one
-			// frame's worth behind the note it was just built from.
-			var strums:FlxTypedGroup<StrumNote> = trail.mustPress ? playerStrums : opponentStrums;
-			trail.refresh((trail.noteData >= 0 && trail.noteData < strums.length) ? strums.members[trail.noteData] : null, songSpeed);
+		// Only a piece someone is actually drawing for gets hidden. A hold whose trail could not
+		// be built - or whose head was gone before it ever spawned - goes on drawing itself the
+		// way Psych always did, rather than turning invisible.
+		notes.forEachAlive(function(note:Note)
+		{
+			if (note.isSustainNote) note.visible = (trailCovering(note) == null);
 		});
 	}
 
-	function hasTrailFor(note:Note):Bool
+	/** Hangs a trail off the strum its lane belongs to. */
+	function placeTrail(trail:SustainTrail, songSpeed:Float):Void
+	{
+		var strums:FlxTypedGroup<StrumNote> = trail.mustPress ? playerStrums : opponentStrums;
+		var strum:StrumNote = (trail.noteData >= 0 && trail.noteData < strums.length) ? strums.members[trail.noteData] : null;
+
+		trail.refresh(strum, songSpeed);
+	}
+
+	/** The live trail drawing this note's hold, if there is one. */
+	function trailCovering(note:Note):SustainTrail
 	{
 		for (trail in grpSustainTrails)
-			if (trail != null && trail.alive && !trail.spent && trail.noteData == note.noteData
-				&& trail.mustPress == note.mustPress && Math.abs(trail.strumTime - note.strumTime) < 1)
-				return true;
+			if (trail != null && trail.alive && !trail.spent && trail.covers(note))
+				return trail;
 
-		return false;
+		return null;
 	}
 
 	public function invalidateNote(note:Note):Void {
