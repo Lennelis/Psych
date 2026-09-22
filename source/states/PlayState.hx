@@ -180,6 +180,9 @@ class PlayState extends MusicBeatState
 	/** One mesh per hold, standing in for its pieces when V-Slice's sustains are on. */
 	public var grpSustainTrails:FlxTypedGroup<SustainTrail> = new FlxTypedGroup<SustainTrail>();
 
+	/** TEMPORARY. Prints a live trail's layout numbers while the hold joint is being chased. */
+	var trailReport:FlxText;
+
 	public var camZooming:Bool = false;
 	public var camZoomingMult:Float = 1;
 	public var camZoomingDecay:Float = 1;
@@ -4301,6 +4304,35 @@ class PlayState extends MusicBeatState
 		// Nothing hides a piece but the trail that holds it, so a hold whose trail could not be
 		// built - or whose head was thrown away before it ever spawned - goes on drawing itself
 		// the way Psych always did.
+
+		showTrailReport();
+	}
+
+	/**
+	 * TEMPORARY. Puts the longest live trail's numbers on screen.
+	 *
+	 * The joint between a hold's body and its cap lands a few pixels apart on a device where the
+	 * arithmetic says it is exactly zero, and it could not be read off a screenshot - the note
+	 * art is the same red as the character standing behind it. This says what the maths produced.
+	 */
+	function showTrailReport():Void
+	{
+		if (trailReport == null)
+		{
+			trailReport = new FlxText(10, 120, FlxG.width - 20, '', 14);
+			trailReport.setFormat(Paths.font("vcr.ttf"), 14, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+			trailReport.scrollFactor.set();
+			trailReport.cameras = [camHUD];
+			add(trailReport);
+		}
+
+		var best:SustainTrail = null;
+		grpSustainTrails.forEachAlive(function(trail:SustainTrail)
+		{
+			if (trail.visible && (best == null || trail.lengthMs > best.lengthMs)) best = trail;
+		});
+
+		trailReport.text = (best == null) ? '' : best.report + ' | pieces left ' + best.standing;
 	}
 
 	/** Hangs a trail off the strum its lane belongs to. */

@@ -92,6 +92,15 @@ class SustainTrail extends FlxSpriteGroup
 
 	var clip:FlxRect;
 
+	/**
+	 * TEMPORARY. The numbers behind the last layout, for reading off a device.
+	 *
+	 * The joint between the body and the cap comes out a few pixels apart on hardware where the
+	 * arithmetic here says it is exactly zero, and two rounds of reading it off screenshots got
+	 * the mechanism wrong both times. This prints what the maths actually produced.
+	 */
+	public var report:String = '';
+
 	public function new()
 	{
 		super();
@@ -269,7 +278,22 @@ class SustainTrail extends FlxSpriteGroup
 
 		visible = true;
 		body.visible = bodyLength > 0;
+
+		// TEMPORARY, with the field above.
+		report = 'trail ' + Std.int(trailLength) + 'px'
+			+ ' | body len ' + fmt(bodyLength) + ' scaleY ' + fmt(body.scale.y) + ' fh ' + body.frameHeight
+			+ ' -> y ' + fmt(body.y) + ' h ' + fmt(body.height) + ' off ' + fmt(body.offset.y)
+			+ '\ncap len ' + fmt(capLength) + '/' + fmt(capHeight) + ' scaleY ' + fmt(cap.scale.y)
+			+ ' fh ' + cap.frameHeight + ' -> y ' + fmt(cap.y) + ' h ' + fmt(cap.height)
+			+ ' off ' + fmt(cap.offset.y) + ' flipY ' + cap.flipY
+			+ '\nbody top ' + fmt(down ? body.y : body.y + body.height)
+			+ ' vs cap edge ' + fmt(down ? cap.y + cap.height : cap.y)
+			+ ' | anchor ' + fmt(anchor) + ' clip ' + (cap.clipRect != null ? 'yes' : 'no');
 	}
+
+	/** TEMPORARY. Two decimals, so a fractional scale is not rounded out of sight. */
+	static function fmt(v:Float):String
+		return '' + Math.round(v * 100) / 100;
 
 	/**
 	 * Puts one piece with its far edge `far` pixels out from the strum, standing `height` tall.
@@ -300,15 +324,20 @@ class SustainTrail extends FlxSpriteGroup
 	{
 		if (!bound) return;
 
+		standing = 0;
 		for (piece in pieces)
 		{
 			if (piece == null || !piece.exists) continue;
 
+			standing++;
 			piece.visible = false;
 			if (piece.missed) faded = true;
 			restyle(piece);
 		}
 	}
+
+	/** TEMPORARY. How many of the pieces are still around, for the readout. */
+	public var standing:Int = 0;
 
 	/**
 	 * Takes the colour from a piece the trail is standing in for.
