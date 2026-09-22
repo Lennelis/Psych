@@ -4198,6 +4198,12 @@ class PlayState extends MusicBeatState
 						var owed:Int = Math.round(Scoring.SCORE_HOLD_BONUS_PER_SECOND * holdTimeHeld / 1000);
 						songScore += owed - holdScorePaid;
 						holdScorePaid = owed;
+
+						// The counter is only ever refreshed out of `popUpScore`, which a
+						// sustain never reaches - so the score was climbing and the HUD was
+						// not saying so, which from the outside is the same as it not
+						// climbing. No bop: one of those per step of hold would be a rattle.
+						updateScore(false, false);
 					}
 				}
 				else
