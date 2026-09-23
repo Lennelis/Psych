@@ -146,9 +146,10 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	
 	var camUI:FlxCamera;
 
-	var prevGridBg:ChartingGridSprite;
+	// One grid for the whole song. It used to be three - the current section and its two
+	// neighbours - which is what made the chart read as a run of separate panels rather
+	// than one continuous thing.
 	var gridBg:ChartingGridSprite;
-	var nextGridBg:ChartingGridSprite;
 	var waveformSprite:FlxSprite;
 	var scrollY:Float = 0;
 	
@@ -174,7 +175,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	var events:Array<EventMetaNote> = [];
 	var notes:Array<MetaNote> = [];
 
-	var behindRenderedNotes:FlxTypedGroup<MetaNote> = new FlxTypedGroup<MetaNote>();
 	var curRenderedNotes:FlxTypedGroup<MetaNote> = new FlxTypedGroup<MetaNote>();
 
 	/** A right click that has not been claimed by a move cancel or a selection drag. */
@@ -289,7 +289,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		add(vortexIndicator);
 		add(strumLineNotes);
 
-		add(behindRenderedNotes);
 		add(curRenderedNotes);
 		add(movingNotes);
 
@@ -375,7 +374,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			icon.x = iconX + GRID_SIZE * (GRID_COLUMNS_PER_PLAYER/2) - icon.width/2;
 			iconX += GRID_SIZE * GRID_COLUMNS_PER_PLAYER;
 		}
-		prevGridBg.stripes = nextGridBg.stripes = gridBg.stripes = gridStripes;
+		gridBg.stripes = gridStripes;
 		
 		selectionBox = new FlxSprite().makeGraphic(1, 1, FlxColor.CYAN);
 		selectionBox.alpha = 0.4;
@@ -582,18 +581,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 				gridBg.loadGrid(gridColors[0], gridColors[1]);
 				gridBg.vortexLineEnabled = vortexEnabled;
 				gridBg.vortexLineSpace = GRID_SIZE * 4 * curZoom;
-			}
-			if(prevGridBg != null)
-			{
-				prevGridBg.loadGrid(gridColorsOther[0], gridColorsOther[1]);
-				prevGridBg.vortexLineEnabled = vortexEnabled;
-				prevGridBg.vortexLineSpace = GRID_SIZE * 4 * curZoom;
-			}
-			if(nextGridBg != null)
-			{
-				nextGridBg.loadGrid(gridColorsOther[0], gridColorsOther[1]);
-				nextGridBg.vortexLineEnabled = vortexEnabled;
-				nextGridBg.vortexLineSpace = GRID_SIZE * 4 * curZoom;
 			}
 		}
 	}
@@ -1243,11 +1230,8 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			if(!FlxG.keys.pressed.SHIFT)
 				diffY -= diffY % (GRID_SIZE / (curQuant/16));
 
-			if(nextGridBg.visible) diffY = Math.min(diffY, gridBg.height + nextGridBg.height);
-			else diffY = Math.min(diffY, gridBg.height);
-
-			if(prevGridBg.visible) diffY = Math.max(diffY, -prevGridBg.height);
-			else diffY = Math.max(diffY, 0);
+			// The grid is the song now, so the placeable range is simply the grid.
+			diffY = FlxMath.bound(diffY, 0, gridBg.height);
 
 			var noteData:Int = Math.floor(diffX / GRID_SIZE);
 			dummyArrow.visible = !selectionBox.visible;
@@ -1255,14 +1239,9 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			if(SHOW_EVENT_COLUMN)
 				noteData--;
 
-			if(FlxG.keys.pressed.SHIFT || FlxG.mouse.y >= gridBg.y || !prevGridBg.visible)
-				dummyArrow.y = gridBg.y + diffY;
-			else
-			{
-				var t:Float = (diffY - (GRID_SIZE / (curQuant/16)));
-				if(FlxG.mouse.y >= gridBg.y) t *= curZoom;
-				dummyArrow.y = gridBg.y + t;
-			}
+			// The branch that used to be here corrected for the previous section's grid being
+			// a separate sprite that the mouse could be above. There is no above any more.
+			dummyArrow.y = gridBg.y + diffY;
 
 			if(isMovingNotes)
 			{
@@ -1394,7 +1373,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					}
 					else if(!holdingAlt && FlxG.mouse.y >= gridBg.y && FlxG.mouse.y < gridBg.y + gridBg.height) // Add note
 					{
-						var strumTime:Float = (diffY / GRID_SIZE * Conductor.stepCrochet / curZoom) + cachedSectionTimes[curSec];
+						var strumTime:Float = timeFromGridY(diffY);
 						if(noteData >= 0)
 						{
 							trace('Added note at time: $strumTime');
@@ -1812,39 +1791,73 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	{
 		var destroyed:Bool = false;
 		var stripes:Array<Int> = null;
-		if(prevGridBg != null)
+		if(gridBg != null)
 		{
-			stripes = prevGridBg.stripes;
-			remove(prevGridBg);
+			stripes = gridBg.stripes;
 			remove(gridBg);
-			remove(nextGridBg);
-			prevGridBg = FlxDestroyUtil.destroy(prevGridBg);
 			gridBg = FlxDestroyUtil.destroy(gridBg);
-			nextGridBg = FlxDestroyUtil.destroy(nextGridBg);
 			destroyed = true;
 		}
 
 		var columnCount:Int = (GRID_COLUMNS_PER_PLAYER * GRID_PLAYERS) + (SHOW_EVENT_COLUMN ? 1 : 0);
 		gridBg = new ChartingGridSprite(columnCount, gridColors[0], gridColors[1]);
 		gridBg.screenCenter(X);
+		gridBg.stripes = stripes;
 
-		prevGridBg = new ChartingGridSprite(columnCount, gridColorsOther[0], gridColorsOther[1]);
-		nextGridBg = new ChartingGridSprite(columnCount, gridColorsOther[0], gridColorsOther[1]);
-		prevGridBg.x = nextGridBg.x = gridBg.x;
-		prevGridBg.stripes = nextGridBg.stripes = gridBg.stripes = stripes;
-		
 		if(destroyed)
 		{
-			insert(getFirstNull(), prevGridBg);
-			insert(getFirstNull(), nextGridBg);
 			insert(getFirstNull(), gridBg);
 			loadSection();
 		}
-		else
+		else add(gridBg);
+	}
+
+	/**
+	 * Sizes the grid to the whole song and works out where the section boundaries fall.
+	 *
+	 * Rows are a fixed height in pixels, so one grid can span sections of different beat
+	 * counts and different BPMs without trouble - what varies between sections is how many
+	 * rows they get, not how tall a row is. `cachedSectionRow` already holds exactly that.
+	 */
+	function resizeGridToSong()
+	{
+		if(gridBg == null) return;
+
+		gridBg.y = 0;
+
+		var lines:Array<Float> = [];
+		var totalRows:Float = 0;
+
+		if(PlayState.SONG != null && PlayState.SONG.notes.length > 0)
 		{
-			add(prevGridBg);
-			add(nextGridBg);
-			add(gridBg);
+			// _cacheSections can drop sections that run past the end of the audio, so the
+			// two are read together rather than trusting them to be the same length.
+			var count:Int = Std.int(Math.min(PlayState.SONG.notes.length, cachedSectionRow.length));
+			for (secNum in 1...count)
+			{
+				// The first boundary is the top of the grid and needs no line drawn on it.
+				lines.push(cachedSectionRow[secNum] * GRID_SIZE * curZoom);
+			}
+
+			if(count > 0)
+			{
+				var last:Int = count - 1;
+				totalRows = cachedSectionRow[last] + 4 * PlayState.SONG.notes[last].sectionBeats;
+			}
+		}
+
+		gridBg.sectionLines = lines;
+		gridBg.rows = totalRows * curZoom;
+
+		// The overlay is pinned to the camera instead of being stretched over the whole
+		// grid: it only has to cover the part of the event column someone can see, and a
+		// sprite scaled to the length of a song is asking for trouble for no gain.
+		if(eventLockOverlay != null)
+		{
+			eventLockOverlay.scrollFactor.set();
+			eventLockOverlay.y = 0;
+			eventLockOverlay.scale.y = FlxG.height;
+			eventLockOverlay.updateHitbox();
 		}
 	}
 
@@ -2181,44 +2194,25 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		cachedSectionTimes.push(time);
 	}
 
-	var showPreviousSection:Bool = true;
-	var showNextSection:Bool = true;
 	var showNoteTypeLabels:Bool = true;
+	var showSectionLines:Bool = true;
 	var forceDataUpdate:Bool = true;
+
+	/**
+	 * Points the editor at a section.
+	 *
+	 * This no longer moves anything: the grid spans the whole song and every note is
+	 * already drawn, so "the current section" is only about which one the properties panel
+	 * on the right is editing - mustHitSection, the beat count, the BPM change. The
+	 * playhead decides it, and `update` keeps it in step.
+	 */
 	function loadSection(?sec:Null<Int> = null)
 	{
 		if(sec != null) curSec = sec;
 		curSec = Std.int(FlxMath.bound(curSec, 0, PlayState.SONG.notes.length-1));
 		Conductor.bpm = cachedSectionBPMs[curSec];
 
-		var hei:Float = 0;
-		if(curSec > 0)
-		{
-			prevGridBg.y = cachedSectionRow[curSec-1] * GRID_SIZE * curZoom;
-			prevGridBg.rows = 4 * PlayState.SONG.notes[curSec-1].sectionBeats * curZoom;
-			prevGridBg.visible = showPreviousSection;
-			hei += prevGridBg.height;
-			eventLockOverlay.y = prevGridBg.y;
-		}
-		else prevGridBg.visible = false;
-
-		if(curSec < PlayState.SONG.notes.length - 1)
-		{
-			nextGridBg.y = cachedSectionRow[curSec+1] * GRID_SIZE * curZoom;
-			nextGridBg.rows = 4 * PlayState.SONG.notes[curSec+1].sectionBeats * curZoom;
-			nextGridBg.visible = showNextSection;
-			hei += nextGridBg.height;
-		}
-		else nextGridBg.visible = false;
-
-		gridBg.y = cachedSectionRow[curSec] * GRID_SIZE * curZoom;
-		gridBg.rows = 4 * PlayState.SONG.notes[curSec].sectionBeats * curZoom;
-		hei += gridBg.height;
-
-		if(!prevGridBg.visible) eventLockOverlay.y = gridBg.y;
-		eventLockOverlay.scale.y = hei;
-		eventLockOverlay.updateHitbox();
-
+		resizeGridToSong();
 		softReloadNotes();
 		updateHeads();
 
@@ -2238,102 +2232,116 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			if(selectedNotes.length > 1) susLengthStepper.min = -susLengthStepper.max;
 			else susLengthStepper.min = 0;
 		}
-		prevGridBg.vortexLineEnabled = gridBg.vortexLineEnabled = nextGridBg.vortexLineEnabled = vortexEnabled;
-		prevGridBg.vortexLineSpace = gridBg.vortexLineSpace = nextGridBg.vortexLineSpace = GRID_SIZE * 4 * curZoom;
+		gridBg.vortexLineEnabled = vortexEnabled;
+		gridBg.vortexLineSpace = GRID_SIZE * 4 * curZoom;
 		updateWaveform();
 	}
 
+	/**
+	 * Rebuilds what the grid draws.
+	 *
+	 * Every note in the song goes in, not just the current section's. Flixel skips drawing
+	 * a sprite that is off camera, so a note nowhere near the viewport costs a bounds check
+	 * and nothing else - cheap enough that culling by hand would buy little, and it would
+	 * have to be redone whenever the view scrolled, which is every frame.
+	 *
+	 * `onlyCurrent` is kept for its callers and no longer distinguishes anything: there is
+	 * one group now and it always holds the lot.
+	 */
 	function softReloadNotes(onlyCurrent:Bool = false)
 	{
-		if(!onlyCurrent) behindRenderedNotes.clear();
+		// Pushed straight into members rather than through add(). add() scans the group for
+		// a duplicate and then for a free slot, both linear, which turns rebuilding a
+		// whole-song group into quadratic work every time a note is placed.
 		curRenderedNotes.clear();
+		var rendered:Array<MetaNote> = curRenderedNotes.members;
 
-		var minTime:Float = getMinNoteTime(curSec);
-		var maxTime:Float = getMaxNoteTime(curSec);
-		function curSecFilter(note:MetaNote)
-		{
-			return (note.strumTime >= minTime && note.strumTime < maxTime);
-		}
-
-		var firstNote:Bool = false;
-		var firstEvent:Bool = false;
+		var sectionStart:Float = cachedSectionTimes[curSec];
 		sectionFirstNoteID = 0;
 		sectionFirstEventID = 0;
+
+		var foundNote:Bool = false;
+		var sec:Int = 0;
 		for (num => note in notes)
 		{
-			if(note != null && curSecFilter(note))
+			if(note == null) continue;
+
+			// The first note at or after the current section. Callers use it to start a
+			// sorted insert from, so it has to be at or before the right index - which is
+			// why it is the first match. It used to be written on every match and so ended
+			// up being the last, which could put an insert after the note it belonged
+			// before.
+			if(!foundNote && note.strumTime >= sectionStart)
 			{
-				if(!firstNote) sectionFirstNoteID = num;
-				curRenderedNotes.add(note);
-				note.alpha = (note.strumTime >= Conductor.songPosition) ? 1 : 0.6;
-				if(note.hasSustain) note.updateSustainToZoom(cachedSectionCrochets[curSec] / 4, curZoom);
+				sectionFirstNoteID = num;
+				foundNote = true;
+			}
+
+			rendered.push(note);
+			note.alpha = (note.strumTime >= Conductor.songPosition) ? 1 : 0.6;
+
+			if(note.hasSustain)
+			{
+				// Each hold is sized against its own section's crochet. Using the current
+				// section's was survivable when only three were on screen; with the whole
+				// song drawn, one BPM change would misdraw every hold after it. The notes
+				// are in time order, so the section only ever walks forwards.
+				while(sec + 1 < cachedSectionTimes.length && cachedSectionTimes[sec + 1] <= note.strumTime) sec++;
+				note.updateSustainToZoom(cachedSectionCrochets[sec] / 4, curZoom);
 			}
 		}
 
 		if(SHOW_EVENT_COLUMN)
 		{
+			var foundEvent:Bool = false;
 			for (num => event in events)
 			{
-				if(event != null && curSecFilter(event))
+				if(event == null) continue;
+
+				if(!foundEvent && event.strumTime >= sectionStart)
 				{
-					if(!firstEvent) sectionFirstEventID = num;
-					curRenderedNotes.add(event);
-					event.alpha = (event.strumTime >= Conductor.songPosition) ? 1 : 0.6;
-					event.eventText.visible = true;
-					event.updateTweenPreview(curZoom);
+					sectionFirstEventID = num;
+					foundEvent = true;
 				}
+
+				rendered.push(event);
+				event.alpha = (event.strumTime >= Conductor.songPosition) ? 1 : 0.6;
+				event.eventText.visible = true;
+				event.updateTweenPreview(curZoom);
 			}
 		}
 
-		if(!onlyCurrent)
-		{
-			if(showPreviousSection || showNextSection)
-			{
-				var prevMinTime:Float = getMinNoteTime(curSec-1);
-				var prevMaxTime:Float = getMaxNoteTime(curSec-1);
-				var nextMinTime:Float = getMinNoteTime(curSec+1);
-				var nextMaxTime:Float = getMaxNoteTime(curSec+1);
-				function otherSecFilter(note:MetaNote)
-				{
-					return (prevGridBg.visible && (note.strumTime >= prevMinTime && note.strumTime < prevMaxTime)) ||
-						(nextGridBg.visible && (note.strumTime >= nextMinTime && note.strumTime < nextMaxTime));
-				}
-	
-				for(note in notes.filter(otherSecFilter))
-				{
-					behindRenderedNotes.add(note);
-					note.alpha = 0.4;
-					if(note.hasSustain) note.updateSustainToZoom(cachedSectionCrochets[curSec] / 4, curZoom);
-				}
-
-				if(SHOW_EVENT_COLUMN)
-				{
-					for(event in events.filter(otherSecFilter))
-					{
-						behindRenderedNotes.add(event);
-						event.alpha = 0.4;
-						event.eventText.visible = false;
-						event.updateTweenPreview(curZoom);
-					}
-				}
-			}
-		}
+		// FlxTypedGroup keeps `length` itself and exposes it read-only, so filling members
+		// behind its back leaves it stale - and update() walks members up to length, not to
+		// the end, so a stale zero would stop every note updating.
+		@:privateAccess curRenderedNotes.length = rendered.length;
 	}
 
-	function getMinNoteTime(sec:Int)
+	/**
+	 * Which section a row of the grid belongs to.
+	 */
+	function sectionFromRow(row:Float):Int
 	{
-		var minTime:Float = Math.NEGATIVE_INFINITY;
-		if(sec > 0)
-			minTime = cachedSectionTimes[sec];
-		return minTime;
+		var sec:Int = 0;
+		while(sec + 1 < cachedSectionRow.length && cachedSectionRow[sec + 1] <= row) sec++;
+		return sec;
 	}
 
-	function getMaxNoteTime(sec:Int)
+	/**
+	 * The song time at a point on the grid, given in pixels from the top of it.
+	 *
+	 * The inverse of `positionNoteYOnTime`, and it has to go through whichever section the
+	 * row lands in rather than multiplying by a single crochet: a BPM change makes pixels
+	 * to milliseconds piecewise, uniform inside a section and not across the song. That did
+	 * not matter while the only placeable rows belonged to the current section.
+	 */
+	function timeFromGridY(pixelY:Float):Float
 	{
-		var maxTime:Float = Math.POSITIVE_INFINITY;
-		if(sec < cachedSectionTimes.length)
-			maxTime = cachedSectionTimes[sec + 1];
-		return maxTime;
+		if(cachedSectionRow.length == 0) return 0;
+
+		var row:Float = pixelY / (GRID_SIZE * curZoom);
+		var sec:Int = sectionFromRow(row);
+		return cachedSectionTimes[sec] + (row - cachedSectionRow[sec]) / 4 * cachedSectionCrochets[sec];
 	}
 
 	function positionNoteXByData(note:MetaNote, ?data:Null<Int> = null)
@@ -4266,8 +4274,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		}
 	}
 
-	var showLastGridButton:PsychUIButton;
-	var showNextGridButton:PsychUIButton;
+	var sectionLinesButton:PsychUIButton;
 	var noteTypeLabelsButton:PsychUIButton;
 	var vortexEditorButton:PsychUIButton;
 	function addViewTab()
@@ -4285,22 +4292,16 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		if(chartEditorSave.data.waveformColor != null)
 			waveformSprite.color = CoolUtil.colorFromString(chartEditorSave.data.waveformColor);
 
-		showLastGridButton = new PsychUIButton(btnX, btnY, '', function()
+		// These used to be "show last section" and "show next section", which only meant
+		// anything while the grid was three separate panels. The chart is continuous now,
+		// so the thing worth being able to hide is where the section boundaries fall.
+		sectionLinesButton = new PsychUIButton(btnX, btnY, '', function()
 		{
-			showPreviousSection = !showPreviousSection;
+			showSectionLines = !showSectionLines;
 			updateGridVisibility();
 		}, btnWid);
-		showLastGridButton.text.alignment = LEFT;
-		tab_group.add(showLastGridButton);
-
-		btnY += 20;
-		showNextGridButton = new PsychUIButton(btnX, btnY, '', function()
-		{
-			showNextSection = !showNextSection;
-			updateGridVisibility();
-		}, btnWid);
-		showNextGridButton.text.alignment = LEFT;
-		tab_group.add(showNextGridButton);
+		sectionLinesButton.text.alignment = LEFT;
+		tab_group.add(sectionLinesButton);
 
 		btnY++;
 		btnY += 20;
@@ -4326,7 +4327,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 				note.playAnim('static');
 				note.resetAnim = 0;
 			}
-			prevGridBg.vortexLineEnabled = gridBg.vortexLineEnabled = nextGridBg.vortexLineEnabled = vortexEnabled;
+			gridBg.vortexLineEnabled = vortexEnabled;
 		}, btnWid);
 		vortexEditorButton.text.alignment = LEFT;
 		tab_group.add(vortexEditorButton);
@@ -4718,11 +4719,9 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 
 	function updateGridVisibility()
 	{
-		showLastGridButton.text.text = showPreviousSection	? '  Hide Last Section' :  '  Show Last Section';
-		showNextGridButton.text.text = showNextSection		? '  Hide Next Section' :  '  Show Next Section';
+		sectionLinesButton.text.text = showSectionLines ? '  Hide Section Lines' : '  Show Section Lines';
+		if(gridBg != null) gridBg.drawSectionLines = showSectionLines;
 
-		prevGridBg.visible = (curSec > 0 && showPreviousSection);
-		nextGridBg.visible = (curSec < PlayState.SONG.notes.length - 1 && showNextSection);
 		
 		noteTypeLabelsButton.text.text = showNoteTypeLabels ? '  Hide Note Labels' : '  Show Note Labels';
 		for (num => text in MetaNote.noteTypeTexts)
@@ -4734,7 +4733,13 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	{
 		undoActions = [];
 		setSongPlaying(false);
-		var gridLerp:Float = FlxMath.bound((scrollY + FlxG.height/2 - gridBg.y) / gridBg.height, 0.000001, 0.999999);
+		// How far the playhead is through the CURRENT SECTION, which is what the remap at the
+		// bottom of this function expects. It used to read that off the grid, because the
+		// grid was the current section; now the grid is the whole song and the section has
+		// to be measured directly.
+		var sectionTop:Float = cachedSectionRow[curSec] * GRID_SIZE * curZoom;
+		var sectionHeight:Float = 4 * PlayState.SONG.notes[curSec].sectionBeats * curZoom * GRID_SIZE;
+		var gridLerp:Float = FlxMath.bound((scrollY + FlxG.height/2 - sectionTop) / sectionHeight, 0.000001, 0.999999);
 		notes.sort(PlayState.sortByTime);
 		_cacheSections();
 
@@ -5190,9 +5195,19 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		}
 
 		waveformSprite.visible = true;
-		waveformSprite.y = gridBg.y;
+
+		// Measured from the current section rather than from the grid. The grid is the
+		// whole song now, and a bitmap as tall as a whole song at any useful zoom is
+		// hundreds of thousands of pixels - past what a texture can be, never mind what is
+		// worth allocating to draw a waveform nobody can see all of at once. Drawing it
+		// over the section the playhead is in is what it always did in practice, because
+		// the grid used to BE that section.
+		var sectionRows:Float = 4 * PlayState.SONG.notes[curSec].sectionBeats * curZoom;
+		waveformSprite.y = cachedSectionRow[curSec] * GRID_SIZE * curZoom;
+
 		var width:Int = Std.int(GRID_SIZE * GRID_COLUMNS_PER_PLAYER * GRID_PLAYERS);
-		var height:Int = Std.int(gridBg.height);
+		var height:Int = Std.int(sectionRows * GRID_SIZE);
+		if(height < 1) height = 1;
 		if(Std.int(waveformSprite.height) != height && waveformSprite.pixels != null)
 		{
 			waveformSprite.pixels.dispose();

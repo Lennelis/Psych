@@ -15,6 +15,21 @@ class ChartingGridSprite extends FlxSprite
 	public var vortexLineEnabled:Bool = false;
 	public var vortexLineSpace:Float = 0;
 
+	/**
+	 * Where each section begins, in pixels from the top of the grid.
+	 *
+	 * The grid used to be three sprites, one per section, so a section boundary was just
+	 * where one sprite ended and the next began. One continuous grid has no such seam, and
+	 * sections still matter - they carry mustHitSection, the BPM changes, the beat count -
+	 * so they get drawn.
+	 */
+	public var sectionLines:Array<Float> = [];
+
+	/** Whether to draw them. Toggled from the editor's grid options. */
+	public var drawSectionLines:Bool = true;
+
+	var sectionLine:FlxSprite;
+
 	public function new(columns:Int, ?color1:FlxColor = 0xFFE6E6E6, ?color2:FlxColor = 0xFFD8D8D8)
 	{
 		super();
@@ -36,6 +51,13 @@ class ChartingGridSprite extends FlxSprite
 		stripe = new FlxSprite().makeGraphic(1, 1, FlxColor.WHITE);
 		stripe.scrollFactor.x = 0;
 		stripe.color = FlxColor.BLACK;
+
+		sectionLine = new FlxSprite().makeGraphic(1, 1, FlxColor.WHITE);
+		sectionLine.scale.x = this.width;
+		sectionLine.scrollFactor.x = 0;
+		sectionLine.color = 0xFF222222;
+		sectionLine.updateHitbox();
+
 		updateStripes();
 	}
 
@@ -52,49 +74,94 @@ class ChartingGridSprite extends FlxSprite
 	override function draw()
 	{
 		if(!visible || alpha == 0 || y - camera.scroll.y >= FlxG.height) return;
-		scale.y = ChartingState.GRID_SIZE * Math.min(1, rows);
-		offset.y = -0.5 * (scale.y - 1);
 
-		super.draw();
-		if(rows <= 1)
-		{
-			_drawStripes();
-			return;
-		}
-
+		var step:Float = ChartingState.GRID_SIZE + spacing;
 		var initialY:Float = y;
-		for (i in 1...Math.ceil(rows))
-		{
-			y += ChartingState.GRID_SIZE + spacing;
-			if(y - camera.scroll.y >= FlxG.height)
-				break;
+		var total:Int = Math.ceil(rows);
 
-			animation.play((i % 2 == 1) ? 'odd' : 'even', true);
-			scale.y = ChartingState.GRID_SIZE * Math.min(1, rows - i);
-			offset.y = -0.5 * (scale.y - 1);
-			super.draw();
+		// A grid spanning a whole song is tens of thousands of rows tall and nearly all of
+		// them are above the viewport. Starting at row zero and walking down until one
+		// lands on screen is what would make that unusable; this starts at the first row
+		// that could be seen and stops at the first one that can't.
+		var first:Int = 0;
+		if(step > 0 && y < camera.scroll.y) first = Math.floor((camera.scroll.y - y) / step);
+
+		if(first < total)
+		{
+			y = initialY + first * step;
+			for (i in first...total)
+			{
+				if(y - camera.scroll.y >= FlxG.height) break;
+
+				animation.play((i % 2 == 1) ? 'odd' : 'even', true);
+				scale.y = ChartingState.GRID_SIZE * Math.min(1, rows - i);
+				offset.y = -0.5 * (scale.y - 1);
+				super.draw();
+
+				y += step;
+			}
+			animation.play('even', true);
+			y = initialY;
 		}
-		animation.play('even', true);
-		y = initialY;
 
 		_drawStripes();
+		_drawSectionLines();
 
-		if(vortexLineEnabled)
+		if(vortexLineEnabled && vortexLineSpace > 0)
 		{
 			vortexLine.x = this.x;
-			vortexLine.y = this.y - 1;
+
+			// Same reasoning as the rows above: skip straight to the first line that could
+			// be on screen rather than counting up to it one beat at a time.
+			var skipped:Float = Math.max(0, Math.ffloor((camera.scroll.y - this.y) / vortexLineSpace));
+			vortexLine.y = this.y - 1 + skipped * vortexLineSpace;
+
+			var bottom:Float = this.y + this.height;
 			while (true)
 			{
 				vortexLine.y += vortexLineSpace;
-				if(vortexLine.y >= this.y + this.height) break;
+				if(vortexLine.y >= bottom || vortexLine.y - camera.scroll.y >= FlxG.height) break;
 
 				vortexLine.draw();
 			}
 		}
 	}
 
+	function _drawSectionLines()
+	{
+		if(!drawSectionLines || sectionLines == null || sectionLines.length == 0) return;
+
+		var top:Float = camera.scroll.y;
+		var bottom:Float = top + FlxG.height;
+
+		sectionLine.x = this.x;
+		for (offsetY in sectionLines)
+		{
+			var lineY:Float = this.y + offsetY;
+			if(lineY < top) continue;
+			if(lineY >= bottom) break;
+
+			sectionLine.y = lineY;
+			sectionLine.draw();
+		}
+	}
+
 	function _drawStripes()
 	{
+		if(stripes == null) return;
+
+		// Sized to the viewport rather than to the grid. The grid is now as long as the
+		// song, and asking the renderer to scale a 1x1 pixel to a few hundred thousand
+		// tall is asking for precision artifacts for no benefit - nobody can see past the
+		// bottom of the screen anyway.
+		var top:Float = Math.max(this.y, camera.scroll.y);
+		var bottom:Float = Math.min(this.y + this.height, camera.scroll.y + FlxG.height);
+		if(bottom <= top) return;
+
+		stripe.y = top;
+		stripe.setGraphicSize(2, bottom - top);
+		stripe.updateHitbox();
+
 		for (i => column in stripes)
 		{
 			if(column == 0)
@@ -109,8 +176,6 @@ class ChartingGridSprite extends FlxSprite
 	{
 		if(stripe == null || !stripe.exists) return;
 		stripe.y = this.y;
-		stripe.setGraphicSize(2, this.height);
-		stripe.updateHitbox();
 	}
 
 	function set_rows(v:Float)
