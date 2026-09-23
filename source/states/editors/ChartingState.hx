@@ -181,6 +181,16 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	var rightClickY:Float = 0;
 	/** How far the mouse may wander and still count as a click rather than a drag, in pixels. */
 	static inline var RIGHT_CLICK_SLOP:Float = 4;
+
+	/** A left press on a note that has not yet moved far enough to count as a drag. */
+	var dragArmed:Bool = false;
+
+	var dragStartX:Float = 0;
+	var dragStartY:Float = 0;
+	var dragNoteData:Int = 0;
+
+	/** How far the cursor has to travel before a press on a note becomes a drag. */
+	static inline var DRAG_SLOP:Float = 4;
 	var movingNotes:FlxTypedGroup<MetaNote> = new FlxTypedGroup<MetaNote>();
 	var eventLockOverlay:FlxSprite;
 	var vortexIndicator:FlxSprite;
@@ -521,9 +531,13 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			"Enter - Playtest Chart",
 			"Space - Stop/Resume song",
 			"",
-			"Alt + Click - Select Note(s)",
+			"Left Click - Place a Note, or Select the One Under It",
+			"Left Click + Drag - Move the Selection",
+			"Right Click - Delete the Note or Event Under It",
+			"Right Click + Drag - Selection Box",
+			"Alt + Click - Add to Selection",
 			"Shift + Click - Select/Unselect Note(s)",
-			"Right Click - Selection Box",
+			"Delete/Backspace - Remove Selected Notes",
 			"",
 			"R - Reset Section",
 			"Shift + R - Go Back to the Start of the Song",
@@ -1122,6 +1136,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					}
 					movingNotes.clear();
 					isMovingNotes = false;
+					dragArmed = false;
 					selectedNotes = [];
 					onSelectNote();
 					softReloadNotes();
@@ -1233,6 +1248,10 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		var minX:Float = gridBg.x;
 		if(SHOW_EVENT_COLUMN && lockedEvents) minX += GRID_SIZE;
 
+		// Outside the bounds check below on purpose: letting go anywhere ends the drag, and
+		// disarms a press that never became one, even if the cursor has left the grid.
+		if(!FlxG.mouse.pressed) dragArmed = false;
+
 		if(isMovingNotes && FlxG.mouse.justReleased)
 			stopMovingNotes();
 
@@ -1255,6 +1274,21 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			// The branch that used to be here corrected for the previous section's grid being
 			// a separate sprite that the mouse could be above. There is no above any more.
 			dummyArrow.y = gridBg.y + diffY;
+
+			// A press that has wandered far enough from where it started picks the selection
+			// up. Done here rather than at the press, because dummyArrow has only just been
+			// put where the cursor is and moveSelectedNotes measures from it - starting the
+			// drag a frame early would jump every note by whatever the cursor did first.
+			if(dragArmed)
+			{
+				if(!FlxG.mouse.pressed) dragArmed = false;
+				else if(!isMovingNotes
+					&& (Math.abs(FlxG.mouse.screenX - dragStartX) > DRAG_SLOP || Math.abs(FlxG.mouse.screenY - dragStartY) > DRAG_SLOP))
+				{
+					dragArmed = false;
+					if(selectedNotes.length > 0) moveSelectedNotes(dragNoteData, dummyArrow.y);
+				}
+			}
 
 			if(isMovingNotes)
 			{
@@ -1298,29 +1332,35 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 				if(dummyArrow.y != movingNotesLastY)
 				{
 					var diff:Float = dummyArrow.y - movingNotesLastY;
-					var curSecRow:Int = 0;
-					for (note in movingNotes) //Try to figure out new strum time for the notes, DEFINITELY INACCURATE WITH BPM CHANGING, ALTHOUGH UNTESTED
+					// Three things were wrong here, and the original comment said as much -
+					// "DEFINITELY INACCURATE WITH BPM CHANGING, ALTHOUGH UNTESTED". Now that
+					// dragging is how notes get moved, they matter.
+					//
+					// A row is GRID_SIZE * curZoom pixels tall, so converting pixels to rows
+					// divides by the zoom; both conversions multiplied by it instead, which
+					// put the time delta out by the square of the zoom. And the walk to find
+					// the section tested the current section's start rather than the next
+					// one's, so it always landed one section too far along.
+					for (note in movingNotes)
 					{
 						if(note == null) continue;
 
 						note.chartY += diff;
-						var row:Float = (note.chartY / GRID_SIZE) * curZoom;
-						while(curSecRow + 1 < cachedSectionRow.length && cachedSectionRow[curSecRow] <= row)
-						{
-							curSecRow++;
-						}
 
-						note.setStrumTime(Math.max(-5000, note.strumTime + (diff * cachedSectionCrochets[curSecRow] / 4) / GRID_SIZE * curZoom));
-						positionNoteYOnTime(note, curSecRow);
+						var sec:Int = sectionFromRow(note.chartY / (GRID_SIZE * curZoom));
+						var beats:Float = diff / (GRID_SIZE * curZoom) / 4;
+
+						note.setStrumTime(Math.max(-5000, note.strumTime + beats * cachedSectionCrochets[sec]));
+						positionNoteYOnTime(note, sec);
 						if(note.isEvent) cast (note, EventMetaNote).updateEventText();
 					}
 					movingNotesLastY = dummyArrow.y;
 				}
 			}
-			else if(FlxG.mouse.justReleasedRight && rightClickArmed && !lockedEvents)
+			else if(FlxG.mouse.justReleasedRight && rightClickArmed)
 			{
 				rightClickArmed = false;
-				removeEventUnder(noteData);
+				removeUnderCursor(noteData);
 			}
 			else if(FlxG.mouse.justPressed && !ignoreClickForThisFrame)
 			{
@@ -1333,14 +1373,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 				}
 				else if(FlxG.mouse.x >= gridBg.x && FlxG.mouse.x < gridBg.x + gridBg.width)
 				{
-					var closeNotes:Array<MetaNote> = curRenderedNotes.members.filter(function(note:MetaNote)
-					{
-						var chartY:Float = FlxG.mouse.y - note.chartY;
-						return ((note.isEvent && noteData < 0) || (!note.isEvent && note.songData[1] == noteData)) && chartY >= 0 && chartY < GRID_SIZE;
-					});
-					closeNotes.sort(function(a:MetaNote, b:MetaNote) return Math.abs(a.strumTime - FlxG.mouse.y) < Math.abs(b.strumTime - FlxG.mouse.y) ? 1 : -1);
-
-					var closest = closeNotes[0];
+					var closest:MetaNote = noteUnderCursor(noteData);
 					if(closest != null && (!closest.isEvent || !lockedEvents))
 					{
 						if(FlxG.keys.pressed.SHIFT || holdingAlt) // Select Note/Event
@@ -1361,25 +1394,26 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 						}
 						else if(!FlxG.keys.pressed.CONTROL)
 						{
-							// Events pick up to be edited; right click is what removes them, the way
-							// V-Slice's editor works. Notes keep click-to-delete, which is how charts
-							// actually get made - and an event is a thing you tweak far more often
-							// than you delete, which is why the two differ.
-							if(closest.isEvent)
+							// Left click picks a note up rather than deleting it. Deleting was
+							// the same gesture as placing, which left nowhere for dragging to
+							// live; right click deletes now, and events and notes finally
+							// behave the same way as each other.
+							if(!selectedNotes.contains(closest))
 							{
 								var sel = selectedNotes.copy();
 								resetSelectedNotes();
 								selectedNotes.push(closest);
 								addUndoAction(SELECT_NOTE, {old: sel, current: selectedNotes.copy()});
 							}
-							else
-							{
-								trace('Removed note at time: ${closest.strumTime}');
-								notes.remove(closest);
-								selectedNotes.remove(closest);
-								curRenderedNotes.remove(closest, true);
-								addUndoAction(DELETE_NOTE, {notes: [closest]});
-							}
+
+							// Armed, not started. A press that goes nowhere is a plain
+							// selection; it only becomes a drag once the cursor has actually
+							// left where it went down, so a click cannot nudge a note by a
+							// pixel and quietly change its time.
+							dragArmed = true;
+							dragStartX = FlxG.mouse.screenX;
+							dragStartY = FlxG.mouse.screenY;
+							dragNoteData = noteData;
 						}
 						if(selectedNotes.length == 1) onSelectNote();
 						forceDataUpdate = true;
@@ -1601,6 +1635,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		events.sort(PlayState.sortByTime);
 		movingNotes.clear();
 		isMovingNotes = false;
+		dragArmed = false;
 		softReloadNotes();
 	}
 
@@ -1717,27 +1752,63 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	 * Shares the lookup the left click uses - same column test, same one-cell window, same
 	 * tie-break - so the event that lights up under the pointer is the event that goes.
 	 */
-	function removeEventUnder(noteData:Int)
+	/**
+	 * The note or event the cursor is over, or null.
+	 *
+	 * `noteData` is the column under the cursor, with a negative value meaning the event
+	 * column.
+	 */
+	function noteUnderCursor(noteData:Int):MetaNote
 	{
-		if(noteData >= 0) return; // not the event column
-
-		var closeEvents:Array<MetaNote> = curRenderedNotes.members.filter(function(note:MetaNote)
+		var under:Array<MetaNote> = curRenderedNotes.members.filter(function(note:MetaNote)
 		{
+			if(note == null) return false;
+
 			var chartY:Float = FlxG.mouse.y - note.chartY;
-			return note.isEvent && chartY >= 0 && chartY < GRID_SIZE;
+			if(chartY < 0 || chartY >= GRID_SIZE) return false;
+
+			return note.isEvent ? (noteData < 0) : (noteData >= 0 && note.songData[1] == noteData);
 		});
-		if(closeEvents.length < 1) return;
+		if(under.length < 1) return null;
 
-		closeEvents.sort(function(a:MetaNote, b:MetaNote) return Math.abs(a.strumTime - FlxG.mouse.y) < Math.abs(b.strumTime - FlxG.mouse.y) ? 1 : -1);
+		// Nearest to the cursor. The comparison used to weigh a strum time against a pixel
+		// position, which only ever landed on the right answer because everything in this
+		// list is already inside one cell of the cursor.
+		under.sort(function(a:MetaNote, b:MetaNote)
+			return Math.abs(a.chartY - FlxG.mouse.y) < Math.abs(b.chartY - FlxG.mouse.y) ? -1 : 1);
 
-		var closest:EventMetaNote = cast closeEvents[0];
+		return under[0];
+	}
+
+	/**
+	 * Deletes whatever the cursor is over.
+	 *
+	 * Right click used to only take events, because left click deleted notes. Now that left
+	 * click selects them, this is how anything gets removed.
+	 */
+	function removeUnderCursor(noteData:Int)
+	{
+		var closest:MetaNote = noteUnderCursor(noteData);
 		if(closest == null) return;
 
-		trace('Removed event at time: ${closest.strumTime}');
-		events.remove(closest);
+		if(closest.isEvent)
+		{
+			if(lockedEvents) return;
+
+			var event:EventMetaNote = cast closest;
+			trace('Removed event at time: ${event.strumTime}');
+			events.remove(event);
+			addUndoAction(DELETE_NOTE, {events: [event]});
+		}
+		else
+		{
+			trace('Removed note at time: ${closest.strumTime}');
+			notes.remove(closest);
+			addUndoAction(DELETE_NOTE, {notes: [closest]});
+		}
+
 		selectedNotes.remove(closest);
 		curRenderedNotes.remove(closest, true);
-		addUndoAction(DELETE_NOTE, {events: [closest]});
 
 		if(selectedNotes.length == 1) onSelectNote();
 		forceDataUpdate = true;
