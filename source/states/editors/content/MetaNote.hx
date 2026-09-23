@@ -29,7 +29,19 @@ class MetaNote extends Note
 		this.songData[1] = v;
 		this.noteData = v % ChartingState.GRID_COLUMNS_PER_PLAYER;
 		this.mustPress = (v < ChartingState.GRID_COLUMNS_PER_PLAYER);
-		
+
+		// While a note is being carried the data moves and the picture stays put, so the
+		// arrow can swing round to its new direction on landing rather than snapping to it
+		// halfway across the grid.
+		if(deferVisuals) return;
+
+		applyNoteVisuals();
+	}
+
+	function applyNoteVisuals()
+	{
+		visualNoteData = this.noteData;
+
 		if(!PlayState.isPixelStage)
 			loadNoteAnims();
 		else
@@ -88,6 +100,228 @@ class MetaNote extends Note
 		setSustainLength(sustainLength, stepCrochet, _lastZoom);
 	}
 	
+	//
+	// DRAG FEEL
+	// Tuned on a bench rather than guessed. The constants live on ChartingState.
+	//
+
+	public static inline var DRAG_NONE:Int = 0;
+	public static inline var DRAG_LIFT:Int = 1;
+	public static inline var DRAG_CARRY:Int = 2;
+	public static inline var DRAG_SETTLE:Int = 3;
+
+	/**
+	 * How far the sprite is drawn from where the note actually is, in pixels.
+	 *
+	 * The note's real position never stops being snapped - this is only what the eye sees.
+	 * Every time the snapped position jumps, the jump is subtracted from here, so the sprite
+	 * stays where it was and then catches up. That one trick covers all three phases: a big
+	 * subtraction on pick-up is the lift, small ones while carrying are the lag, and the one
+	 * on landing is the settle. All that differs between them is how fast it decays.
+	 */
+	public var dragOffsetX:Float = 0;
+
+	public var dragOffsetY:Float = 0;
+
+	public var dragPhase:Int = DRAG_NONE;
+
+	/** While true, changeNoteData moves the data and leaves the picture where it was. */
+	public var deferVisuals:Bool = false;
+
+	/** The direction currently drawn, which lags the data while a note is carried. */
+	public var visualNoteData:Int = -1;
+
+	// Where the arrow points for each direction, in the order of Note.colArray:
+	// purple/left, blue/down, green/up, red/right.
+	static var DIR_ANGLE:Array<Float> = [180, 90, -90, 0];
+
+	var dragVelX:Float = 0;
+	var dragVelY:Float = 0;
+	var dragBaseScaleX:Float = 0;
+	var dragBaseScaleY:Float = 0;
+	var dragScale:Float = 1;
+
+	var fadeT:Float = 1;
+	var fadeFrom:Array<FlxColor> = null;
+	var fadeTo:Array<FlxColor> = null;
+
+	/**
+	 * Takes the note off the grid. The sprite stays where it is until the first move.
+	 */
+	public function beginDrag()
+	{
+		if(dragBaseScaleX == 0)
+		{
+			dragBaseScaleX = scale.x;
+			dragBaseScaleY = scale.y;
+		}
+
+		deferVisuals = true;
+		if(visualNoteData < 0) visualNoteData = noteData;
+		dragPhase = DRAG_LIFT;
+		dragVelX = dragVelY = 0;
+	}
+
+	/**
+	 * Puts it down: the picture catches up with the data it has been ignoring, and the
+	 * offset it has accumulated settles out.
+	 */
+	public function endDrag()
+	{
+		deferVisuals = false;
+		dragPhase = DRAG_SETTLE;
+		dragVelX = dragVelY = 0;
+
+		var wanted:Int = noteData % Note.colArray.length;
+		var shown:Int = (visualNoteData < 0 ? wanted : visualNoteData) % Note.colArray.length;
+
+		if(wanted != shown && !isEvent)
+		{
+			// The frame swaps to the new direction straight away and the sprite is turned
+			// back to where the old one pointed, then unwinds. The arrows are rotations of
+			// each other, so the first frame of that is indistinguishable from the old note
+			// and nothing has to pop at the end of the turn.
+			var from:Array<FlxColor> = [rgbShader.r, rgbShader.g, rgbShader.b];
+
+			applyNoteVisuals();
+
+			angle = -shortestTurn(DIR_ANGLE[shown], DIR_ANGLE[wanted]);
+
+			// Cross-fade the palette rather than swapping it. Writing to the reference clones
+			// the shared palette for this note alone, so the rest of the chart is untouched.
+			fadeFrom = from;
+			fadeTo = [rgbShader.r, rgbShader.g, rgbShader.b];
+			fadeT = 0;
+			rgbShader.r = fadeFrom[0];
+			rgbShader.g = fadeFrom[1];
+			rgbShader.b = fadeFrom[2];
+		}
+		else
+		{
+			applyNoteVisuals();
+			angle = 0;
+			fadeT = 1;
+		}
+
+		// applyNoteVisuals goes through setGraphicSize, so the resting scale is whatever it
+		// just decided - re-read it rather than trusting what was captured before the lift.
+		dragBaseScaleX = scale.x;
+		dragBaseScaleY = scale.y;
+	}
+
+	static function shortestTurn(from:Float, to:Float):Float
+	{
+		var d:Float = (to - from) % 360;
+		if(d > 180) d -= 360;
+		if(d < -180) d += 360;
+		return d;
+	}
+
+	/**
+	 * Advances one frame of the drag. Returns whether anything is still moving.
+	 */
+	public function stepDrag(elapsed:Float):Bool
+	{
+		if(dragPhase == DRAG_NONE) return false;
+
+		var held:Bool = (dragPhase == DRAG_LIFT || dragPhase == DRAG_CARRY);
+
+		if(dragPhase == DRAG_SETTLE && ChartingState.LAND_OVERSHOOT > 0 && ChartingState.SETTLE_TAU > 0)
+		{
+			// A chase can only ever approach, so the landing is a damped spring instead and
+			// the overshoot is its damping ratio. Substepped because a stiff spring goes
+			// unstable on a long frame, and the editor drops frames on a big chart.
+			var omega:Float = 1 / ChartingState.SETTLE_TAU;
+			var zeta:Float = Math.max(0.08, 1 - ChartingState.LAND_OVERSHOOT);
+			var steps:Int = Std.int(Math.max(1, Math.ceil(elapsed * 240)));
+			var h:Float = elapsed / steps;
+
+			for (i in 0...steps)
+			{
+				dragVelX += (-(omega * omega) * dragOffsetX - 2 * zeta * omega * dragVelX) * h;
+				dragVelY += (-(omega * omega) * dragOffsetY - 2 * zeta * omega * dragVelY) * h;
+				dragOffsetX += dragVelX * h;
+				dragOffsetY += dragVelY * h;
+			}
+		}
+		else
+		{
+			var tau:Float = switch(dragPhase)
+			{
+				case DRAG_LIFT: ChartingState.LIFT_TAU;
+				case DRAG_CARRY: ChartingState.FOLLOW_TAU;
+				default: ChartingState.SETTLE_TAU;
+			}
+
+			var k:Float = (tau <= 0) ? 1 : (1 - Math.exp(-elapsed / tau));
+			dragOffsetX -= dragOffsetX * k;
+			dragOffsetY -= dragOffsetY * k;
+		}
+
+		// The lift is over once the note has caught up with the cursor; from then on it is
+		// the carry, which is usually a good deal tighter.
+		if(dragPhase == DRAG_LIFT && Math.abs(dragOffsetX) < 1.5 && Math.abs(dragOffsetY) < 1.5)
+			dragPhase = DRAG_CARRY;
+
+		// Tilt reads the lag rather than the mouse, so it can never disagree with what is on
+		// screen and it straightens itself the moment you stop moving.
+		if(!isEvent)
+		{
+			var wantAngle:Float = 0;
+			if(held && ChartingState.TILT_MAX > 0)
+				wantAngle = Math.max(-ChartingState.TILT_MAX, Math.min(ChartingState.TILT_MAX, dragOffsetX * 0.55));
+			else if(fadeT < 1 || angle != 0)
+				wantAngle = 0;
+
+			angle += (wantAngle - angle) * Math.min(1, elapsed / Math.max(0.001, ChartingState.TURN_TAU));
+			if(!held && Math.abs(angle) < 0.35) angle = 0;
+		}
+
+		if(dragBaseScaleX != 0)
+		{
+			var wantScale:Float = held ? ChartingState.HELD_SCALE : 1;
+			dragScale += (wantScale - dragScale) * Math.min(1, elapsed / Math.max(0.001, ChartingState.LIFT_TAU));
+			scale.set(dragBaseScaleX * dragScale, dragBaseScaleY * dragScale);
+		}
+
+		if(fadeT < 1 && fadeFrom != null)
+		{
+			fadeT += (1 - fadeT) * (ChartingState.FADE_TAU <= 0 ? 1 : (1 - Math.exp(-elapsed / ChartingState.FADE_TAU)));
+			if(fadeT > 0.997) fadeT = 1;
+
+			rgbShader.r = FlxColor.interpolate(fadeFrom[0], fadeTo[0], fadeT);
+			rgbShader.g = FlxColor.interpolate(fadeFrom[1], fadeTo[1], fadeT);
+			rgbShader.b = FlxColor.interpolate(fadeFrom[2], fadeTo[2], fadeT);
+
+			if(fadeT >= 1)
+			{
+				// Hand the shared palette back, so a dragged note does not keep a private
+				// shader for the rest of the session.
+				fadeFrom = fadeTo = null;
+				if(!PlayState.isPixelStage)
+					rgbShader = new RGBShaderReference(this, Note.initializeGlobalRGBShader(noteData));
+			}
+		}
+
+		var resting:Bool = !held
+			&& Math.abs(dragOffsetX) < 0.3 && Math.abs(dragOffsetY) < 0.3
+			&& Math.abs(dragVelX) < 2 && Math.abs(dragVelY) < 2
+			&& Math.abs(dragScale - 1) < 0.004
+			&& angle == 0 && fadeT >= 1;
+
+		if(resting)
+		{
+			dragOffsetX = dragOffsetY = 0;
+			dragVelX = dragVelY = 0;
+			dragScale = 1;
+			if(dragBaseScaleX != 0) scale.set(dragBaseScaleX, dragBaseScaleY);
+			dragPhase = DRAG_NONE;
+			return false;
+		}
+
+		return true;
+	}
+
 	var _noteTypeText:FlxText;
 	public function findNoteTypeText(num:Int)
 	{

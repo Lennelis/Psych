@@ -195,6 +195,46 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	/** How far the cursor has to move before a press on a note lifts it. */
 	static inline var DRAG_SLOP:Float = 4;
 
+	//
+	// DRAG FEEL
+	//
+	// Tuned by hand on a bench rather than guessed at. Seconds, and time constants rather
+	// than durations: the value covers about 63% of what is left in one tau, which is what
+	// makes it behave the same on a 60Hz phone and a 144Hz desktop, where a per-frame lerp
+	// would not. Zero means instant.
+
+	/** Running to the cursor when a note is first picked up. */
+	public static inline var LIFT_TAU:Float = 0.100;
+
+	/** Trailing the cursor for the rest of the carry. This is the part that reads as mass. */
+	public static inline var FOLLOW_TAU:Float = 0.045;
+
+	/** Coming to rest after being put down. */
+	public static inline var SETTLE_TAU:Float = 0.050;
+
+	/** Swinging round to the new lane's arrow, which happens on landing. */
+	public static inline var TURN_TAU:Float = 0.050;
+
+	/** And fading to that lane's colour. */
+	public static inline var FADE_TAU:Float = 0.120;
+
+	/** How far past its resting place a landing note throws itself. 0 is a plain ease. */
+	public static inline var LAND_OVERSHOOT:Float = 0.60;
+
+	/** Size while in the air. */
+	public static inline var HELD_SCALE:Float = 1.15;
+
+	/** Degrees of lean at full lag. Read off how far behind the note is, not off the mouse. */
+	public static inline var TILT_MAX:Float = 40.0;
+
+	/** Whether a faded copy stays behind at the place a note was taken from. */
+	public static inline var GHOST_AT_ORIGIN:Bool = true;
+
+	/** Notes still finishing a landing. Held notes are ticked through movingNotes instead. */
+	var dragAnimating:Array<MetaNote> = [];
+
+	var dragGhosts:FlxTypedGroup<MetaNote> = new FlxTypedGroup<MetaNote>();
+
 	var movingNotes:FlxTypedGroup<MetaNote> = new FlxTypedGroup<MetaNote>();
 	var eventLockOverlay:FlxSprite;
 	var vortexIndicator:FlxSprite;
@@ -302,6 +342,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		add(strumLineNotes);
 
 		add(curRenderedNotes);
+		add(dragGhosts);
 		add(movingNotes);
 
 		eventLockOverlay = new FlxSprite(gridBg.x, 0).makeGraphic(1, 1, FlxColor.BLACK);
@@ -1144,6 +1185,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 							removedEvents.push(ev);
 						}
 					}
+					clearDragGhosts();
 					movingNotes.clear();
 					isMovingNotes = false;
 					dragArmed = false;
@@ -1335,6 +1377,10 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					{
 						if(note == null || note.isEvent) continue; //Events shouldn't change note data as they don't have one
 
+						// Subtracted before the move, so the sprite holds still and catches up
+						// rather than teleporting a lane sideways.
+						note.dragOffsetX -= diff * GRID_SIZE;
+
 						note.changeNoteData(note.songData[1] + diff);
 						positionNoteXByData(note);
 					}
@@ -1357,6 +1403,10 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					for (note in movingNotes)
 					{
 						if(note == null) continue;
+
+						// Same again for the vertical: the snapped position steps a quantise
+						// row at a time, and this is what turns those steps into a slide.
+						note.dragOffsetY -= diff;
 
 						note.chartY += diff;
 
@@ -1478,6 +1528,10 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			dummyArrow.visible = false;
 		}
 		ignoreClickForThisFrame = false;
+
+		// Last word on where a note is drawn, so nothing above can leave a sprite
+		// at its snapped position for a frame.
+		updateDragFeel(elapsed);
 
 		if(Conductor.songPosition != lastTime || forceDataUpdate)
 		{
@@ -1618,6 +1672,21 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			}
 		}
 		selectedNotes = movingNotes.members.copy();
+
+		for (note in movingNotes)
+		{
+			if(note == null) continue;
+			note.beginDrag();
+		}
+
+		if(GHOST_AT_ORIGIN)
+		{
+			// The originals have already been taken out of the chart, so they are free to
+			// stand in as the "it came from here" marker until the note is put down.
+			for (note in originalNotes) { note.alpha = 0.28; dragGhosts.add(note); }
+			for (event in originalEvents) { event.alpha = 0.28; dragGhosts.add(event); }
+		}
+
 		isMovingNotes = true;
 		movingNotesLastY = lastY;
 		movingNotesLastData = noteData;
@@ -1645,10 +1714,64 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		});
 		notes.sort(PlayState.sortByTime);
 		events.sort(PlayState.sortByTime);
+
+		// Handed over before the group is emptied: from here they finish the landing on
+		// their own, in dragAnimating, while living in the ordinary rendered group.
+		for (note in pushedNotes) { note.endDrag(); dragAnimating.push(note); }
+		for (event in pushedEvents) { event.endDrag(); dragAnimating.push(event); }
+
+		clearDragGhosts();
+
 		movingNotes.clear();
 		isMovingNotes = false;
 		dragArmed = false;
 		softReloadNotes();
+	}
+
+	function clearDragGhosts()
+	{
+		for (ghost in dragGhosts) if(ghost != null) ghost.alpha = 1;
+		dragGhosts.clear();
+	}
+
+	/**
+	 * Moves every note that is mid-lift, mid-carry or mid-landing along by one frame.
+	 *
+	 * The note's real position is never touched here. All of this reads a visual offset that
+	 * decays to nothing, so a note is always exactly where the chart says it is however it
+	 * happens to be drawn.
+	 */
+	function updateDragFeel(elapsed:Float)
+	{
+		if(isMovingNotes)
+		{
+			for (note in movingNotes)
+			{
+				if(note == null) continue;
+				note.stepDrag(elapsed);
+				applyDragOffset(note);
+			}
+		}
+
+		var i:Int = dragAnimating.length;
+		while(i-- > 0)
+		{
+			var note:MetaNote = dragAnimating[i];
+
+			// A note can be deleted while it is still settling, and a destroyed one has
+			// nothing left to move.
+			if(note == null || !note.exists) { dragAnimating.splice(i, 1); continue; }
+
+			if(!note.stepDrag(elapsed)) dragAnimating.splice(i, 1);
+			applyDragOffset(note);
+		}
+	}
+
+	function applyDragOffset(note:MetaNote)
+	{
+		positionNoteXByData(note);
+		note.x += note.dragOffsetX;
+		note.y = note.chartY + note.dragOffsetY + (GRID_SIZE / 2 - note.height / 2);
 	}
 
 	function makeNoteDataCopy(originalData:Array<Dynamic>, isEvent:Bool)
