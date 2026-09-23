@@ -33,8 +33,29 @@ STAGES = {
 
 # The Erect stages are their own art and have no Psych equivalent yet, so they fall
 # back to the stage they are a version of. Swapped for the real ones once those exist.
+STAGES['phillyBlazin'] = 'phillyBlazin'  # Psych calls it the same thing
+
 for base, psych in list(STAGES.items()):
     STAGES[base + 'Erect'] = psych
+
+
+def carry_over(new_song, old_song):
+    """
+    Keeps anything the old chart said that this converter has no opinion about.
+
+    A Psych chart carries more than the notes: Stress names a game over character, the
+    Weekend 1 songs carry an audio offset, three dozen files carry a `player3`. None of
+    that is in a V-Slice chart, and none of it would error on the way out - it would just
+    quietly stop happening. So the old values come across untouched.
+    """
+    if not isinstance(old_song, dict):
+        return new_song
+
+    for key, value in old_song.items():
+        if key not in new_song:
+            new_song[key] = value
+
+    return new_song
 
 
 # V-Slice ships recoloured characters for some Erect stages that Psych has no copy of.
