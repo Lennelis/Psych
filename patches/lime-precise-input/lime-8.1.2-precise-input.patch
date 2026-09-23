@@ -1,27 +1,8 @@
-Adds a timestamp to lime's key events, and a clock fine enough to compare it to.
-
-SDL stamps every key event with the moment it happened. Lime reads the key code, the
-modifier and the window id off that event and drops the rest, so by the time Haxe sees a
-key press there is no way left to ask when it happened - only that it arrived in this
-frame's batch. That is the whole reason precise input needs a patched lime.
-
-Two things are needed, not one:
-
-  * the event's own timestamp, carried through to Haxe
-  * a clock with better than millisecond resolution to compare it against
-
-`System::GetTimer` returns `SDL_GetTicks`, which counts whole milliseconds. Against an
-effect worth about four of them at 120fps that is too coarse to measure, so this adds a
-separate high resolution reading rather than changing GetTimer's meaning - everything in
-lime and openfl reads GetTimer, and giving it new units would be felt far from here.
-
-Applies to lime 8.1.2. Rebuilding the native side is required afterwards; see README.md.
-
+diff --git a/project/include/ui/KeyEvent.h b/project/include/ui/KeyEvent.h
+index 28e6fcc..58ac231 100644
 --- a/project/include/ui/KeyEvent.h
 +++ b/project/include/ui/KeyEvent.h
-@@ struct KeyEvent {
- 		hl_type* t;
- 		double keyCode;
+@@ -25,6 +25,7 @@ namespace lime {
  		int modifier;
  		KeyEventType type;
  		int windowID;
@@ -29,66 +10,173 @@ Applies to lime 8.1.2. Rebuilding the native side is required afterwards; see RE
  
  		static ValuePointer* callback;
  		static ValuePointer* eventObject;
-
+diff --git a/project/include/ui/TouchEvent.h b/project/include/ui/TouchEvent.h
+index 321c5f8..57ec32f 100644
+--- a/project/include/ui/TouchEvent.h
++++ b/project/include/ui/TouchEvent.h
+@@ -30,6 +30,7 @@ namespace lime {
+ 		TouchEventType type;
+ 		double x;
+ 		double y;
++		double timestamp;
+ 
+ 		static ValuePointer* callback;
+ 		static ValuePointer* eventObject;
+diff --git a/project/src/backend/sdl/SDLApplication.cpp b/project/src/backend/sdl/SDLApplication.cpp
+index 682a7f3..b6c98f9 100644
+--- a/project/src/backend/sdl/SDLApplication.cpp
++++ b/project/src/backend/sdl/SDLApplication.cpp
+@@ -576,6 +576,13 @@ namespace lime {
+ 			keyEvent.modifier = event->key.keysym.mod;
+ 			keyEvent.windowID = event->key.windowID;
+ 
++			// SDL stamps every event with when it happened, counted in milliseconds from
++			// its own start - the same count and the same start as System::GetTimer, so
++			// Haxe can subtract one from the other without any rebasing. Lime read the
++			// three fields above and left this one, which is the whole reason a press
++			// could only ever be placed in the frame it arrived in.
++			keyEvent.timestamp = event->key.timestamp;
++
+ 			if (keyEvent.type == KEY_DOWN) {
+ 
+ 				if (keyEvent.keyCode == SDLK_CAPSLOCK) keyEvent.modifier |= KMOD_CAPS;
+@@ -751,6 +758,9 @@ namespace lime {
+ 			touchEvent.dx = event->tfinger.dx;
+ 			touchEvent.dy = event->tfinger.dy;
+ 			touchEvent.pressure = event->tfinger.pressure;
++
++			// Same count and same start as System::GetTimer, as with key events above.
++			touchEvent.timestamp = event->tfinger.timestamp;
+ 			touchEvent.device = event->tfinger.touchId;
+ 
+ 			TouchEvent::Dispatch (&touchEvent);
+diff --git a/project/src/ui/KeyEvent.cpp b/project/src/ui/KeyEvent.cpp
+index 42acd15..100f10d 100644
 --- a/project/src/ui/KeyEvent.cpp
 +++ b/project/src/ui/KeyEvent.cpp
-@@ static ids
+@@ -12,6 +12,7 @@ namespace lime {
+ 	static int id_modifier;
  	static int id_type;
  	static int id_windowID;
 +	static int id_timestamp;
  	static bool init = false;
-@@ KeyEvent::KeyEvent ()
+ 
+ 
+@@ -21,6 +22,7 @@ namespace lime {
+ 		modifier = 0;
+ 		type = KEY_DOWN;
  		windowID = 0;
 +		timestamp = 0;
-@@ if (!init)
- 				id_windowID = val_id ("windowID");
-+				id_timestamp = val_id ("timestamp");
- 				init = true;
-@@ alloc_field block
- 			alloc_field (object, id_windowID, alloc_int (event->windowID));
-+			alloc_field (object, id_timestamp, alloc_float (event->timestamp));
-@@ non-CFFI branch
- 				eventObject->windowID = event->windowID;
-+				eventObject->timestamp = event->timestamp;
-
---- a/project/src/backend/sdl/SDLApplication.cpp
-+++ b/project/src/backend/sdl/SDLApplication.cpp
-@@ void SDLApplication::ProcessKeyEvent (SDL_Event* event)
- 			keyEvent.windowID = event->key.windowID;
-+
-+			// SDL counts this in whole milliseconds from its own start. Re-based onto the
-+			// high resolution clock below so a press can be placed inside a frame rather
-+			// than only within the millisecond it landed in.
-+			keyEvent.timestamp = System::GetTimerPrecise () -
-+				((double)(SDL_GetTicks () - event->key.timestamp) * 1000000.0);
-
---- a/project/src/backend/sdl/SDLSystem.cpp
-+++ b/project/src/backend/sdl/SDLSystem.cpp
-@@ double System::GetTimer ()
- 		return SDL_GetTicks ();
  
  	}
-+
-+
-+	// Nanoseconds, from the same start as GetTimer. Its own function rather than a change
-+	// to GetTimer, which the whole of lime and openfl read and which is expected to be
-+	// milliseconds.
-+	double System::GetTimerPrecise () {
-+
-+		static Uint64 frequency = SDL_GetPerformanceFrequency ();
-+		return ((double)SDL_GetPerformanceCounter () / (double)frequency) * 1000000000.0;
-+
-+	}
-
+ 
+@@ -37,6 +39,7 @@ namespace lime {
+ 					id_modifier = val_id ("modifier");
+ 					id_type = val_id ("type");
+ 					id_windowID = val_id ("windowID");
++					id_timestamp = val_id ("timestamp");
+ 					init = true;
+ 
+ 				}
+@@ -47,6 +50,7 @@ namespace lime {
+ 				alloc_field (object, id_modifier, alloc_int (event->modifier));
+ 				alloc_field (object, id_type, alloc_int (event->type));
+ 				alloc_field (object, id_windowID, alloc_int (event->windowID));
++				alloc_field (object, id_timestamp, alloc_float (event->timestamp));
+ 
+ 			} else {
+ 
+@@ -56,6 +60,7 @@ namespace lime {
+ 				eventObject->modifier = event->modifier;
+ 				eventObject->type = event->type;
+ 				eventObject->windowID = event->windowID;
++				eventObject->timestamp = event->timestamp;
+ 
+ 			}
+ 
+diff --git a/project/src/ui/TouchEvent.cpp b/project/src/ui/TouchEvent.cpp
+index 51fe149..ce37e1b 100644
+--- a/project/src/ui/TouchEvent.cpp
++++ b/project/src/ui/TouchEvent.cpp
+@@ -16,6 +16,7 @@ namespace lime {
+ 	static int id_type;
+ 	static int id_x;
+ 	static int id_y;
++	static int id_timestamp;
+ 	static bool init = false;
+ 
+ 
+@@ -29,6 +30,7 @@ namespace lime {
+ 		dy = 0;
+ 		pressure = 0;
+ 		device = 0;
++		timestamp = 0;
+ 
+ 	}
+ 
+@@ -49,6 +51,7 @@ namespace lime {
+ 					id_type = val_id ("type");
+ 					id_x = val_id ("x");
+ 					id_y = val_id ("y");
++					id_timestamp = val_id ("timestamp");
+ 					init = true;
+ 
+ 				}
+@@ -63,6 +66,7 @@ namespace lime {
+ 				alloc_field (object, id_type, alloc_int (event->type));
+ 				alloc_field (object, id_x, alloc_float (event->x));
+ 				alloc_field (object, id_y, alloc_float (event->y));
++				alloc_field (object, id_timestamp, alloc_float (event->timestamp));
+ 
+ 			} else {
+ 
+@@ -76,6 +80,7 @@ namespace lime {
+ 				eventObject->type = event->type;
+ 				eventObject->x = event->x;
+ 				eventObject->y = event->y;
++				eventObject->timestamp = event->timestamp;
+ 
+ 			}
+ 
+diff --git a/src/lime/_internal/backend/native/NativeApplication.hx b/src/lime/_internal/backend/native/NativeApplication.hx
+index 7093473..e637a44 100644
 --- a/src/lime/_internal/backend/native/NativeApplication.hx
 +++ b/src/lime/_internal/backend/native/NativeApplication.hx
-@@ class KeyEventInfo
+@@ -262,9 +262,11 @@ class NativeApplication
+ 			{
+ 				case KEY_DOWN:
+ 					window.onKeyDown.dispatch(keyCode, modifier);
++					window.onKeyDownPrecise.dispatch(keyCode, modifier, keyEventInfo.timestamp);
+ 
+ 				case KEY_UP:
+ 					window.onKeyUp.dispatch(keyCode, modifier);
++					window.onKeyUpPrecise.dispatch(keyCode, modifier, keyEventInfo.timestamp);
+ 			}
+ 
+ 			#if (windows || linux)
+@@ -464,6 +466,8 @@ class NativeApplication
+ 					touch.device = touchEventInfo.device;
+ 				}
+ 
++				touch.timestamp = touchEventInfo.timestamp;
++
+ 				currentTouches.set(touch.id, touch);
+ 
+ 				Touch.onStart.dispatch(touch);
+@@ -766,17 +770,26 @@ class NativeApplication
  	public var type:KeyEventType;
  	public var windowID:Int;
-+	public var timestamp:Float;
  
--	public function new(type:KeyEventType = null, windowID:Int = 0, keyCode:Float = 0, modifier:Int = 0)
-+	public function new(type:KeyEventType = null, windowID:Int = 0, keyCode:Float = 0, modifier:Int = 0, timestamp:Float = 0)
+-	public function new(type:KeyEventType = null, windowID:Int = 0, keyCode: Float = 0, modifier:Int = 0)
++	/**
++	 * When the key actually went down, in milliseconds, counted from the same start as
++	 * `System.getTimer` - both come from SDL's own tick count. Subtracting one from the
++	 * other gives how long ago the press happened, which is the thing that cannot be
++	 * worked out once the event has been flattened into a frame's batch.
++	 */
++	public var timestamp:Float;
++
++	public function new(type:KeyEventType = null, windowID:Int = 0, keyCode: Float = 0, modifier:Int = 0, timestamp:Float = 0)
  	{
  		this.type = type;
  		this.windowID = windowID;
@@ -102,19 +190,74 @@ Applies to lime 8.1.2. Rebuilding the native side is required afterwards; see RE
 -		return new KeyEventInfo(type, windowID, keyCode, modifier);
 +		return new KeyEventInfo(type, windowID, keyCode, modifier, timestamp);
  	}
-@@ private function handleKeyEvent
- 				case KEY_DOWN:
- 					window.onKeyDown.dispatch(keyCode, modifier);
-+					window.onKeyDownPrecise.dispatch(keyCode, modifier, keyEventInfo.timestamp);
-@@ KEY_UP
- 				case KEY_UP:
- 					window.onKeyUp.dispatch(keyCode, modifier);
-+					window.onKeyUpPrecise.dispatch(keyCode, modifier, keyEventInfo.timestamp);
-
+ }
+ 
+@@ -914,7 +927,11 @@ class NativeApplication
+ 	public var x:Float;
+ 	public var y:Float;
+ 
+-	public function new(type:TouchEventType = null, x:Float = 0, y:Float = 0, id:Int = 0, dx:Float = 0, dy:Float = 0, pressure:Float = 0, device:Int = 0)
++	/** When the event happened, on `System.getTimer`'s count. See `lime.ui.Touch`. */
++	public var timestamp:Float;
++
++	public function new(type:TouchEventType = null, x:Float = 0, y:Float = 0, id:Int = 0, dx:Float = 0, dy:Float = 0, pressure:Float = 0, device:Int = 0,
++			timestamp:Float = 0)
+ 	{
+ 		this.type = type;
+ 		this.x = x;
+@@ -924,11 +941,12 @@ class NativeApplication
+ 		this.dy = dy;
+ 		this.pressure = pressure;
+ 		this.device = device;
++		this.timestamp = timestamp;
+ 	}
+ 
+ 	public function clone():TouchEventInfo
+ 	{
+-		return new TouchEventInfo(type, x, y, id, dx, dy, pressure, device);
++		return new TouchEventInfo(type, x, y, id, dx, dy, pressure, device, timestamp);
+ 	}
+ }
+ 
+diff --git a/src/lime/ui/Touch.hx b/src/lime/ui/Touch.hx
+index aa90605..f9bf150 100644
+--- a/src/lime/ui/Touch.hx
++++ b/src/lime/ui/Touch.hx
+@@ -18,6 +18,15 @@ class Touch
+ 	public var dy:Float;
+ 	public var id:Int;
+ 	public var pressure:Float;
++
++	/**
++	 * When the finger actually landed, in milliseconds, counted from the same start as
++	 * `System.getTimer`. SDL reports it on every touch event; without it a tap can only
++	 * be placed in the frame it was noticed in, which on a phone is the larger part of
++	 * how late an input reads.
++	 */
++	public var timestamp:Float = 0;
++
+ 	public var x:Float;
+ 	public var y:Float;
+ 
+diff --git a/src/lime/ui/Window.hx b/src/lime/ui/Window.hx
+index 64810eb..bb8fa47 100644
 --- a/src/lime/ui/Window.hx
 +++ b/src/lime/ui/Window.hx
-@@ signals
+@@ -68,7 +68,17 @@ class Window
+ 	public var onFullscreen(default, null) = new Event<Void->Void>();
+ 	public var onHide(default, null) = new Event<Void->Void>();
  	public var onKeyDown(default, null) = new Event<KeyCode->KeyModifier->Void>();
++
++	/**
++	 * As `onKeyDown`, and additionally carries when the key went down, in milliseconds on
++	 * the same count as `System.getTimer`. SDL reports it; everything else here throws it
++	 * away, leaving a press placeable only within the frame it arrived in.
++	 */
 +	public var onKeyDownPrecise(default, null) = new Event<KeyCode->KeyModifier->Float->Void>();
  	public var onKeyUp(default, null) = new Event<KeyCode->KeyModifier->Void>();
++
++	/** As `onKeyUp`, carrying when the key came up. See `onKeyDownPrecise`. */
 +	public var onKeyUpPrecise(default, null) = new Event<KeyCode->KeyModifier->Float->Void>();
+ 	public var onLeave(default, null) = new Event<Void->Void>();
+ 	public var onMaximize(default, null) = new Event<Void->Void>();
+ 	public var onMinimize(default, null) = new Event<Void->Void>();

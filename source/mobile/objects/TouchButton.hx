@@ -37,6 +37,15 @@ class TouchButton extends FlxSprite
 	public var justPressed(default, null):Bool = false;
 	public var justReleased(default, null):Bool = false;
 
+	/**
+	 * The finger that started the press this button is currently under, or -1.
+	 *
+	 * Only there so `PreciseInput` can look up when that finger actually landed - the
+	 * button itself only knows which frame it noticed. `MOUSE_ID` when a mouse did it,
+	 * which no touch record will match, so it falls through to the estimate.
+	 */
+	public var pressedTouchID(default, null):Int = -1;
+
 	/** When true a finger that slides onto the button counts as a press. Wanted on note lanes, not on menu buttons. */
 	public var allowSlideIn:Bool = false;
 
@@ -117,6 +126,7 @@ class TouchButton extends FlxSprite
 	{
 		heldIDs.resize(0);
 		pressed = justPressed = justReleased = false;
+		pressedTouchID = -1;
 	}
 
 	override function update(elapsed:Float):Void
@@ -161,12 +171,16 @@ class TouchButton extends FlxSprite
 
 		if (justPressed)
 		{
+			pressedTouchID = heldIDs[0];
 			TouchUtil.vibrate();
 			playPressAnim();
 			onDown.dispatch(this);
 		}
 		else if (justReleased)
+		{
+			pressedTouchID = -1;
 			onUp.dispatch(this);
+		}
 	}
 
 	public function playPressAnim():Void

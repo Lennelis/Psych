@@ -7,7 +7,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ claude/psych-engine-mobile-port-9sau2w, claude/vslice-freeplay ]
+    branches: [ claude/psych-engine-mobile-port-9sau2w, claude/vslice-freeplay, psych-slice ]
 
   # Run it by hand from the Actions tab, with these switches.
   workflow_dispatch:
@@ -70,7 +70,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/haxelib
-          key: haxelib-android-${{ hashFiles('setup/android.sh') }}
+          key: haxelib-android-${{ hashFiles('setup/android.sh', 'patches/lime-precise-input/*.patch') }}
 
       - name: Install Haxe libraries
         if: steps.haxelib-cache.outputs.cache-hit != 'true'
@@ -82,6 +82,28 @@ jobs:
       - name: Point haxelib at the cache
         if: steps.haxelib-cache.outputs.cache-hit == 'true'
         run: haxelib setup ~/haxelib
+
+      # SDL knows exactly when a key or a finger went down; lime 8.1.2 drops the number
+      # on the way through, so the game can only place an input in the frame it noticed
+      # it. patches/lime-precise-input/ carries it through, which means rebuilding lime's
+      # native library - the patch is C++ as well as Haxe.
+      #
+      # Only arm64 is rebuilt, matching the APK. `lime rebuild android` would build four
+      # architectures, three of which nothing here ships.
+      #
+      # Allowed to fail. Without it the game falls back to the half-frame estimate it
+      # used before any of this existed, which is worth less but costs nothing, and a
+      # broken toolchain here should not take the whole APK down with it.
+      - name: Rebuild lime with input timestamps
+        id: precise
+        continue-on-error: true
+        run: |
+          chmod +x ./setup/patch-lime.sh
+          ./setup/patch-lime.sh -Dandroid -DHXCPP_ARM64 -DPLATFORM=android-21
+
+          if [ "${{ inputs.armv7 }}" = "true" ]; then
+            ./setup/patch-lime.sh -Dandroid -DHXCPP_ARMV7 -DHXCPP_ARM7 -DPLATFORM=android-21
+          fi
 
       # Android will only install a new build over an old one when both are signed by
       # the same key. A key made fresh each run means every APK is a stranger to the
@@ -148,6 +170,16 @@ jobs:
           # officialBuild is what pulls in the weeks and songs; without it the
           # game boots to an empty menu, which is no use for testing the controls.
           FLAGS="-D officialBuild"
+
+          # Only when the step above got all the way through. A lime that was patched but
+          # failed to rebuild reports no timestamps rather than wrong ones, but a lime
+          # that never took the patch has no onKeyDownPrecise for PreciseInput to hook,
+          # and the game would not compile.
+          if [ "${{ steps.precise.outcome }}" = "success" ]; then
+            FLAGS="$FLAGS -D PATCHED_LIME"
+          else
+            echo "Building without precise input - see the lime rebuild step."
+          fi
 
           if [ "${{ inputs.videos }}" != "true" ]; then
             FLAGS="$FLAGS -D NO_VIDEOS"

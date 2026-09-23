@@ -126,6 +126,13 @@
 
 	<define name="CHECK_FOR_UPDATES" if="desktop officialBuild"/>
 
+	<!-- Input timestamps straight from SDL, rather than "some time in the last frame".
+	     Only true when the build was linked against a lime carrying the patch in
+	     patches/lime-precise-input/ - the CI step that applies it passes PATCHED_LIME.
+	     Without it PreciseInput reports nothing and PlayState falls back to the
+	     half-frame estimate, which is what every build did before this existed. -->
+	<define name="PRECISE_INPUT" if="PATCHED_LIME"/>
+
 	<section if="MODS_ALLOWED">
 		<assets path='example_mods' rename='mods' embed='false' type='template' unless="mac || mobile"/>
 		<assets path='example_mods' rename='mods' embed='false' if="mac"/>

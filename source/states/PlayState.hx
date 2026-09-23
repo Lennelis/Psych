@@ -1462,6 +1462,10 @@ class PlayState extends MusicBeatState
 
 		curSong = songData.song;
 
+		// Only while a song is up: outside one nothing asks, and the maps would go on
+		// collecting presses from every menu.
+		PreciseInput.hook();
+
 		// A chart can name a different recording of the same song - the Erect remixes do, and
 		// they sit beside the original as `Inst-erect` rather than in a folder of their own. A
 		// chart that says nothing gets the plain tracks, which is every chart Psych already had.
@@ -3314,9 +3318,34 @@ class PlayState extends MusicBeatState
 	 * capped at half of a 30fps frame; anything slower than that has worse problems than
 	 * note timing.
 	 */
-	inline function pressLag():Float
+	inline function pressLag(?note:Note):Float
 	{
 		if(!ClientPrefs.data.inputLagComp) return 0;
+
+		// With a patched lime the real figure is there to be had, per key, and there is no
+		// reason to estimate. It only answers for a key this game knows about and only
+		// within the last half second, so anything it cannot vouch for comes back as zero
+		// and falls through to the estimate below.
+		if(PreciseInput.available && note != null && note.noteData >= 0 && note.noteData < keysArray.length)
+		{
+			#if TOUCH_CONTROLS_ALLOWED
+			// A finger, if one is on this lane's button. Tried first because on a phone
+			// it is usually the only thing that pressed anything.
+			if(mobileControls != null && note.noteData < mobileControls.noteButtons.length)
+			{
+				var button = mobileControls.noteButtons[note.noteData];
+				if(button != null && button.pressed)
+				{
+					var tapped:Float = PreciseInput.sinceTouch(button.pressedTouchID);
+					if(tapped > 0) return Math.min(tapped, 16.7);
+				}
+			}
+			#end
+
+			var keys:Array<FlxKey> = controls.keyboardBinds.get(keysArray[note.noteData]);
+			var measured:Float = PreciseInput.sinceKey(keys);
+			if(measured > 0) return Math.min(measured, 16.7);
+		}
 
 		return Math.min(FlxG.elapsed * 500 * playbackRate, 16.7);
 	}
@@ -3325,7 +3354,7 @@ class PlayState extends MusicBeatState
 	{
 		// Judged against where the song was when the key went down rather than where it is
 		// now, which is what the correction above amounts to.
-		var noteDiff:Float = Math.abs(note.strumTime - (Conductor.songPosition - pressLag()) + ClientPrefs.data.ratingOffset);
+		var noteDiff:Float = Math.abs(note.strumTime - (Conductor.songPosition - pressLag(note)) + ClientPrefs.data.ratingOffset);
 		vocals.volume = 1;
 
 		if (!ClientPrefs.data.comboStacking && comboGroup.members.length > 0)
@@ -4398,6 +4427,9 @@ class PlayState extends MusicBeatState
 		#if mobile
 		lime.system.System.allowScreenTimeout = true;
 		#end
+
+		// The precise-input listeners sit on the window, which outlives the state.
+		PreciseInput.unhook();
 
 		if (psychlua.CustomSubstate.instance != null)
 		{
