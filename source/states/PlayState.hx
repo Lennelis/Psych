@@ -267,6 +267,20 @@ class PlayState extends MusicBeatState
 	 */
 	var holdTimeHeld:Float = 0;
 
+	/**
+	 * Song milliseconds of the hold in progress that no piece has confirmed yet.
+	 *
+	 * V-Slice pays a hold out per frame, so its counter climbs the whole way through one -
+	 * that's the part of it you actually watch. Psych only learns a hold is still being held
+	 * when the next piece of it lands, which at 120bpm is four times a second, so paying only
+	 * on those reads as the score sitting still and then jumping.
+	 *
+	 * So the time is run forward every frame here as well, and a piece landing takes its own
+	 * step back out of it - the estimate and the confirmation cancel instead of stacking, and
+	 * the total over a whole hold is the same as it was before, just handed over smoothly.
+	 */
+	var holdTimeLive:Float = 0;
+
 	var holdScorePaid:Int = 0;
 	public var songHits:Int = 0;
 	public var songMisses:Int = 0;
@@ -1323,6 +1337,28 @@ class PlayState extends MusicBeatState
 		if(!instakillOnMiss) tempScore = Language.getPhrase('score_text', 'Score: {1} | Misses: {2} | Rating: {3}', [songScore, songMisses, str]);
 		else tempScore = Language.getPhrase('score_text_instakill', 'Score: {1} | Rating: {2}', [songScore, str]);
 		scoreTxt.text = tempScore;
+	}
+
+	/**
+	 * Hands over what the hold in progress is worth so far.
+	 *
+	 * Paying the difference between what all the held time comes to and what has already been
+	 * handed over means the running estimate can be as wrong as it likes between pieces: the
+	 * next call settles it, and nothing is ever paid twice.
+	 *
+	 * The counter is refreshed straight from `updateScoreText` rather than through
+	 * `updateScore`, because this runs every frame of every hold - the script hooks on the
+	 * long way round would fire sixty times a second, and there is no bop to skip since one
+	 * per frame would be a rattle rather than a bop.
+	 */
+	function payHoldScore():Void
+	{
+		var owed:Int = Math.round(Scoring.SCORE_HOLD_BONUS_PER_SECOND * (holdTimeHeld + holdTimeLive) / 1000);
+		if (owed == holdScorePaid) return;
+
+		songScore += owed - holdScorePaid;
+		holdScorePaid = owed;
+		updateScoreText();
 	}
 
 	public dynamic function fullComboFunction()
@@ -3732,6 +3768,7 @@ class PlayState extends MusicBeatState
 		var releaseArray:Array<Bool> = [];
 		var sustainArray:Array<Bool> = [];
 		var holdPending:Array<Bool> = [];
+		var holdScoring:Array<Bool> = [];
 		for (key in keysArray)
 		{
 			holdArray.push(controls.pressed(key));
@@ -3739,6 +3776,7 @@ class PlayState extends MusicBeatState
 			releaseArray.push(controls.justReleased(key));
 			sustainArray.push(false);
 			holdPending.push(false);
+			holdScoring.push(false);
 		}
 		while(wasHoldingSustain.length < holdPending.length) wasHoldingSustain.push(false);
 		while(holdEndTime.length < holdPending.length) holdEndTime.push(-1);
@@ -3771,7 +3809,12 @@ class PlayState extends MusicBeatState
 					if(n != null && n.isSustainNote && n.mustPress && !n.wasGoodHit && !n.tooLate
 						&& n.noteData >= 0 && n.noteData < holdPending.length
 						&& (n.parent == null || n.parent.wasGoodHit || n.parent == holdHead[n.noteData]))
+					{
 						holdPending[n.noteData] = true;
+						// Same hold, minus the pieces that aren't worth anything, so the
+						// per-frame payout below stops where `goodNoteHit` would have.
+						if(!n.ratingDisabled) holdScoring[n.noteData] = true;
+					}
 
 					if (guitarHeroSustains)
 						canHit = canHit && n.parent != null && n.parent.wasGoodHit;
@@ -3808,6 +3851,24 @@ class PlayState extends MusicBeatState
 			for (i in 0...releaseArray.length)
 				if(releaseArray[i] || strumsBlocked[i] == true)
 					keyReleased(i);
+
+		// What the hold in progress has earned since the last piece of it landed. Counted in
+		// song milliseconds rather than real ones so it runs at the same rate as the pieces it
+		// is standing in for, which arrive a step of the chart apart however fast the song is
+		// being played. One lane's worth each, so two holds at once pay double, as they do
+		// when their pieces land.
+		if (Scoring.usingVSlice && !cpuControlled && startedCountdown && !inCutscene && !endingSong)
+		{
+			var lanesHeld:Int = 0;
+			for (i in 0...holdScoring.length)
+				if(holdScoring[i] && holdArray[i]) lanesHeld++;
+
+			if (lanesHeld > 0)
+			{
+				holdTimeLive += lanesHeld * FlxG.elapsed * 1000 * playbackRate;
+				payHoldScore();
+			}
+		}
 
 		// Handed on rather than acted on here. Ending a hold asks where the last of its trail
 		// is, and the notes are not moved until further down the frame - deciding at this point
@@ -4253,17 +4314,13 @@ class PlayState extends MusicBeatState
 
 					if (!cpuControlled && !note.ratingDisabled)
 					{
+						// A piece landing confirms a step that the per-frame estimate has
+						// mostly been paid for already, so it takes its own step back out of
+						// the estimate as it goes in. Clamped at zero for the frame a piece
+						// lands early - dropping below would hand back time that was held.
 						holdTimeHeld += Scoring.holdPieceLength();
-
-						var owed:Int = Math.round(Scoring.SCORE_HOLD_BONUS_PER_SECOND * holdTimeHeld / 1000);
-						songScore += owed - holdScorePaid;
-						holdScorePaid = owed;
-
-						// The counter is only ever refreshed out of `popUpScore`, which a
-						// sustain never reaches - so the score was climbing and the HUD was
-						// not saying so, which from the outside is the same as it not
-						// climbing. No bop: one of those per step of hold would be a rattle.
-						updateScore(false, false);
+						holdTimeLive = Math.max(0, holdTimeLive - Scoring.holdPieceLength());
+						payHoldScore();
 					}
 				}
 				else

@@ -1,10 +1,9 @@
 package mobile.objects;
 
-import backend.VSliceVisuals;
 import flixel.FlxG;
 import flixel.group.FlxSpriteGroup;
 import flixel.util.FlxColor;
-import objects.Note;
+import objects.StrumNote;
 
 /**
  * The gameplay control layer: whichever of the touch layouts the player picked,
@@ -19,6 +18,9 @@ class MobileControls extends FlxSpriteGroup
 	public static final MODES:Array<String> = ['Hitbox', 'Arrows', 'Pad-Right', 'Pad-Left', 'Keyboard'];
 
 	public var noteButtons(default, null):Array<TouchButton> = [];
+
+	/** The receptors the Arrows scheme draws behind its hit zones. Empty for every other layout. */
+	public var arrowStrums(default, null):Array<StrumNote> = [];
 	public var hitbox(default, null):Hitbox;
 	public var pauseButton(default, null):TouchButton;
 
@@ -51,41 +53,55 @@ class MobileControls extends FlxSpriteGroup
 	}
 
 	/**
-	 * Four arrow buttons standing in the player's own note columns, which is what V-Slice's
-	 * Arrows scheme is: its hit zones sit on the receptors rather than off to one side, so the
-	 * thing being tapped is the thing being aimed at.
+	 * V-Slice's Arrows scheme: four receptors in a row across the lower half of the screen,
+	 * each one tapped to play its lane.
 	 *
-	 * The columns are worked out the way `StrumNote.playerPosition` works them out, so they line
-	 * up with the receptors whether middlescroll is on or off, and they are exactly one note wide
-	 * so the four tile the lane grid without any two of them sharing a finger.
+	 * The numbers are `FunkinHitbox`'s own, down to the trailing gap its centring arithmetic
+	 * counts in - the row is a spacing's worth left of true centre there, and moving it would
+	 * be a different layout rather than the same one.
 	 *
-	 * The row sits near the bottom rather than on the strumline itself, because upscroll puts the
-	 * receptors at the top of the screen where no thumb reaches. On downscroll it lands on them,
-	 * which is the V-Slice arrangement.
+	 * What is tapped and what is drawn are two objects, as they are in V-Slice: a hit zone the
+	 * full 146 by 149, and a receptor centred inside it. Making the receptor itself the button
+	 * would tie the tappable area to the art, which is a good deal smaller than the zone and
+	 * would cost the player every near miss the zone is there to catch.
+	 *
+	 * The receptor is a real `StrumNote`, so the note skin, the pixel stages and the Note
+	 * Colors setting all reach it without a word of this knowing about any of them. Holding a
+	 * lane shows the press art and keeps it up, which `StrumNote.update` already does off
+	 * `keyHeld` for the strumline - it only has to be told what is held.
+	 *
+	 * V-Slice draws none of this: its hints are left at zero alpha in play and only the
+	 * options preview turns them up. Here they follow the Controls Opacity setting instead, so
+	 * that arrangement is still a setting away rather than the only one on offer.
 	 */
 	function buildArrows():Void
 	{
-		final width:Int = Std.int(Note.swagWidth);
-		final height:Int = Std.int(Note.swagWidth * 1.25);
+		final hintWidth:Int = 146;
+		final hintHeight:Int = 149;
+		final noteSpacing:Int = 80;
 
-		// StrumNote: x = strumLineX + 50 + (FlxG.width / 2) * player, then swagWidth per column.
-		var left:Float = (ClientPrefs.data.middleScroll ? PlayState.STRUM_X_MIDDLESCROLL : PlayState.STRUM_X) + 50 + FlxG.width / 2;
-		if (VSliceVisuals.strumline && !ClientPrefs.data.middleScroll) left += VSliceVisuals.STRUM_X_NUDGE;
+		final xPos:Float = Math.floor((FlxG.width - (hintWidth + noteSpacing) * 4) / 2);
+		final yPos:Float = Math.floor(FlxG.height - hintHeight * 2 - 24);
 
-		final top:Float = FlxG.height - height - 26;
-		final symbols:Array<String> = ['left', 'down', 'up', 'right'];
-
-		for (i in 0...symbols.length)
+		for (i in 0...4)
 		{
-			final button:TouchButton = new TouchButton(left + Note.swagWidth * i, top, [Hitbox.ACTIONS[i]]);
-			button.setGraphic(symbols[i], width, height, noteColor(i));
+			// Transparent rather than hidden: `TouchButton` ignores a button it can't see, so
+			// an invisible one would take no taps at all.
+			final button:TouchButton = new TouchButton(xPos + i * (hintWidth + noteSpacing), yPos, [Hitbox.ACTIONS[i]]);
+			button.makeGraphic(hintWidth, hintHeight, FlxColor.TRANSPARENT);
 			button.allowSlideIn = true; // rolls are played by sliding a thumb across, same as the lanes
-			button.idleAlpha = ClientPrefs.data.controlsAlpha;
-			button.pressedAlpha = Math.min(1, ClientPrefs.data.controlsAlpha + 0.35);
-			button.alpha = button.idleAlpha;
-			button.antialiasing = ClientPrefs.data.antialiasing;
+			button.alphaTweenSpeed = 0;
+			button.idleAlpha = 1;
+			button.pressedAlpha = 1;
+			button.alpha = 1;
 			add(button);
 			noteButtons.push(button);
+
+			final strum:StrumNote = new StrumNote(0, 0, i, 0);
+			strum.setPosition(button.x + (hintWidth - strum.width) * 0.5, button.y + (hintHeight - strum.height) * 0.5);
+			strum.alpha = ClientPrefs.data.controlsAlpha;
+			add(strum);
+			arrowStrums.push(strum);
 		}
 	}
 
@@ -187,6 +203,18 @@ class MobileControls extends FlxSpriteGroup
 		add(pauseCircle); // before the button, so it sits behind it
 	}
 
+	override function update(elapsed:Float):Void
+	{
+		super.update(elapsed);
+
+		// A frame behind what the buttons report, the same way the strumline's own is a frame
+		// behind the keyboard - `StrumNote` reads this in its update and both orders settle in
+		// one frame either way.
+		for (i in 0...arrowStrums.length)
+			if (arrowStrums[i] != null && i < noteButtons.length && noteButtons[i] != null)
+				arrowStrums[i].keyHeld = noteButtons[i].pressed;
+	}
+
 	public function releaseAll():Void
 	{
 		for (button in noteButtons)
@@ -202,6 +230,9 @@ class MobileControls extends FlxSpriteGroup
 
 		for (button in noteButtons)
 			if (button != null) button.visible = value;
+
+		for (strum in arrowStrums)
+			if (strum != null) strum.visible = value;
 	}
 
 	/**
