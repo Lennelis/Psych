@@ -1308,7 +1308,11 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		if(isMovingNotes && FlxG.mouse.justReleased)
 			stopMovingNotes();
 
-		if(FlxG.mouse.x >= minX && FlxG.mouse.x < gridBg.x + gridBg.width)
+		// The bounds test still decides what a click can do, but a note already in the air
+		// keeps following the cursor past the edge of the grid. It lands on a real cell
+		// either way - only the picture leaves the grid, never the note.
+		var overGrid:Bool = (FlxG.mouse.x >= minX && FlxG.mouse.x < gridBg.x + gridBg.width);
+		if(overGrid || isMovingNotes)
 		{
 			var diffX:Float = FlxG.mouse.x - gridBg.x;
 			var diffY:Float = FlxG.mouse.y - gridBg.y;
@@ -1319,6 +1323,11 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			diffY = FlxMath.bound(diffY, 0, gridBg.height);
 
 			var noteData:Int = Math.floor(diffX / GRID_SIZE);
+
+			// Off the side of the grid there is no lane under the cursor, but the drop still
+			// has to go somewhere real, so the one it would land on is pinned to the edge.
+			if(!overGrid)
+				noteData = Std.int(FlxMath.bound(noteData, 0, (GRID_PLAYERS * GRID_COLUMNS_PER_PLAYER) + (SHOW_EVENT_COLUMN ? 1 : 0) - 1));
 
 			// Hidden while carrying something: the note itself is under the cursor, and a
 			// ghost of a different note drawn on top of it only muddles where it will land.
@@ -1426,7 +1435,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 				rightClickArmed = false;
 				removeUnderCursor(noteData);
 			}
-			else if(FlxG.mouse.justPressed && !ignoreClickForThisFrame)
+			else if(overGrid && FlxG.mouse.justPressed && !ignoreClickForThisFrame)
 			{
 				if(FlxG.keys.pressed.CONTROL && FlxG.mouse.justPressed)
 				{
@@ -1758,16 +1767,12 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			var freeX:Float = FlxG.mouse.x - (dummyArrow.x + GRID_SIZE / 2);
 			var freeY:Float = FlxG.mouse.y - (dummyArrow.y + GRID_SIZE / 2);
 
-			// In step these two are never more than half a cell apart. They come apart when
-			// the cursor leaves the grid, because the snapped one stops being updated - and
-			// without this the note would chase the pointer off across the screen.
-			freeX = FlxMath.bound(freeX, -GRID_SIZE, GRID_SIZE);
-			freeY = FlxMath.bound(freeY, -GRID_SIZE, GRID_SIZE);
 
 			for (note in movingNotes)
 			{
 				if(note == null) continue;
-				note.dragTargetX = freeX;
+				// There is one event column, so an event only ever moves in time.
+				note.dragTargetX = note.isEvent ? 0 : freeX;
 				note.dragTargetY = freeY;
 				note.stepDrag(elapsed);
 				applyDragOffset(note);
@@ -1790,7 +1795,13 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 
 	function applyDragOffset(note:MetaNote)
 	{
-		positionNoteXByData(note);
+		// An event has no lane. Its column is fixed, and songData[1] holds its event list
+		// rather than a number - running that through positionNoteXByData is what walked
+		// events into the note lanes and left them somewhere nothing could click them,
+		// since an event is only ever found under a cursor in the event column.
+		if(note.isEvent) note.x = gridBg.x;
+		else positionNoteXByData(note);
+
 		note.x += note.dragOffsetX;
 		note.y = note.chartY + note.dragOffsetY + (GRID_SIZE / 2 - note.height / 2);
 	}
