@@ -2,6 +2,7 @@ package states.editors.content;
 
 import objects.Note;
 import shaders.RGBPalette;
+import flixel.math.FlxRect;
 import flixel.util.FlxDestroyUtil;
 import flixel.graphics.FlxGraphic;
 import openfl.display.BitmapData;
@@ -10,6 +11,15 @@ import openfl.geom.Rectangle;
 class MetaNote extends Note
 {
 	public static var noteTypeTexts:Map<Int, FlxText> = [];
+
+	/**
+	 * Scratch rectangle for cutting the last tile of a hold short.
+	 *
+	 * `clipRect` takes a `FlxRect` and rounds it in place, so one kept here and rewritten is
+	 * the same thing to Flixel as a fresh one - and every note on screen would otherwise be
+	 * allocating one a frame.
+	 */
+	static var _tileClip:FlxRect = FlxRect.get();
 	public var isEvent:Bool = false;
 	public var songData:Array<Dynamic>;
 	/**
@@ -521,7 +531,7 @@ class MetaNote extends Note
 				// The last tile is cut off rather than squashed, so every repeat down the
 				// hold is the same size as the one above it.
 				if(remain < tileH)
-					sustainBody.clipRect = new Rectangle(0, 0, frameW, frameH * (remain / tileH));
+					sustainBody.clipRect = _tileClip.set(0, 0, frameW, frameH * (remain / tileH));
 
 				sustainBody.y = top + drawn;
 				sustainBody.draw();
