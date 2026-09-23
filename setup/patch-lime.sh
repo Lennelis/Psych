@@ -43,8 +43,18 @@ if command -v cygpath > /dev/null 2>&1; then
 	LIME="$(cygpath -u "$LIME")"
 fi
 
+# haxelib prints a trailing separator, which turns every path built from it into one with
+# a doubled slash. Harmless in most places and not worth risking anywhere.
+LIME="${LIME%/}"
+
 if [ ! -d "$LIME/project" ]; then
 	echo "Could not find lime's sources - haxelib says $LIME" >&2
+	echo "What is actually there:" >&2
+	ls -A "$LIME" >&2 2>/dev/null || echo "  (could not list it - the path may be wrong)" >&2
+	echo >&2
+	echo "If there is no project/ directory, the haxelib release of lime ships without" >&2
+	echo "its C++ sources and cannot be rebuilt in place. That would need a git checkout" >&2
+	echo "of lime with its submodules, which is a different and much larger job." >&2
 	exit 1
 fi
 

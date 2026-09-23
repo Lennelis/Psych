@@ -3318,7 +3318,10 @@ class PlayState extends MusicBeatState
 	 * capped at half of a 30fps frame; anything slower than that has worse problems than
 	 * note timing.
 	 */
-	inline function pressLag(?note:Note):Float
+	// Not inline: the early returns below are not in tail position and Haxe refuses to
+	// inline a function with those. It is called once per judged note, so there was never
+	// anything measurable in it.
+	function pressLag(?note:Note):Float
 	{
 		if(!ClientPrefs.data.inputLagComp) return 0;
 
