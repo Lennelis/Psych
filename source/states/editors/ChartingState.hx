@@ -182,15 +182,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	/** How far the mouse may wander and still count as a click rather than a drag, in pixels. */
 	static inline var RIGHT_CLICK_SLOP:Float = 4;
 
-	/** A left press on a note that has not yet moved far enough to count as a drag. */
-	var dragArmed:Bool = false;
-
-	var dragStartX:Float = 0;
-	var dragStartY:Float = 0;
-	var dragNoteData:Int = 0;
-
-	/** How far the cursor has to travel before a press on a note becomes a drag. */
-	static inline var DRAG_SLOP:Float = 4;
 	var movingNotes:FlxTypedGroup<MetaNote> = new FlxTypedGroup<MetaNote>();
 	var eventLockOverlay:FlxSprite;
 	var vortexIndicator:FlxSprite;
@@ -294,7 +285,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		vortexIndicator.scrollFactor.set();
 		vortexIndicator.active = false;
 		updateVortexColor();
-		vortexBaseY = vortexIndicator.y;
 		add(vortexIndicator);
 		add(strumLineNotes);
 
@@ -313,8 +303,10 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		timeLine.setGraphicSize(Std.int(gridBg.width), 4);
 		timeLine.updateHitbox();
 		timeLine.screenCenter(Y);
+		// Stays put on screen. The chart scrolls past it, whether that is the song playing or
+		// the wheel moving the view, so the row it sits on is always the row you are working
+		// at - which is what makes it useful to place notes against.
 		timeLine.scrollFactor.set();
-		timeLineBaseY = timeLine.y;
 		add(timeLine);
 		
 		var startX:Float = gridBg.x;
@@ -338,11 +330,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			note.x += GRID_SIZE/2 - note.width/2;
 			note.y += GRID_SIZE/2 - note.height/2;
 			strumLineNotes.add(note);
-
-			// Remembered rather than recomputed: a strum note changes height when it plays
-			// its pressed animation, so working the position out again each frame would make
-			// the playhead jitter as you chart.
-			strumBaseY.push(note.y);
 		}
 
 		var columns:Int = 0;
@@ -531,8 +518,8 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			"Enter - Playtest Chart",
 			"Space - Stop/Resume song",
 			"",
-			"Left Click - Place a Note, or Select the One Under It",
-			"Left Click + Drag - Move the Selection",
+			"Left Click - Place a Note, or Pick Up the One Under It",
+			"Left Click Again - Put Down What You Are Carrying",
 			"Right Click - Delete the Note or Event Under It",
 			"Right Click + Drag - Selection Box",
 			"Alt + Click - Add to Selection",
@@ -1136,7 +1123,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					}
 					movingNotes.clear();
 					isMovingNotes = false;
-					dragArmed = false;
 					selectedNotes = [];
 					onSelectNote();
 					softReloadNotes();
@@ -1248,12 +1234,17 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		var minX:Float = gridBg.x;
 		if(SHOW_EVENT_COLUMN && lockedEvents) minX += GRID_SIZE;
 
-		// Outside the bounds check below on purpose: letting go anywhere ends the drag, and
-		// disarms a press that never became one, even if the cursor has left the grid.
-		if(!FlxG.mouse.pressed) dragArmed = false;
-
-		if(isMovingNotes && FlxG.mouse.justReleased)
+		// A note that has been picked up follows the cursor until it is put down, so the drop
+		// is the next click rather than the button coming up. Outside the bounds check below
+		// on purpose, so letting go of one anywhere still works.
+		//
+		// That same press must not then be read as picking something else up, which is what
+		// the ignore is for.
+		if(isMovingNotes && FlxG.mouse.justPressed)
+		{
 			stopMovingNotes();
+			ignoreClickForThisFrame = true;
+		}
 
 		if(FlxG.mouse.x >= minX && FlxG.mouse.x < gridBg.x + gridBg.width)
 		{
@@ -1266,7 +1257,10 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			diffY = FlxMath.bound(diffY, 0, gridBg.height);
 
 			var noteData:Int = Math.floor(diffX / GRID_SIZE);
-			dummyArrow.visible = !selectionBox.visible;
+
+			// Hidden while carrying something: the note itself is under the cursor, and a
+			// ghost of a different note drawn on top of it only muddles where it will land.
+			dummyArrow.visible = !selectionBox.visible && !isMovingNotes;
 			dummyArrow.x = gridBg.x + noteData * GRID_SIZE;
 			if(SHOW_EVENT_COLUMN)
 				noteData--;
@@ -1274,21 +1268,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			// The branch that used to be here corrected for the previous section's grid being
 			// a separate sprite that the mouse could be above. There is no above any more.
 			dummyArrow.y = gridBg.y + diffY;
-
-			// A press that has wandered far enough from where it started picks the selection
-			// up. Done here rather than at the press, because dummyArrow has only just been
-			// put where the cursor is and moveSelectedNotes measures from it - starting the
-			// drag a frame early would jump every note by whatever the cursor did first.
-			if(dragArmed)
-			{
-				if(!FlxG.mouse.pressed) dragArmed = false;
-				else if(!isMovingNotes
-					&& (Math.abs(FlxG.mouse.screenX - dragStartX) > DRAG_SLOP || Math.abs(FlxG.mouse.screenY - dragStartY) > DRAG_SLOP))
-				{
-					dragArmed = false;
-					if(selectedNotes.length > 0) moveSelectedNotes(dragNoteData, dummyArrow.y);
-				}
-			}
 
 			if(isMovingNotes)
 			{
@@ -1406,14 +1385,11 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 								addUndoAction(SELECT_NOTE, {old: sel, current: selectedNotes.copy()});
 							}
 
-							// Armed, not started. A press that goes nowhere is a plain
-							// selection; it only becomes a drag once the cursor has actually
-							// left where it went down, so a click cannot nudge a note by a
-							// pixel and quietly change its time.
-							dragArmed = true;
-							dragStartX = FlxG.mouse.screenX;
-							dragStartY = FlxG.mouse.screenY;
-							dragNoteData = noteData;
+							// Picked up there and then. It follows the cursor until the next
+							// click puts it down, rather than only while a button is held -
+							// which means you can scroll the chart while carrying a note and
+							// drop it somewhere that was not even on screen when you took it.
+							moveSelectedNotes(noteData, dummyArrow.y);
 						}
 						if(selectedNotes.length == 1) onSelectNote();
 						forceDataUpdate = true;
@@ -1635,7 +1611,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		events.sort(PlayState.sortByTime);
 		movingNotes.clear();
 		isMovingNotes = false;
-		dragArmed = false;
 		softReloadNotes();
 	}
 
@@ -1666,30 +1641,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	inline function snapViewToPlayhead()
 		viewOffset = 0;
 
-	var strumBaseY:Array<Float> = [];
-	var timeLineBaseY:Float = 0;
-	var vortexBaseY:Float = 0;
-
-	/**
-	 * Keeps the playhead marks on the playhead.
-	 *
-	 * They are screen-fixed sprites sitting at the middle of the screen, which was the same
-	 * thing as the playhead while the view could not leave it. Now that the wheel can push
-	 * the view away, the middle of the screen is only the middle of the screen, and a line
-	 * drawn there would claim the song is somewhere it isn't.
-	 */
-	function updatePlayheadMarks()
-	{
-		if(timeLine != null) timeLine.y = timeLineBaseY - viewOffset;
-		if(vortexIndicator != null) vortexIndicator.y = vortexBaseY - viewOffset;
-
-		for (i => note in strumLineNotes.members)
-		{
-			if(note == null || i >= strumBaseY.length) continue;
-			note.y = strumBaseY[i] - viewOffset;
-		}
-	}
-
 	function updateScrollY()
 	{
 		var secStartTime:Null<Float> = cast cachedSectionTimes[curSec];
@@ -1705,7 +1656,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		viewOffset = FlxMath.bound(viewOffset, -playheadY, Math.max(0, limit - playheadY));
 
 		scrollY = playheadY + viewOffset - FlxG.height/2;
-		updatePlayheadMarks();
 	}
 
 	function updateSelectionBox()
