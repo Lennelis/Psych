@@ -182,6 +182,19 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	/** How far the mouse may wander and still count as a click rather than a drag, in pixels. */
 	static inline var RIGHT_CLICK_SLOP:Float = 4;
 
+	/** A press on a note that has not yet moved far enough to lift it. */
+	var dragArmed:Bool = false;
+
+	var dragStartX:Float = 0;
+	var dragStartY:Float = 0;
+	var dragNoteData:Int = 0;
+
+	/** Where the note being grabbed was sitting, so it can be lifted onto the cursor. */
+	var dragGrabY:Float = 0;
+
+	/** How far the cursor has to move before a press on a note lifts it. */
+	static inline var DRAG_SLOP:Float = 4;
+
 	var movingNotes:FlxTypedGroup<MetaNote> = new FlxTypedGroup<MetaNote>();
 	var eventLockOverlay:FlxSprite;
 	var vortexIndicator:FlxSprite;
@@ -518,8 +531,8 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			"Enter - Playtest Chart",
 			"Space - Stop/Resume song",
 			"",
-			"Left Click - Place a Note, or Pick Up the One Under It",
-			"Left Click Again - Put Down What You Are Carrying",
+			"Left Click - Place a Note, or Select the One Under It",
+			"Left Click + Hold - Lift a Note and Drop It Somewhere Else",
 			"Right Click - Delete the Note or Event Under It",
 			"Right Click + Drag - Selection Box",
 			"Alt + Click - Add to Selection",
@@ -972,9 +985,19 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 				}
 				else if(FlxG.keys.justPressed.SPACE)
 				{
-					// Starting playback comes back to the playhead; pausing leaves the view
-					// wherever it is, so you can stop and go on reading from there.
-					if(!FlxG.sound.music.playing) snapViewToPlayhead();
+					// Play from the line rather than from wherever the song was left. The line
+					// is the row you are working at, so scrolling somewhere and pressing play
+					// should start there - it used to throw you back to the spot you had just
+					// scrolled away from, which is the one place you did not want to hear.
+					if(!FlxG.sound.music.playing && viewOffset != 0)
+					{
+						var at:Float = timeFromGridY(scrollY + FlxG.height/2);
+						FlxG.sound.music.time = FlxMath.bound(at, 0, FlxG.sound.music.length - 1);
+						Conductor.songPosition = FlxG.sound.music.time;
+					}
+
+					// Nothing to move: the view is already showing that row.
+					snapViewToPlayhead();
 					setSongPlaying(!FlxG.sound.music.playing);
 				}
 			}
@@ -1123,6 +1146,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					}
 					movingNotes.clear();
 					isMovingNotes = false;
+					dragArmed = false;
 					selectedNotes = [];
 					onSelectNote();
 					softReloadNotes();
@@ -1234,17 +1258,12 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		var minX:Float = gridBg.x;
 		if(SHOW_EVENT_COLUMN && lockedEvents) minX += GRID_SIZE;
 
-		// A note that has been picked up follows the cursor until it is put down, so the drop
-		// is the next click rather than the button coming up. Outside the bounds check below
-		// on purpose, so letting go of one anywhere still works.
-		//
-		// That same press must not then be read as picking something else up, which is what
-		// the ignore is for.
-		if(isMovingNotes && FlxG.mouse.justPressed)
-		{
+		// Outside the bounds check below on purpose: letting go anywhere puts the note down,
+		// and disarms a press that never lifted anything, even off the edge of the grid.
+		if(!FlxG.mouse.pressed) dragArmed = false;
+
+		if(isMovingNotes && FlxG.mouse.justReleased)
 			stopMovingNotes();
-			ignoreClickForThisFrame = true;
-		}
 
 		if(FlxG.mouse.x >= minX && FlxG.mouse.x < gridBg.x + gridBg.width)
 		{
@@ -1268,6 +1287,21 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			// The branch that used to be here corrected for the previous section's grid being
 			// a separate sprite that the mouse could be above. There is no above any more.
 			dummyArrow.y = gridBg.y + diffY;
+
+			// The lift. A press alone does nothing, so clicking a note to look at it cannot
+			// nudge it; once the cursor has actually moved, the note comes up off the grid
+			// onto the cursor and stays there until the button is let go.
+			//
+			// The reference handed over is where the grabbed note WAS, not where the cursor
+			// is, which is what makes it jump under the cursor on the first frame rather than
+			// keeping whatever gap it was grabbed with. Anything else selected keeps its
+			// spacing, because they all move by the same amount.
+			if(dragArmed && !isMovingNotes && FlxG.mouse.pressed
+				&& (Math.abs(FlxG.mouse.screenX - dragStartX) > DRAG_SLOP || Math.abs(FlxG.mouse.screenY - dragStartY) > DRAG_SLOP))
+			{
+				dragArmed = false;
+				if(selectedNotes.length > 0) moveSelectedNotes(dragNoteData, dragGrabY);
+			}
 
 			if(isMovingNotes)
 			{
@@ -1385,11 +1419,13 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 								addUndoAction(SELECT_NOTE, {old: sel, current: selectedNotes.copy()});
 							}
 
-							// Picked up there and then. It follows the cursor until the next
-							// click puts it down, rather than only while a button is held -
-							// which means you can scroll the chart while carrying a note and
-							// drop it somewhere that was not even on screen when you took it.
-							moveSelectedNotes(noteData, dummyArrow.y);
+							// Armed, not lifted. The note comes up once the cursor moves, so a
+							// click that stays put is only a selection.
+							dragArmed = true;
+							dragStartX = FlxG.mouse.screenX;
+							dragStartY = FlxG.mouse.screenY;
+							dragNoteData = noteData;
+							dragGrabY = closest.chartY;
 						}
 						if(selectedNotes.length == 1) onSelectNote();
 						forceDataUpdate = true;
@@ -1611,6 +1647,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		events.sort(PlayState.sortByTime);
 		movingNotes.clear();
 		isMovingNotes = false;
+		dragArmed = false;
 		softReloadNotes();
 	}
 
