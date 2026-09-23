@@ -1,0 +1,120 @@
+Adds a timestamp to lime's key events, and a clock fine enough to compare it to.
+
+SDL stamps every key event with the moment it happened. Lime reads the key code, the
+modifier and the window id off that event and drops the rest, so by the time Haxe sees a
+key press there is no way left to ask when it happened - only that it arrived in this
+frame's batch. That is the whole reason precise input needs a patched lime.
+
+Two things are needed, not one:
+
+  * the event's own timestamp, carried through to Haxe
+  * a clock with better than millisecond resolution to compare it against
+
+`System::GetTimer` returns `SDL_GetTicks`, which counts whole milliseconds. Against an
+effect worth about four of them at 120fps that is too coarse to measure, so this adds a
+separate high resolution reading rather than changing GetTimer's meaning - everything in
+lime and openfl reads GetTimer, and giving it new units would be felt far from here.
+
+Applies to lime 8.1.2. Rebuilding the native side is required afterwards; see README.md.
+
+--- a/project/include/ui/KeyEvent.h
++++ b/project/include/ui/KeyEvent.h
+@@ struct KeyEvent {
+ 		hl_type* t;
+ 		double keyCode;
+ 		int modifier;
+ 		KeyEventType type;
+ 		int windowID;
++		double timestamp;
+ 
+ 		static ValuePointer* callback;
+ 		static ValuePointer* eventObject;
+
+--- a/project/src/ui/KeyEvent.cpp
++++ b/project/src/ui/KeyEvent.cpp
+@@ static ids
+ 	static int id_type;
+ 	static int id_windowID;
++	static int id_timestamp;
+ 	static bool init = false;
+@@ KeyEvent::KeyEvent ()
+ 		windowID = 0;
++		timestamp = 0;
+@@ if (!init)
+ 				id_windowID = val_id ("windowID");
++				id_timestamp = val_id ("timestamp");
+ 				init = true;
+@@ alloc_field block
+ 			alloc_field (object, id_windowID, alloc_int (event->windowID));
++			alloc_field (object, id_timestamp, alloc_float (event->timestamp));
+@@ non-CFFI branch
+ 				eventObject->windowID = event->windowID;
++				eventObject->timestamp = event->timestamp;
+
+--- a/project/src/backend/sdl/SDLApplication.cpp
++++ b/project/src/backend/sdl/SDLApplication.cpp
+@@ void SDLApplication::ProcessKeyEvent (SDL_Event* event)
+ 			keyEvent.windowID = event->key.windowID;
++
++			// SDL counts this in whole milliseconds from its own start. Re-based onto the
++			// high resolution clock below so a press can be placed inside a frame rather
++			// than only within the millisecond it landed in.
++			keyEvent.timestamp = System::GetTimerPrecise () -
++				((double)(SDL_GetTicks () - event->key.timestamp) * 1000000.0);
+
+--- a/project/src/backend/sdl/SDLSystem.cpp
++++ b/project/src/backend/sdl/SDLSystem.cpp
+@@ double System::GetTimer ()
+ 		return SDL_GetTicks ();
+ 
+ 	}
++
++
++	// Nanoseconds, from the same start as GetTimer. Its own function rather than a change
++	// to GetTimer, which the whole of lime and openfl read and which is expected to be
++	// milliseconds.
++	double System::GetTimerPrecise () {
++
++		static Uint64 frequency = SDL_GetPerformanceFrequency ();
++		return ((double)SDL_GetPerformanceCounter () / (double)frequency) * 1000000000.0;
++
++	}
+
+--- a/src/lime/_internal/backend/native/NativeApplication.hx
++++ b/src/lime/_internal/backend/native/NativeApplication.hx
+@@ class KeyEventInfo
+ 	public var type:KeyEventType;
+ 	public var windowID:Int;
++	public var timestamp:Float;
+ 
+-	public function new(type:KeyEventType = null, windowID:Int = 0, keyCode:Float = 0, modifier:Int = 0)
++	public function new(type:KeyEventType = null, windowID:Int = 0, keyCode:Float = 0, modifier:Int = 0, timestamp:Float = 0)
+ 	{
+ 		this.type = type;
+ 		this.windowID = windowID;
+ 		this.keyCode = keyCode;
+ 		this.modifier = modifier;
++		this.timestamp = timestamp;
+ 	}
+ 
+ 	public function clone():KeyEventInfo
+ 	{
+-		return new KeyEventInfo(type, windowID, keyCode, modifier);
++		return new KeyEventInfo(type, windowID, keyCode, modifier, timestamp);
+ 	}
+@@ private function handleKeyEvent
+ 				case KEY_DOWN:
+ 					window.onKeyDown.dispatch(keyCode, modifier);
++					window.onKeyDownPrecise.dispatch(keyCode, modifier, keyEventInfo.timestamp);
+@@ KEY_UP
+ 				case KEY_UP:
+ 					window.onKeyUp.dispatch(keyCode, modifier);
++					window.onKeyUpPrecise.dispatch(keyCode, modifier, keyEventInfo.timestamp);
+
+--- a/src/lime/ui/Window.hx
++++ b/src/lime/ui/Window.hx
+@@ signals
+ 	public var onKeyDown(default, null) = new Event<KeyCode->KeyModifier->Void>();
++	public var onKeyDownPrecise(default, null) = new Event<KeyCode->KeyModifier->Float->Void>();
+ 	public var onKeyUp(default, null) = new Event<KeyCode->KeyModifier->Void>();
++	public var onKeyUpPrecise(default, null) = new Event<KeyCode->KeyModifier->Float->Void>();
