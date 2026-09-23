@@ -1,0 +1,187 @@
+{
+  "directory": "week3",
+  "defaultZoom": 1.1,
+  "stageUI": "",
+  "boyfriend": [
+    770,
+    100
+  ],
+  "girlfriend": [
+    400,
+    130
+  ],
+  "opponent": [
+    100,
+    100
+  ],
+  "hide_girlfriend": false,
+  "camera_boyfriend": [
+    0,
+    0
+  ],
+  "camera_opponent": [
+    0,
+    0
+  ],
+  "camera_girlfriend": [
+    0,
+    0
+  ],
+  "camera_speed": 1,
+  "preload": {
+    "images/philly/city": 3,
+    "images/philly/street": 3,
+    "images/philly/train": 3,
+    "images/philly/window": 3,
+    "images/philly/behindTrain": 2,
+    "images/philly/sky": 2
+  },
+  "_editorMeta": {
+    "dad": "pico",
+    "boyfriend": "bf",
+    "gf": "gf"
+  },
+  "objects": [
+    {
+      "type": "sprite",
+      "name": "sky",
+      "x": -100,
+      "y": 0,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        0.1,
+        0.1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "philly/erect/sky",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "city",
+      "x": -255,
+      "y": 45,
+      "scale": [
+        0.9,
+        0.9
+      ],
+      "scroll": [
+        0.3,
+        0.3
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "philly/erect/city",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "lights",
+      "x": -184,
+      "y": 155,
+      "scale": [
+        0.9,
+        0.9
+      ],
+      "scroll": [
+        0.3,
+        0.3
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "philly/win",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "behindTrain",
+      "x": -299,
+      "y": 144,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "philly/erect/behindTrain",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "train",
+      "x": 2000,
+      "y": 360,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "philly/train",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "street",
+      "x": -299,
+      "y": 144,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "philly/erect/street",
+      "antialiasing": true
+    },
+    {
+      "type": "gf"
+    },
+    {
+      "type": "dad"
+    },
+    {
+      "type": "boyfriend"
+    }
+  ]
+}

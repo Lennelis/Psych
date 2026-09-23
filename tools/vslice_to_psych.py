@@ -31,12 +31,13 @@ STAGES = {
     'tankmanBattlefield': 'tank', 'phillyStreets': 'phillyStreets',
 }
 
-# The Erect stages are their own art and have no Psych equivalent yet, so they fall
-# back to the stage they are a version of. Swapped for the real ones once those exist.
 STAGES['phillyBlazin'] = 'phillyBlazin'  # Psych calls it the same thing
 
-for base, psych in list(STAGES.items()):
-    STAGES[base + 'Erect'] = psych
+# The Erect stages exist now - tools/vslice_stage_to_psych.py converts them into Psych
+# stage files of the same name - so they keep their own names instead of falling back to
+# the stage they are a version of.
+for base in list(STAGES.keys()):
+    STAGES[base + 'Erect'] = base + 'Erect'
 
 
 def carry_over(new_song, old_song):

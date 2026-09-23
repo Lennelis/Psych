@@ -1,0 +1,283 @@
+{
+  "directory": "week1",
+  "defaultZoom": 0.85,
+  "stageUI": "",
+  "boyfriend": [
+    770,
+    100
+  ],
+  "girlfriend": [
+    400,
+    130
+  ],
+  "opponent": [
+    100,
+    100
+  ],
+  "hide_girlfriend": false,
+  "camera_boyfriend": [
+    0,
+    0
+  ],
+  "camera_opponent": [
+    0,
+    0
+  ],
+  "camera_girlfriend": [
+    0,
+    0
+  ],
+  "camera_speed": 1,
+  "preload": {
+    "images/stageback": 3,
+    "images/stagefront": 3,
+    "images/stagecurtains": 2,
+    "images/stage_light": 2
+  },
+  "_editorMeta": {
+    "dad": "dad",
+    "boyfriend": "bf",
+    "gf": "gf"
+  },
+  "objects": [
+    {
+      "type": "square",
+      "name": "solid",
+      "x": -500,
+      "y": -1000,
+      "scale": [
+        2400,
+        2000
+      ],
+      "scroll": [
+        0,
+        0
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#222026",
+      "filters": 3
+    },
+    {
+      "type": "animatedSprite",
+      "name": "crowd",
+      "x": 682,
+      "y": 290,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        0.8,
+        0.8
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "erect/crowd",
+      "antialiasing": true,
+      "animations": [
+        {
+          "anim": "idle",
+          "name": "idle0",
+          "fps": 12,
+          "loop": true,
+          "indices": [],
+          "offsets": [
+            0,
+            0
+          ]
+        }
+      ],
+      "firstAnimation": "idle"
+    },
+    {
+      "type": "sprite",
+      "name": "brightLightSmall",
+      "x": 967,
+      "y": -103,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1.2,
+        1.2
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "erect/brightLightSmall",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "bg",
+      "x": -765,
+      "y": -247,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "erect/bg",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "server",
+      "x": -991,
+      "y": 205,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "erect/server",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "lightgreen",
+      "x": -171,
+      "y": 242,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "erect/lightgreen",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "lightred",
+      "x": -101,
+      "y": 560,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "erect/lightred",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "orangeLight",
+      "x": 189,
+      "y": -500,
+      "scale": [
+        1,
+        1700
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "erect/orangeLight",
+      "antialiasing": true
+    },
+    {
+      "type": "gf"
+    },
+    {
+      "type": "dad"
+    },
+    {
+      "type": "boyfriend"
+    },
+    {
+      "type": "sprite",
+      "name": "lights",
+      "x": -847,
+      "y": -245,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1.2,
+        1.2
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "erect/lights",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "lightAbove",
+      "x": 804,
+      "y": -117,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "erect/lightAbove",
+      "antialiasing": true
+    }
+  ]
+}

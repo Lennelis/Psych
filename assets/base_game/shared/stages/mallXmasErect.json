@@ -1,0 +1,256 @@
+{
+  "directory": "week5",
+  "defaultZoom": 0.8,
+  "stageUI": "",
+  "boyfriend": [
+    970,
+    100
+  ],
+  "girlfriend": [
+    400,
+    130
+  ],
+  "opponent": [
+    100,
+    100
+  ],
+  "hide_girlfriend": false,
+  "camera_boyfriend": [
+    0,
+    -100
+  ],
+  "camera_opponent": [
+    0,
+    0
+  ],
+  "camera_girlfriend": [
+    0,
+    0
+  ],
+  "camera_speed": 1,
+  "preload": {
+    "images/christmas/bgWalls": 3,
+    "images/christmas/bottomBop": 3,
+    "images/christmas/christmasTree": 3,
+    "images/christmas/fgSnow": 3,
+    "images/christmas/santa": 3,
+    "images/christmas/upperBop": 2,
+    "images/christmas/bgEscalator": 2
+  },
+  "_editorMeta": {
+    "dad": "parents-christmas",
+    "boyfriend": "bf-christmas",
+    "gf": "gf-christmas"
+  },
+  "objects": [
+    {
+      "type": "sprite",
+      "name": "bgWalls",
+      "x": -726,
+      "y": -566,
+      "scale": [
+        0.9,
+        0.9
+      ],
+      "scroll": [
+        0.2,
+        0.2
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "christmas/erect/bgWalls",
+      "antialiasing": true
+    },
+    {
+      "type": "animatedSprite",
+      "name": "upperBoppers",
+      "x": -374,
+      "y": -98,
+      "scale": [
+        0.85,
+        0.85
+      ],
+      "scroll": [
+        0.28,
+        0.28
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "christmas/erect/upperBop",
+      "antialiasing": true,
+      "animations": [
+        {
+          "anim": "idle",
+          "name": "upperBop",
+          "fps": 24,
+          "loop": false,
+          "indices": [],
+          "offsets": [
+            0,
+            0
+          ]
+        }
+      ],
+      "firstAnimation": "idle"
+    },
+    {
+      "type": "sprite",
+      "name": "bgEscalator",
+      "x": -1100,
+      "y": -540,
+      "scale": [
+        0.9,
+        0.9
+      ],
+      "scroll": [
+        0.3,
+        0.3
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "christmas/erect/bgEscalator",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "christmasTree",
+      "x": 370,
+      "y": -250,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        0.4,
+        0.4
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "christmas/erect/christmasTree",
+      "antialiasing": true
+    },
+    {
+      "type": "sprite",
+      "name": "fog",
+      "x": -1000,
+      "y": 100,
+      "scale": [
+        0.9,
+        0.9
+      ],
+      "scroll": [
+        0.85,
+        0.85
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "christmas/erect/white",
+      "antialiasing": true
+    },
+    {
+      "type": "square",
+      "name": "snowUnder",
+      "x": -1500,
+      "y": 800,
+      "scale": [
+        5700,
+        3000
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#F3F4F5",
+      "filters": 3
+    },
+    {
+      "type": "sprite",
+      "name": "fgSnow",
+      "x": -1350,
+      "y": 680,
+      "scale": [
+        1.1,
+        1
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "christmas/fgSnow",
+      "antialiasing": true
+    },
+    {
+      "type": "gf"
+    },
+    {
+      "type": "dad"
+    },
+    {
+      "type": "animatedSprite",
+      "name": "santa",
+      "x": -840,
+      "y": 150,
+      "scale": [
+        1,
+        1
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "christmas/santa",
+      "antialiasing": true,
+      "animations": [
+        {
+          "anim": "idle",
+          "name": "santa idle in fear",
+          "fps": 24,
+          "loop": false,
+          "indices": [],
+          "offsets": [
+            0,
+            0
+          ]
+        }
+      ],
+      "firstAnimation": "idle"
+    },
+    {
+      "type": "boyfriend"
+    }
+  ]
+}

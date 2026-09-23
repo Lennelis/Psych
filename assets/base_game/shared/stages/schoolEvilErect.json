@@ -1,0 +1,158 @@
+{
+  "directory": "week6",
+  "defaultZoom": 1,
+  "stageUI": "pixel",
+  "boyfriend": [
+    970,
+    320
+  ],
+  "girlfriend": [
+    580,
+    430
+  ],
+  "opponent": [
+    100,
+    100
+  ],
+  "hide_girlfriend": false,
+  "camera_boyfriend": [
+    -100,
+    -100
+  ],
+  "camera_opponent": [
+    0,
+    0
+  ],
+  "camera_girlfriend": [
+    0,
+    0
+  ],
+  "camera_speed": 1,
+  "preload": {
+    "images/weeb/animatedEvilSchool_low": 1,
+    "images/weeb/animatedEvilSchool": 2,
+    "images/weeb/bgGhouls": 2
+  },
+  "_editorMeta": {
+    "dad": "spirit",
+    "boyfriend": "bf-pixel",
+    "gf": "gf-pixel"
+  },
+  "objects": [
+    {
+      "type": "square",
+      "name": "solid",
+      "x": -500,
+      "y": -1000,
+      "scale": [
+        2400,
+        2000
+      ],
+      "scroll": [
+        0,
+        0
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#000000",
+      "filters": 3
+    },
+    {
+      "type": "sprite",
+      "name": "backspikes",
+      "x": -842,
+      "y": -180,
+      "scale": [
+        6,
+        6
+      ],
+      "scroll": [
+        0.5,
+        0.5
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "weeb/erect/evil/weebBackSpikes",
+      "antialiasing": false
+    },
+    {
+      "type": "sprite",
+      "name": "school",
+      "x": -816,
+      "y": -38,
+      "scale": [
+        6,
+        6
+      ],
+      "scroll": [
+        0.75,
+        0.75
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "weeb/erect/evil/weebSchool",
+      "antialiasing": false
+    },
+    {
+      "type": "sprite",
+      "name": "backspike",
+      "x": 1416,
+      "y": 464,
+      "scale": [
+        6,
+        6
+      ],
+      "scroll": [
+        0.85,
+        0.85
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "weeb/erect/evil/backSpike",
+      "antialiasing": false
+    },
+    {
+      "type": "sprite",
+      "name": "evilstreet",
+      "x": -662,
+      "y": 6,
+      "scale": [
+        6,
+        6
+      ],
+      "scroll": [
+        1,
+        1
+      ],
+      "alpha": 1,
+      "angle": 0,
+      "color": "#FFFFFF",
+      "filters": 3,
+      "flipX": false,
+      "flipY": false,
+      "image": "weeb/erect/evil/weebStreet",
+      "antialiasing": false
+    },
+    {
+      "type": "gf"
+    },
+    {
+      "type": "dad"
+    },
+    {
+      "type": "boyfriend"
+    }
+  ]
+}
