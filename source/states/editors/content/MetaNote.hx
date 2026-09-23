@@ -5,6 +5,7 @@ import shaders.RGBPalette;
 import flixel.util.FlxDestroyUtil;
 import flixel.graphics.FlxGraphic;
 import openfl.display.BitmapData;
+import openfl.geom.Rectangle;
 
 class MetaNote extends Note
 {
@@ -123,6 +124,18 @@ class MetaNote extends Note
 
 	public var dragOffsetY:Float = 0;
 
+	/**
+	 * Where the offset is heading.
+	 *
+	 * Zero everywhere but a note in the air: the snapped position is what a note settles
+	 * onto, so letting go always ends at a grid cell. While it is held this carries the
+	 * cursor's position inside its cell, which is what takes the note off the grid and puts
+	 * it under the pointer instead of jumping a row at a time.
+	 */
+	public var dragTargetX:Float = 0;
+
+	public var dragTargetY:Float = 0;
+
 	public var dragPhase:Int = DRAG_NONE;
 
 	/** While true, changeNoteData moves the data and leaves the picture where it was. */
@@ -156,6 +169,7 @@ class MetaNote extends Note
 			dragBaseScaleY = scale.y;
 		}
 
+		dragTargetX = dragTargetY = 0;
 		deferVisuals = true;
 		if(visualNoteData < 0) visualNoteData = noteData;
 		dragPhase = DRAG_LIFT;
@@ -171,6 +185,16 @@ class MetaNote extends Note
 		deferVisuals = false;
 		dragPhase = DRAG_SETTLE;
 		dragVelX = dragVelY = 0;
+		dragTargetX = dragTargetY = 0;
+
+		// An event has no note graphic, no direction and no rgbShader - reading one is what
+		// crashed this. There is nothing to turn or fade, so it only has to settle.
+		if(isEvent)
+		{
+			angle = 0;
+			fadeT = 1;
+			return;
+		}
 
 		var wanted:Int = noteData % Note.colArray.length;
 		var shown:Int = (visualNoteData < 0 ? wanted : visualNoteData) % Note.colArray.length;
@@ -238,8 +262,8 @@ class MetaNote extends Note
 
 			for (i in 0...steps)
 			{
-				dragVelX += (-(omega * omega) * dragOffsetX - 2 * zeta * omega * dragVelX) * h;
-				dragVelY += (-(omega * omega) * dragOffsetY - 2 * zeta * omega * dragVelY) * h;
+				dragVelX += (-(omega * omega) * (dragOffsetX - dragTargetX) - 2 * zeta * omega * dragVelX) * h;
+				dragVelY += (-(omega * omega) * (dragOffsetY - dragTargetY) - 2 * zeta * omega * dragVelY) * h;
 				dragOffsetX += dragVelX * h;
 				dragOffsetY += dragVelY * h;
 			}
@@ -254,13 +278,16 @@ class MetaNote extends Note
 			}
 
 			var k:Float = (tau <= 0) ? 1 : (1 - Math.exp(-elapsed / tau));
-			dragOffsetX -= dragOffsetX * k;
-			dragOffsetY -= dragOffsetY * k;
+			dragOffsetX += (dragTargetX - dragOffsetX) * k;
+			dragOffsetY += (dragTargetY - dragOffsetY) * k;
 		}
 
 		// The lift is over once the note has caught up with the cursor; from then on it is
 		// the carry, which is usually a good deal tighter.
-		if(dragPhase == DRAG_LIFT && Math.abs(dragOffsetX) < 1.5 && Math.abs(dragOffsetY) < 1.5)
+		var lagX:Float = dragOffsetX - dragTargetX;
+		var lagY:Float = dragOffsetY - dragTargetY;
+
+		if(dragPhase == DRAG_LIFT && Math.abs(lagX) < 1.5 && Math.abs(lagY) < 1.5)
 			dragPhase = DRAG_CARRY;
 
 		// Tilt reads the lag rather than the mouse, so it can never disagree with what is on
@@ -269,7 +296,7 @@ class MetaNote extends Note
 		{
 			var wantAngle:Float = 0;
 			if(held && ChartingState.TILT_MAX > 0)
-				wantAngle = Math.max(-ChartingState.TILT_MAX, Math.min(ChartingState.TILT_MAX, dragOffsetX * 0.55));
+				wantAngle = Math.max(-ChartingState.TILT_MAX, Math.min(ChartingState.TILT_MAX, lagX * 0.55));
 			else if(fadeT < 1 || angle != 0)
 				wantAngle = 0;
 
@@ -304,7 +331,7 @@ class MetaNote extends Note
 		}
 
 		var resting:Bool = !held
-			&& Math.abs(dragOffsetX) < 0.3 && Math.abs(dragOffsetY) < 0.3
+			&& Math.abs(lagX) < 0.3 && Math.abs(lagY) < 0.3
 			&& Math.abs(dragVelX) < 2 && Math.abs(dragVelY) < 2
 			&& Math.abs(dragScale - 1) < 0.004
 			&& angle == 0 && fadeT >= 1;
@@ -320,6 +347,34 @@ class MetaNote extends Note
 		}
 
 		return true;
+	}
+
+	/**
+	 * Drawn with a ring round it rather than pulsed.
+	 *
+	 * The old highlight rode the notes' own brightness up and down on a sine, which both
+	 * fought the lane colours and made a long selection flicker. A ring says the same thing
+	 * without moving, and it still reads on a note of any colour.
+	 */
+	public var selected:Bool = false;
+
+	static var _ring:FlxSprite;
+
+	static function getRing():FlxSprite
+	{
+		if(_ring != null) return _ring;
+
+		var size:Int = Std.int(ChartingState.GRID_SIZE);
+		var thick:Int = 3;
+
+		_ring = new FlxSprite().makeGraphic(size, size, FlxColor.TRANSPARENT, true, 'chartingSelectionRing');
+		_ring.pixels.fillRect(new Rectangle(0, 0, size, thick), FlxColor.WHITE);
+		_ring.pixels.fillRect(new Rectangle(0, size - thick, size, thick), FlxColor.WHITE);
+		_ring.pixels.fillRect(new Rectangle(0, 0, thick, size), FlxColor.WHITE);
+		_ring.pixels.fillRect(new Rectangle(size - thick, 0, thick, size), FlxColor.WHITE);
+		_ring.dirty = true;
+		_ring.scrollFactor.x = 0;
+		return _ring;
 	}
 
 	var _noteTypeText:FlxText;
@@ -346,6 +401,19 @@ class MetaNote extends Note
 
 	override function draw()
 	{
+		if(selected)
+		{
+			// Behind everything else the note draws, and squared to the cell rather than to
+			// the sprite, so a ring round a hold and a ring round a tap are the same size.
+			var ring:FlxSprite = getRing();
+			ring.x = this.x + this.width / 2 - ring.width / 2;
+			ring.y = this.y + this.height / 2 - ring.height / 2;
+			ring.angle = this.angle;
+			ring.color = 0xFF33E1FF;
+			ring.alpha = this.alpha;
+			ring.draw();
+		}
+
 		if(sustainSprite != null && sustainSprite.exists && sustainSprite.visible && sustainLength > 0)
 		{
 			sustainSprite.x = this.x + this.width/2 - sustainSprite.width/2;

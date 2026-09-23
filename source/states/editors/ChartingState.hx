@@ -714,7 +714,8 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		noteSplashesInputText.text = PlayState.SONG.splashSkin;
 	}
 	
-	var noteSelectionSine:Float = 0;
+	/** Whatever wore a selection ring last frame, so it can be taken off again. */
+	var _ringed:Array<MetaNote> = [];
 	var selectedNotes:Array<MetaNote> = [];
 	var ignoreClickForThisFrame:Bool = false;
 	var outputAlpha:Float = 0;
@@ -996,7 +997,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					// its own back when there was nowhere else to look. It deliberately does
 					// not pause playback - scrolling ahead while a song plays is useful.
 					var step:Float = GRID_SIZE * 4 * curZoom * (FlxG.keys.pressed.SHIFT ? 4 : 1) / (holdingAlt ? 4 : 1);
-					viewOffset -= FlxG.mouse.wheel * step;
+					viewOffsetTarget -= FlxG.mouse.wheel * step;
 				}
 				else if(FlxG.keys.pressed.W != FlxG.keys.pressed.S || FlxG.mouse.wheel != 0)
 				{
@@ -1595,12 +1596,19 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			lastBeatHit = curBeat;
 		}
 
+		// Marked rather than pulsed. Cleared first so a note that has just left the selection
+		// loses its ring on the same frame, without walking the whole chart to find it.
+		for (note in _ringed) if(note != null) note.selected = false;
+		_ringed.resize(0);
+		for (note in selectedNotes)
+		{
+			if(note == null) continue;
+			note.selected = true;
+			_ringed.push(note);
+		}
+
 		if(selectedNotes.length > 0)
 		{
-			noteSelectionSine += elapsed;
-			var sineValue:Float = 0.75 + Math.cos(Math.PI * noteSelectionSine * (isMovingNotes ? 8 : 2)) / 4;
-			//trace(sineValue);
-
 			var qPress = FlxG.keys.justPressed.Q;
 			var ePress = FlxG.keys.justPressed.E;
 			var addSus = (FlxG.keys.pressed.SHIFT ? 4 : 1) * (Conductor.stepCrochet / 2);
@@ -1627,10 +1635,8 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					}
 					note.animation.update(elapsed); //let selected notes be animated for better visibility
 				}
-				note.colorTransform.redMultiplier = note.colorTransform.greenMultiplier = note.colorTransform.blueMultiplier = sineValue;
 			}
 		}
-		else noteSelectionSine = 0;
 
 		outputTxt.alpha = outputAlpha;
 		outputTxt.visible = (outputAlpha > 0);
@@ -1745,9 +1751,24 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	{
 		if(isMovingNotes)
 		{
+			// Where the cursor sits inside the cell it has snapped to. Handing that to every
+			// carried note is what takes them off the grid: the snapped cell is still what
+			// they land on, but in the air they sit under the pointer rather than stepping a
+			// row at a time.
+			var freeX:Float = FlxG.mouse.x - (dummyArrow.x + GRID_SIZE / 2);
+			var freeY:Float = FlxG.mouse.y - (dummyArrow.y + GRID_SIZE / 2);
+
+			// In step these two are never more than half a cell apart. They come apart when
+			// the cursor leaves the grid, because the snapped one stops being updated - and
+			// without this the note would chase the pointer off across the screen.
+			freeX = FlxMath.bound(freeX, -GRID_SIZE, GRID_SIZE);
+			freeY = FlxMath.bound(freeY, -GRID_SIZE, GRID_SIZE);
+
 			for (note in movingNotes)
 			{
 				if(note == null) continue;
+				note.dragTargetX = freeX;
+				note.dragTargetY = freeY;
 				note.stepDrag(elapsed);
 				applyDragOffset(note);
 			}
@@ -1798,8 +1819,17 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	 */
 	var viewOffset:Float = 0;
 
+	/**
+	 * Where the view is heading. The wheel moves this and the view catches up, so a notch
+	 * glides instead of teleporting - a jump of a whole beat gives the eye nothing to
+	 * follow and you lose your place.
+	 */
+	var viewOffsetTarget:Float = 0;
+
+	static inline var SCROLL_TAU:Float = 0.070;
+
 	inline function snapViewToPlayhead()
-		viewOffset = 0;
+		viewOffset = viewOffsetTarget = 0;
 
 	function updateScrollY()
 	{
@@ -1813,7 +1843,11 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		// Held inside the chart, so the wheel cannot strand the view somewhere empty with
 		// no obvious way back to the notes.
 		var limit:Float = (gridBg != null) ? gridBg.height : 0;
-		viewOffset = FlxMath.bound(viewOffset, -playheadY, Math.max(0, limit - playheadY));
+		viewOffsetTarget = FlxMath.bound(viewOffsetTarget, -playheadY, Math.max(0, limit - playheadY));
+
+		var k:Float = (SCROLL_TAU <= 0) ? 1 : (1 - Math.exp(-FlxG.elapsed / SCROLL_TAU));
+		viewOffset += (viewOffsetTarget - viewOffset) * k;
+		if(Math.abs(viewOffsetTarget - viewOffset) < 0.25) viewOffset = viewOffsetTarget;
 
 		scrollY = playheadY + viewOffset - FlxG.height/2;
 	}
