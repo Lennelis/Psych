@@ -230,6 +230,12 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	/** Whether a faded copy stays behind at the place a note was taken from. */
 	public static inline var GHOST_AT_ORIGIN:Bool = true;
 
+	/** How near the end of a hold you have to press to take hold of it, in pixels. */
+	static inline var SUSTAIN_HANDLE:Float = 14;
+
+	/** The hold currently being lengthened by its tail. */
+	var resizingNote:MetaNote = null;
+
 	/** Notes still finishing a landing. Held notes are ticked through movingNotes instead. */
 	var dragAnimating:Array<MetaNote> = [];
 
@@ -574,6 +580,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			"",
 			"Left Click - Place a Note, or Select the One Under It",
 			"Left Click + Hold - Lift a Note and Drop It Somewhere Else",
+			"Drag the End of a Hold - Change How Long It Is",
 			"Right Click - Delete the Note or Event Under It",
 			"Right Click + Drag - Selection Box",
 			"Alt + Click - Add to Selection",
@@ -1446,7 +1453,11 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 				}
 				else if(FlxG.mouse.x >= gridBg.x && FlxG.mouse.x < gridBg.x + gridBg.width)
 				{
-					var closest:MetaNote = noteUnderCursor(noteData);
+					// Checked before anything else a press can mean, so the gesture nearest the
+					// cursor wins rather than the note that happens to own the tail.
+					resizingNote = sustainHandleUnder(noteData);
+
+					var closest:MetaNote = (resizingNote != null) ? null : noteUnderCursor(noteData);
 					if(closest != null && (!closest.isEvent || !lockedEvents))
 					{
 						if(FlxG.keys.pressed.SHIFT || holdingAlt) // Select Note/Event
@@ -1490,7 +1501,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 						if(selectedNotes.length == 1) onSelectNote();
 						forceDataUpdate = true;
 					}
-					else if(!holdingAlt && FlxG.mouse.y >= gridBg.y && FlxG.mouse.y < gridBg.y + gridBg.height) // Add note
+					else if(resizingNote == null && !holdingAlt && FlxG.mouse.y >= gridBg.y && FlxG.mouse.y < gridBg.y + gridBg.height) // Add note
 					{
 						var strumTime:Float = timeFromGridY(diffY);
 						if(noteData >= 0)
@@ -1538,6 +1549,8 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			dummyArrow.visible = false;
 		}
 		ignoreClickForThisFrame = false;
+
+		updateSustainResize();
 
 		// Last word on where a note is drawn, so nothing above can leave a sprite
 		// at its snapped position for a frame.
@@ -1933,6 +1946,69 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			return Math.abs(a.chartY - FlxG.mouse.y) < Math.abs(b.chartY - FlxG.mouse.y) ? -1 : 1);
 
 		return under[0];
+	}
+
+	/**
+	 * The hold whose tail is under the cursor, if there is one.
+	 *
+	 * Only counts below the note's own cell: a short hold's tail sits inside it, and
+	 * grabbing the head to move a note has to keep beating grabbing it to stretch one.
+	 */
+	function sustainHandleUnder(noteData:Int):MetaNote
+	{
+		if(noteData < 0) return null;
+
+		var best:MetaNote = null;
+		var bestDist:Float = SUSTAIN_HANDLE;
+
+		for (note in curRenderedNotes.members)
+		{
+			if(note == null || note.isEvent || !note.hasSustain) continue;
+			if(note.songData[1] != noteData) continue;
+			if(FlxG.mouse.y < note.chartY + GRID_SIZE * 0.75) continue;
+
+			var dist:Float = Math.abs(FlxG.mouse.y - note.sustainTailY());
+			if(dist < bestDist)
+			{
+				bestDist = dist;
+				best = note;
+			}
+		}
+		return best;
+	}
+
+	/**
+	 * Drags the end of a hold about.
+	 *
+	 * Q and E still step the length; this is the same value from the other direction, which
+	 * is the one you reach for when you can see where it ought to end.
+	 */
+	function updateSustainResize()
+	{
+		if(resizingNote == null) return;
+
+		if(!FlxG.mouse.pressed || !resizingNote.exists)
+		{
+			resizingNote = null;
+			return;
+		}
+
+		var sec:Int = sectionFromRow(resizingNote.chartY / (GRID_SIZE * curZoom));
+		var stepCrochet:Float = cachedSectionCrochets[sec] / 4;
+		if(stepCrochet <= 0) return;
+
+		var pixels:Float = FlxG.mouse.y - (resizingNote.y + resizingNote.height / 2);
+
+		// The inverse of the sum setSustainLength does to turn a length into a height.
+		// setSustainLength rounds to half a step afterwards, so this does not snap itself.
+		var value:Float = stepCrochet * (pixels + GRID_SIZE / 2) / (curZoom * GRID_SIZE) - stepCrochet;
+
+		resizingNote.setSustainLength(Math.max(0, value), stepCrochet, curZoom);
+
+		if(selectedNotes.length == 1 && selectedNotes[0] == resizingNote)
+			susLengthStepper.value = resizingNote.sustainLength;
+
+		forceDataUpdate = true;
 	}
 
 	/**

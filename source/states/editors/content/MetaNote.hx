@@ -12,7 +12,20 @@ class MetaNote extends Note
 	public static var noteTypeTexts:Map<Int, FlxText> = [];
 	public var isEvent:Bool = false;
 	public var songData:Array<Dynamic>;
-	public var sustainSprite:FlxSprite;
+	/**
+	 * The hold, drawn with the note's own art instead of a white bar.
+	 *
+	 * A MetaNote is built with isSustainNote false, so it never registered the hold frames
+	 * itself - these take the same atlas and register them, and take the note's shader too,
+	 * which is what carries the lane colour since every direction shares one greyscale
+	 * graphic.
+	 */
+	public var sustainBody:FlxSprite;
+
+	public var sustainEnd:FlxSprite;
+
+	/** How far the hold reaches below the middle of the note, in pixels. */
+	public var sustainPixelLength(default, null):Float = 0;
 	public var chartY:Float = 0;
 	public var chartNoteData:Int = 0;
 
@@ -59,6 +72,14 @@ class MetaNote extends Note
 			setGraphicSize(0, ChartingState.GRID_SIZE);
 
 		updateHitbox();
+
+		// The hold's frames and its shader both belong to the old direction now.
+		if(sustainBody != null && _lastStepCrochet > 0)
+		{
+			sustainBody = FlxDestroyUtil.destroy(sustainBody);
+			sustainEnd = FlxDestroyUtil.destroy(sustainEnd);
+			setSustainLength(sustainLength, _lastStepCrochet, _lastZoom);
+		}
 	}
 
 	public function setStrumTime(v:Float)
@@ -68,22 +89,38 @@ class MetaNote extends Note
 	}
 
 	var _lastZoom:Float = -1;
+	var _lastStepCrochet:Float = 0;
 	public function setSustainLength(v:Float, stepCrochet:Float, zoom:Float = 1)
 	{
 		_lastZoom = zoom;
+		_lastStepCrochet = stepCrochet;
 		v = Math.round(v / (stepCrochet / 2)) * (stepCrochet / 2);
 		songData[2] = sustainLength = Math.max(Math.min(v, stepCrochet * 128), 0);
 
 		if(sustainLength > 0)
 		{
-			if(sustainSprite == null)
+			if(sustainBody == null)
 			{
-				sustainSprite = new FlxSprite().makeGraphic(1, 1, FlxColor.WHITE);
-				sustainSprite.scrollFactor.x = 0;
+				sustainBody = buildSustainPiece(false);
+				sustainEnd = buildSustainPiece(true);
 			}
-			sustainSprite.setGraphicSize(8, Math.max(ChartingState.GRID_SIZE/4, (Math.round((v * ChartingState.GRID_SIZE + ChartingState.GRID_SIZE) / stepCrochet) * zoom) - ChartingState.GRID_SIZE/2));
-			sustainSprite.updateHitbox();
+
+			sustainPixelLength = Math.max(ChartingState.GRID_SIZE / 4,
+				(Math.round((v * ChartingState.GRID_SIZE + ChartingState.GRID_SIZE) / stepCrochet) * zoom) - ChartingState.GRID_SIZE / 2);
+
+			var wide:Float = ChartingState.GRID_SIZE * 0.42;
+
+			// The cap keeps its own proportions, and the body fills whatever is left. Sizing
+			// it the other way round makes the cap squash on short holds, which is the one
+			// part of a hold anybody actually looks at.
+			sustainEnd.setGraphicSize(wide, 0);
+			sustainEnd.updateHitbox();
+
+			var bodyLength:Float = Math.max(1, sustainPixelLength - sustainEnd.height);
+			sustainBody.setGraphicSize(wide, bodyLength);
+			sustainBody.updateHitbox();
 		}
+		else sustainPixelLength = 0;
 	}
 
 	public var hasSustain(get, never):Bool;
@@ -399,6 +436,48 @@ class MetaNote extends Note
 		return (_noteTypeText = txt);
 	}
 
+	function buildSustainPiece(isEnd:Bool):FlxSprite
+	{
+		var spr:FlxSprite = new FlxSprite();
+		spr.frames = this.frames;
+		spr.scrollFactor.x = 0;
+		spr.antialiasing = this.antialiasing;
+		spr.active = false;
+
+		var col:String = Note.colArray[noteData % Note.colArray.length];
+
+		if(!PlayState.isPixelStage)
+		{
+			if(isEnd)
+			{
+				spr.animation.addByPrefix('piece', col + ' hold end', 24, true);
+
+				// The original .FLA shipped with 'pruple end hold' in it and every skin since
+				// has copied the typo, so purple has to be asked for twice.
+				if(spr.animation.getByName('piece') == null)
+					spr.animation.addByPrefix('piece', 'pruple end hold', 24, true);
+			}
+			else spr.animation.addByPrefix('piece', col + ' hold piece', 24, true);
+		}
+		else
+		{
+			var d:Int = noteData % Note.colArray.length;
+			spr.animation.add('piece', [isEnd ? d + 4 : d], 24, true);
+		}
+
+		spr.animation.play('piece', true);
+		spr.updateHitbox();
+
+		// Every direction is the same greyscale art tinted by a palette, so the colour comes
+		// from the note's shader rather than from the frame.
+		spr.shader = this.shader;
+		return spr;
+	}
+
+	/** World Y of the far end of the hold, for hit-testing the resize handle. */
+	public function sustainTailY():Float
+		return y + height / 2 + sustainPixelLength;
+
 	override function draw()
 	{
 		if(selected)
@@ -414,12 +493,20 @@ class MetaNote extends Note
 			ring.draw();
 		}
 
-		if(sustainSprite != null && sustainSprite.exists && sustainSprite.visible && sustainLength > 0)
+		if(sustainBody != null && sustainBody.exists && sustainLength > 0)
 		{
-			sustainSprite.x = this.x + this.width/2 - sustainSprite.width/2;
-			sustainSprite.y = this.y + this.height/2;
-			sustainSprite.alpha = this.alpha;
-			sustainSprite.draw();
+			var midX:Float = this.x + this.width / 2;
+			var top:Float = this.y + this.height / 2;
+
+			sustainBody.x = midX - sustainBody.width / 2;
+			sustainBody.y = top;
+			sustainBody.alpha = this.alpha;
+			sustainBody.draw();
+
+			sustainEnd.x = midX - sustainEnd.width / 2;
+			sustainEnd.y = top + sustainBody.height;
+			sustainEnd.alpha = this.alpha;
+			sustainEnd.draw();
 		}
 		super.draw();
 
@@ -434,7 +521,8 @@ class MetaNote extends Note
 
 	override function destroy()
 	{
-		sustainSprite = FlxDestroyUtil.destroy(sustainSprite);
+		sustainBody = FlxDestroyUtil.destroy(sustainBody);
+		sustainEnd = FlxDestroyUtil.destroy(sustainEnd);
 		super.destroy();
 	}
 }
