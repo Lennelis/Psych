@@ -33,10 +33,25 @@ Two switches on the Run workflow form:
 | `videos` | off | Includes hxvlc for video cutscenes. It's the most fragile native dependency here, so it's off by default — turn it on if you want cutscenes and are willing to have the build fail in it. |
 | `armv7` | off | Also builds 32-bit `armeabi-v7a`. Each ABI is a separate full hxcpp compile, so this roughly doubles the build time. Only needed for phones older than about 2016. |
 
-The APK is signed with a throwaway key generated fresh each run. That's fine for
-sideloading, but it means **each build is signed by a different key** — uninstall
-the previous build before installing a new one, or Android refuses it as coming
-from a different signer. Use your own keystore (below) if that gets annoying.
+The APK is signed with a key that stays the same from build to build, so a new
+one **installs straight over the last** and keeps your save and settings.
+
+That key comes from repository secrets if they are set, and otherwise from one
+generated on the first run and kept in the Actions cache. The cached one is
+stable in practice; if the cache is ever evicted a fresh key is made, and that
+costs one uninstall rather than one per build.
+
+No key is committed. This repo is public, and a signing key in it would let
+anyone build an APK that Android accepts as an upgrade to this app. To hold it
+properly, make a keystore (below) and add two repository secrets under
+**Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 ~/psych.keystore` |
+| `ANDROID_KEYSTORE_PASSWORD` | the store password |
+
+`ANDROID_KEYSTORE_ALIAS` is optional and defaults to `psychengine`.
 
 Expect the first run to take a while: hxcpp compiles the whole engine from
 scratch. Later runs reuse a cache of the Haxe libraries, not the C++ objects, so

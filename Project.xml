@@ -4,6 +4,17 @@
 
 	<app title="Friday Night Funkin': Psych Engine" file="PsychEngine" packageName="com.shadowmario.psychengine" package="com.shadowmario.psychengine" main="Main" version="0.2.8" company="ShadowMario" />
 
+	<!--
+		A launcher has room for about a dozen characters under an icon before it starts
+		cutting words off, and the full title is thirty two. On mobile the app is just
+		called Psych Engine; `title` is what lime writes into the manifest as both the
+		application and the activity label, so setting it again here is the whole change.
+		Desktop keeps the long name in its window title.
+	-->
+	<section if="mobile">
+		<app title="Psych Engine" />
+	</section>
+
 	<!--Switch Export with Unique ApplicationID and Icon-->
 	<set name="APP_ID" value="0x0100f6c013bbc000" />
 
@@ -159,6 +170,17 @@
 	<!-- ___________________________ Mobile Targets _____________________________ -->
 
 	<section if="android">
+		<!--
+			Overlays onto the Android project lime generates. Lime looks for `android/template`
+			inside each template path, so this points at the folder above that, and the files
+			live at templates/android/template/... mirroring lime's own layout.
+
+			It holds the adaptive launcher icon: lime has no notion of one, so the files sit
+			here and answer to the name lime's manifest already uses. See the comment in
+			templates/android/template/app/src/main/res/drawable-anydpi-v26/icon.xml.
+		-->
+		<template path="templates" />
+
 		<!--
 			21 is the floor for the NDK toolchain lime uses. Target 33 rather than 34:
 			lime sets compileSdkVersion from this, and lime 8.1.2 generates Gradle 7.4.2

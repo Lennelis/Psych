@@ -83,20 +83,57 @@ jobs:
         if: steps.haxelib-cache.outputs.cache-hit == 'true'
         run: haxelib setup ~/haxelib
 
-      # Android won't install an unsigned APK. This key is generated fresh every
-      # run and thrown away with the runner, which is fine for sideloading but
-      # means each APK is signed by a different key: uninstall the previous build
-      # before installing a new one, or Android rejects it as a downgrade from a
-      # different signer. docs/MOBILE.md shows how to use your own keystore for a
-      # stable one.
-      - name: Generate a throwaway signing key
+      # Android will only install a new build over an old one when both are signed by
+      # the same key. A key made fresh each run means every APK is a stranger to the
+      # last, so the old one has to be uninstalled first - which takes the save file
+      # and every setting with it.
+      #
+      # So the key is kept. If the repo has the secrets set it uses those, which is
+      # the right answer for a public repo: the key never touches the tree. Failing
+      # that it falls back to one held in the Actions cache, generated once and reused
+      # after - stable in practice, and if the cache is ever evicted that costs one
+      # more uninstall rather than one per build.
+      #
+      # It is deliberately not committed. This repo is public, and a signing key in it
+      # would let anyone build an APK that Android accepts as an upgrade to this app.
+      # docs/MOBILE.md has the two secrets to set.
+      # Only ever holds the fallback key. A key from secrets is written straight to
+      # ci.keystore below and never goes near this path, so it cannot end up cached.
+      - name: Restore the fallback signing key
+        uses: actions/cache@v4
+        with:
+          path: signing/fallback.keystore
+          key: android-signing-key-v1
+
+      - name: Set up signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
         run: |
-          keytool -genkeypair -keystore "$PWD/ci.keystore" -alias psychengine \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass throwaway -keypass throwaway \
-            -dname "CN=Psych Engine, OU=CI, O=Psych Engine, C=US"
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "Using the keystore from repository secrets."
+            echo "$KEYSTORE_B64" | base64 -d > "$PWD/ci.keystore"
+            echo "ANDROID_KEYSTORE=ci.keystore" >> $GITHUB_ENV
+            echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
+            echo "ANDROID_KEYSTORE_ALIAS=${KEYSTORE_ALIAS:-psychengine}" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          mkdir -p signing
+          if [ ! -f signing/fallback.keystore ]; then
+            echo "No cached key found - making one. Builds from here on install over each other."
+            keytool -genkeypair -keystore signing/fallback.keystore -alias psychengine \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass psychengine -keypass psychengine \
+              -dname "CN=Psych Engine, OU=CI, O=Psych Engine, C=US"
+          else
+            echo "Reusing the cached key, so this build installs over the last one."
+          fi
+          cp signing/fallback.keystore "$PWD/ci.keystore"
+
           echo "ANDROID_KEYSTORE=ci.keystore" >> $GITHUB_ENV
-          echo "ANDROID_KEYSTORE_PASSWORD=throwaway" >> $GITHUB_ENV
+          echo "ANDROID_KEYSTORE_PASSWORD=psychengine" >> $GITHUB_ENV
           echo "ANDROID_KEYSTORE_ALIAS=psychengine" >> $GITHUB_ENV
 
       - name: Build the APK

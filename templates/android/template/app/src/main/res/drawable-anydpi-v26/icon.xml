@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+	The launcher icon on Android 8 and up.
+
+	Lime's manifest template points at `@drawable/icon` and writes a flat png for it, with
+	no notion of an adaptive icon. Rather than override the manifest - which would mean
+	keeping a copy of lime's own and watching it drift - this answers to the same name
+	under the `anydpi-v26` qualifier, so Android 8 and up resolves `@drawable/icon` here
+	and everything older falls through to the png lime generated.
+
+	The foreground is drawn over the background and the launcher masks the pair into
+	whatever shape the device uses, so the artwork keeps its own silhouette instead of
+	being shrunk into a white tile the way a legacy icon is.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+	<background android:drawable="@mipmap/ic_launcher_background" />
+	<foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
