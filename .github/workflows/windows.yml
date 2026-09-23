@@ -20,12 +20,51 @@ jobs:
         with:
           haxe-version: 4.3.4
 
+      # Every library came down from lib.haxe.org on every single run, twenty-odd of them,
+      # and nothing checked that they arrived. One download failing is how this job died
+      # with 'Could not find haxelib "flixel-addons"' minutes later at the compile, with
+      # nothing in the install step's log to say so. The Android job has had a cache since
+      # it was written and has never hit this.
+      - name: Cache Haxe libraries
+        id: haxelib-cache
+        uses: actions/cache@v4
+        with:
+          path: C:/haxelib
+          key: haxelib-windows-${{ hashFiles('setup/windows.bat') }}
+
       - name: Install Haxelib
+        if: steps.haxelib-cache.outputs.cache-hit != 'true'
         run: |
           haxelib setup C:/haxelib
           haxelib install hxcpp > /dev/null --quiet
           .\"setup/windows.bat"
         shell: cmd
+
+      - name: Point haxelib at the cache
+        if: steps.haxelib-cache.outputs.cache-hit == 'true'
+        run: haxelib setup C:/haxelib
+        shell: cmd
+
+      # setup/windows.bat runs haxelib install twenty times and returns whatever the last
+      # one said, so a failure in the middle of it passes for success. This is the check
+      # that was missing - it fails here, naming the library, instead of somewhere deep in
+      # a compile that has already burned ten minutes.
+      - name: Check the libraries are all there
+        shell: bash
+        run: |
+          missing=""
+          for lib in lime openfl flixel flixel-addons flixel-tools hscript-iris tjson hxvlc \
+                     hxdiscord_rpc flxanimate linc_luajit funkin.vis grig.audio; do
+            haxelib libpath "$lib" > /dev/null 2>&1 || missing="$missing $lib"
+          done
+
+          if [ -n "$missing" ]; then
+            echo "These libraries did not install:$missing"
+            echo "Re-run the job; if it keeps happening, lib.haxe.org is having a bad day."
+            exit 1
+          fi
+
+          echo "All libraries present."
 
       - name: Skip SScript setup mode
         run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> %USERPROFILE%/settings.cocoa
