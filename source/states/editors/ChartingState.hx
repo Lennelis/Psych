@@ -1330,18 +1330,24 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			diffY = FlxMath.bound(diffY, 0, gridBg.height);
 
 			var noteData:Int = Math.floor(diffX / GRID_SIZE);
+			if(SHOW_EVENT_COLUMN) noteData--;
 
 			// Off the side of the grid there is no lane under the cursor, but the drop still
-			// has to go somewhere real, so the one it would land on is pinned to the edge.
+			// has to go somewhere real. Pinned AFTER the event column has been taken off, so
+			// the lane that gets pinned is the lane a note actually lands in - doing it
+			// before left the two a cell apart, which is why a note dragged off the left
+			// hung to the right of the cursor while the right-hand side was fine. A note can
+			// never be pinned into the event column either, since it cannot live there.
 			if(!overGrid)
-				noteData = Std.int(FlxMath.bound(noteData, 0, (GRID_PLAYERS * GRID_COLUMNS_PER_PLAYER) + (SHOW_EVENT_COLUMN ? 1 : 0) - 1));
+			{
+				var lowest:Int = (SHOW_EVENT_COLUMN && !isMovingNotes) ? -1 : 0;
+				noteData = Std.int(FlxMath.bound(noteData, lowest, (GRID_PLAYERS * GRID_COLUMNS_PER_PLAYER) - 1));
+			}
 
 			// Hidden while carrying something: the note itself is under the cursor, and a
 			// ghost of a different note drawn on top of it only muddles where it will land.
 			dummyArrow.visible = !selectionBox.visible && !isMovingNotes;
-			dummyArrow.x = gridBg.x + noteData * GRID_SIZE;
-			if(SHOW_EVENT_COLUMN)
-				noteData--;
+			dummyArrow.x = gridBg.x + (noteData + (SHOW_EVENT_COLUMN ? 1 : 0)) * GRID_SIZE;
 
 			// The branch that used to be here corrected for the previous section's grid being
 			// a separate sprite that the mouse could be above. There is no above any more.
@@ -1999,9 +2005,13 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 
 		var pixels:Float = FlxG.mouse.y - (resizingNote.y + resizingNote.height / 2);
 
-		// The inverse of the sum setSustainLength does to turn a length into a height.
-		// setSustainLength rounds to half a step afterwards, so this does not snap itself.
-		var value:Float = stepCrochet * (pixels + GRID_SIZE / 2) / (curZoom * GRID_SIZE) - stepCrochet;
+		// The inverse of the sum setSustainLength does to turn a length into a height:
+		//   h = round((v * G + G) / sc) * zoom - G / 2
+		// rearranged for v, which leaves a bare 1 at the end and not a crochet. Subtracting
+		// a crochet took about a step off every drag, which on most charts is the entire
+		// hold - so it collapsed instead of stretching. setSustainLength rounds to half a
+		// step afterwards, so this does not snap for itself.
+		var value:Float = stepCrochet * (pixels + GRID_SIZE / 2) / (curZoom * GRID_SIZE) - 1;
 
 		resizingNote.setSustainLength(Math.max(0, value), stepCrochet, curZoom);
 

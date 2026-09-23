@@ -110,15 +110,17 @@ class MetaNote extends Note
 
 			var wide:Float = ChartingState.GRID_SIZE * 0.42;
 
-			// The cap keeps its own proportions, and the body fills whatever is left. Sizing
-			// it the other way round makes the cap squash on short holds, which is the one
-			// part of a hold anybody actually looks at.
-			sustainEnd.setGraphicSize(wide, 0);
-			sustainEnd.updateHitbox();
-
-			var bodyLength:Float = Math.max(1, sustainPixelLength - sustainEnd.height);
-			sustainBody.setGraphicSize(wide, bodyLength);
-			sustainBody.updateHitbox();
+			// Both pieces keep their own proportions and are drawn from their top left rather
+			// than their middle, which is what lets the body be tiled down the hold in draw()
+			// instead of stretched over it. Stretching one frame across a hold several bars
+			// long is what turned the body to mush.
+			for (piece in [sustainBody, sustainEnd])
+			{
+				piece.origin.set();
+				piece.offset.set();
+				var s:Float = wide / piece.frameWidth;
+				piece.scale.set(s, s);
+			}
 		}
 		else sustainPixelLength = 0;
 	}
@@ -498,14 +500,38 @@ class MetaNote extends Note
 			var midX:Float = this.x + this.width / 2;
 			var top:Float = this.y + this.height / 2;
 
-			sustainBody.x = midX - sustainBody.width / 2;
-			sustainBody.y = top;
-			sustainBody.alpha = this.alpha;
-			sustainBody.draw();
+			// Read once. Setting clipRect replaces the frame, and frameWidth and frameHeight
+			// with it, so anything measured after the first clip is measuring the clip.
+			var frameW:Int = sustainBody.frameWidth;
+			var frameH:Int = sustainBody.frameHeight;
+			var tileW:Float = frameW * sustainBody.scale.x;
+			var tileH:Float = frameH * sustainBody.scale.y;
 
-			sustainEnd.x = midX - sustainEnd.width / 2;
-			sustainEnd.y = top + sustainBody.height;
+			var capH:Float = sustainEnd.frameHeight * sustainEnd.scale.y;
+			var bodyLength:Float = Math.max(0, sustainPixelLength - capH);
+
+			sustainBody.alpha = this.alpha;
+			sustainBody.x = midX - tileW / 2;
+
+			var drawn:Float = 0;
+			while(tileH > 0 && drawn < bodyLength)
+			{
+				var remain:Float = bodyLength - drawn;
+
+				// The last tile is cut off rather than squashed, so every repeat down the
+				// hold is the same size as the one above it.
+				if(remain < tileH)
+					sustainBody.clipRect = new Rectangle(0, 0, frameW, frameH * (remain / tileH));
+
+				sustainBody.y = top + drawn;
+				sustainBody.draw();
+				drawn += tileH;
+			}
+			sustainBody.clipRect = null;
+
 			sustainEnd.alpha = this.alpha;
+			sustainEnd.x = midX - (sustainEnd.frameWidth * sustainEnd.scale.x) / 2;
+			sustainEnd.y = top + bodyLength;
 			sustainEnd.draw();
 		}
 		super.draw();
