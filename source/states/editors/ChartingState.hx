@@ -133,8 +133,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	function updateVortexColor()
 		vortexIndicator.color = quantColors[Std.int(FlxMath.bound(quantizations.indexOf(curQuant), 0, quantColors.length - 1))];
 
-	var sectionFirstNoteID:Int = 0;
-	var sectionFirstEventID:Int = 0;
 	var curSec:Int = 0;
 
 	var chartEditorSave:FlxSave;
@@ -286,6 +284,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		vortexIndicator.scrollFactor.set();
 		vortexIndicator.active = false;
 		updateVortexColor();
+		vortexBaseY = vortexIndicator.y;
 		add(vortexIndicator);
 		add(strumLineNotes);
 
@@ -305,6 +304,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		timeLine.updateHitbox();
 		timeLine.screenCenter(Y);
 		timeLine.scrollFactor.set();
+		timeLineBaseY = timeLine.y;
 		add(timeLine);
 		
 		var startX:Float = gridBg.x;
@@ -328,6 +328,11 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			note.x += GRID_SIZE/2 - note.width/2;
 			note.y += GRID_SIZE/2 - note.height/2;
 			strumLineNotes.add(note);
+
+			// Remembered rather than recomputed: a strum note changes height when it plays
+			// its pressed animation, so working the position out again each frame would make
+			// the playhead jitter as you chart.
+			strumBaseY.push(note.y);
 		}
 
 		var columns:Int = 0;
@@ -506,7 +511,8 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		fullTipText.scrollFactor.set();
 		fullTipText.visible = fullTipText.active = false;
 		fullTipText.text = [
-			"W/S/Mouse Wheel - Move Conductor's Time",
+			"Mouse Wheel - Scroll the View",
+			"W/S/Ctrl + Mouse Wheel - Move Conductor's Time",
 			"A/D - Change Sections",
 			"Q/E - Decrease/Increase Note Sustain Length",
 			"Hold Shift/Alt to Increase/Decrease move by 4x",
@@ -848,22 +854,11 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 						if(didDelete) continue;
 
 						// If no notes were found, add a new in its place
-						var didAdd:Bool = false;
 						var noteSetupData:Array<Dynamic> = [strumTime, num, 0];
 						if(typeSelected != null) noteSetupData.push(typeSelected);
 	
 						var noteAdded:MetaNote = createNote(noteSetupData);
-						for (num in sectionFirstNoteID...notes.length)
-						{
-							var note = notes[num];
-							if(note.strumTime >= strumTime)
-							{
-								notes.insert(num, noteAdded);
-								didAdd = true;
-								break;
-							}
-						}
-						if(!didAdd) notes.push(noteAdded);
+						notes.insert(insertIndexFor(notes, strumTime), noteAdded);
 						addedNotes.push(noteAdded);
 					}
 
@@ -889,6 +884,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 				}
 				else if(FlxG.keys.justPressed.A != FlxG.keys.justPressed.D && !holdingAlt)
 				{
+					snapViewToPlayhead();
 					if(FlxG.sound.music.playing)
 						setSongPlaying(false);
 
@@ -917,25 +913,39 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 				}
 				else if(FlxG.keys.justPressed.HOME)
 				{
+					snapViewToPlayhead();
 					setSongPlaying(false);
 					Conductor.songPosition = FlxG.sound.music.time = 0;
 					loadSection(0);
 				}
 				else if(FlxG.keys.justPressed.END)
 				{
+					snapViewToPlayhead();
 					setSongPlaying(false);
 					Conductor.songPosition = FlxG.sound.music.time = FlxG.sound.music.length - 1;
 					loadSection(PlayState.SONG.notes.length - 1);
 				}
 				else if(FlxG.keys.justPressed.R)
 				{
+					snapViewToPlayhead();
 					var timeToGoBack:Float = 0;
 					if(!FlxG.keys.pressed.SHIFT) timeToGoBack = cachedSectionTimes[curSec] + (curSec > 0 ? 0.000001 : 0);
 					else loadSection(0);
 					Conductor.songPosition = FlxG.sound.music.time = vocals.time = opponentVocals.time = timeToGoBack;
 				}
+				else if(FlxG.mouse.wheel != 0 && !FlxG.keys.pressed.CONTROL)
+				{
+					// The wheel moves the view and leaves the song alone, which is the point
+					// of a continuous chart: looking somewhere else without losing your
+					// place. Ctrl and the wheel still scrubs, which is what the wheel did on
+					// its own back when there was nowhere else to look. It deliberately does
+					// not pause playback - scrolling ahead while a song plays is useful.
+					var step:Float = GRID_SIZE * 4 * curZoom * (FlxG.keys.pressed.SHIFT ? 4 : 1) / (holdingAlt ? 4 : 1);
+					viewOffset -= FlxG.mouse.wheel * step;
+				}
 				else if(FlxG.keys.pressed.W != FlxG.keys.pressed.S || FlxG.mouse.wheel != 0)
 				{
+					snapViewToPlayhead();
 					if(FlxG.sound.music.playing)
 						setSongPlaying(false);
 
@@ -961,6 +971,9 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 				}
 				else if(FlxG.keys.justPressed.SPACE)
 				{
+					// Starting playback comes back to the playhead; pausing leaves the view
+					// wherever it is, so you can stop and go on reading from there.
+					if(!FlxG.sound.music.playing) snapViewToPlayhead();
 					setSongPlaying(!FlxG.sound.music.playing);
 				}
 			}
@@ -1377,7 +1390,6 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 						if(noteData >= 0)
 						{
 							trace('Added note at time: $strumTime');
-							var didAdd:Bool = false;
 
 							var noteSetupData:Array<Dynamic> = [strumTime, noteData, 0];
 							var typeSelected:String = noteTypes[noteTypeDropDown.selectedIndex].trim();
@@ -1385,17 +1397,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 								noteSetupData.push(typeSelected);
 
 							var noteAdded:MetaNote = createNote(noteSetupData);
-							for (num in sectionFirstNoteID...notes.length)
-							{
-								var note = notes[num];
-								if(note.strumTime >= strumTime)
-								{
-									notes.insert(num, noteAdded);
-									didAdd = true;
-									break;
-								}
-							}
-							if(!didAdd) notes.push(noteAdded);
+							notes.insert(insertIndexFor(notes, strumTime), noteAdded);
 
 							if(!holdingAlt)
 								resetSelectedNotes();
@@ -1406,20 +1408,9 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 						else if(!lockedEvents)
 						{
 							trace('Added event at time: $strumTime');
-							var didAdd:Bool = false;
 
 							var eventAdded:EventMetaNote = createEvent([strumTime, [[eventsList[Std.int(Math.max(eventDropDown.selectedIndex, 0))][0], value1InputText.text, value2InputText.text]]]);
-							for (num in sectionFirstEventID...events.length)
-							{
-								var event = events[num];
-								if(event.strumTime >= strumTime)
-								{
-									events.insert(num, eventAdded);
-									didAdd = true;
-									break;
-								}
-							}
-							if(!didAdd) events.push(eventAdded);
+							events.insert(insertIndexFor(events, strumTime), eventAdded);
 
 							if(!holdingAlt)
 								resetSelectedNotes();
@@ -1627,6 +1618,43 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		return dataCopy;
 	}
 
+	/**
+	 * How far the view has been pushed off the playhead, in pixels.
+	 *
+	 * The view used to be welded to the playhead, which was fine when the grid only showed
+	 * the section you were on - there was nowhere else to look. On one continuous chart
+	 * there is, so the wheel moves this instead of moving the song. Anything that moves the
+	 * playhead puts it back to zero, so scrubbing still behaves as it always did.
+	 */
+	var viewOffset:Float = 0;
+
+	inline function snapViewToPlayhead()
+		viewOffset = 0;
+
+	var strumBaseY:Array<Float> = [];
+	var timeLineBaseY:Float = 0;
+	var vortexBaseY:Float = 0;
+
+	/**
+	 * Keeps the playhead marks on the playhead.
+	 *
+	 * They are screen-fixed sprites sitting at the middle of the screen, which was the same
+	 * thing as the playhead while the view could not leave it. Now that the wheel can push
+	 * the view away, the middle of the screen is only the middle of the screen, and a line
+	 * drawn there would claim the song is somewhere it isn't.
+	 */
+	function updatePlayheadMarks()
+	{
+		if(timeLine != null) timeLine.y = timeLineBaseY - viewOffset;
+		if(vortexIndicator != null) vortexIndicator.y = vortexBaseY - viewOffset;
+
+		for (i => note in strumLineNotes.members)
+		{
+			if(note == null || i >= strumBaseY.length) continue;
+			note.y = strumBaseY[i] - viewOffset;
+		}
+	}
+
 	function updateScrollY()
 	{
 		var secStartTime:Null<Float> = cast cachedSectionTimes[curSec];
@@ -1634,7 +1662,15 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		var secRows:Null<Float> = cast cachedSectionRow[curSec];
 		if(secStartTime == null || secCrochet == null || secRows == null) return;
 
-		scrollY = (((Conductor.songPosition - secStartTime) / secCrochet * GRID_SIZE * 4) + (secRows * GRID_SIZE)) * curZoom - FlxG.height/2;
+		var playheadY:Float = (((Conductor.songPosition - secStartTime) / secCrochet * GRID_SIZE * 4) + (secRows * GRID_SIZE)) * curZoom;
+
+		// Held inside the chart, so the wheel cannot strand the view somewhere empty with
+		// no obvious way back to the notes.
+		var limit:Float = (gridBg != null) ? gridBg.height : 0;
+		viewOffset = FlxMath.bound(viewOffset, -playheadY, Math.max(0, limit - playheadY));
+
+		scrollY = playheadY + viewOffset - FlxG.height/2;
+		updatePlayheadMarks();
 	}
 
 	function updateSelectionBox()
@@ -2256,26 +2292,10 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		curRenderedNotes.clear();
 		var rendered:Array<MetaNote> = curRenderedNotes.members;
 
-		var sectionStart:Float = cachedSectionTimes[curSec];
-		sectionFirstNoteID = 0;
-		sectionFirstEventID = 0;
-
-		var foundNote:Bool = false;
 		var sec:Int = 0;
-		for (num => note in notes)
+		for (note in notes)
 		{
 			if(note == null) continue;
-
-			// The first note at or after the current section. Callers use it to start a
-			// sorted insert from, so it has to be at or before the right index - which is
-			// why it is the first match. It used to be written on every match and so ended
-			// up being the last, which could put an insert after the note it belonged
-			// before.
-			if(!foundNote && note.strumTime >= sectionStart)
-			{
-				sectionFirstNoteID = num;
-				foundNote = true;
-			}
 
 			rendered.push(note);
 			note.alpha = (note.strumTime >= Conductor.songPosition) ? 1 : 0.6;
@@ -2293,16 +2313,9 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 
 		if(SHOW_EVENT_COLUMN)
 		{
-			var foundEvent:Bool = false;
-			for (num => event in events)
+			for (event in events)
 			{
 				if(event == null) continue;
-
-				if(!foundEvent && event.strumTime >= sectionStart)
-				{
-					sectionFirstEventID = num;
-					foundEvent = true;
-				}
 
 				rendered.push(event);
 				event.alpha = (event.strumTime >= Conductor.songPosition) ? 1 : 0.6;
@@ -2315,6 +2328,28 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		// behind its back leaves it stale - and update() walks members up to length, not to
 		// the end, so a stale zero would stop every note updating.
 		@:privateAccess curRenderedNotes.length = rendered.length;
+	}
+
+	/**
+	 * Where something of this time belongs in a list kept in time order.
+	 *
+	 * Adding a note used to start scanning from the first note of the current section, on
+	 * the reasoning that you could only ever place one inside the section you were looking
+	 * at. Free scrolling breaks that: scroll backwards, place a note, and the scan starts
+	 * past where it belongs and inserts it out of order - which silently corrupts a chart,
+	 * because everything downstream assumes the list is sorted.
+	 */
+	static function insertIndexFor<T:MetaNote>(list:Array<T>, strumTime:Float):Int
+	{
+		var low:Int = 0;
+		var high:Int = list.length;
+		while(low < high)
+		{
+			var mid:Int = (low + high) >> 1;
+			if(list[mid].strumTime < strumTime) low = mid + 1;
+			else high = mid;
+		}
+		return low;
 	}
 
 	/**
