@@ -37,9 +37,22 @@ The APK is signed with a key that stays the same from build to build, so a new
 one **installs straight over the last** and keeps your save and settings.
 
 That key comes from repository secrets if they are set, and otherwise from one
-generated on the first run and kept in the Actions cache. The cached one is
-stable in practice; if the cache is ever evicted a fresh key is made, and that
-costs one uninstall rather than one per build.
+generated on the first run and kept in the Actions cache.
+
+**The cached one is not guaranteed.** An Actions cache is not storage: it is
+scoped to the branch that wrote it, it is dropped after seven days without a
+hit, and it is evicted least-recently-used once the repository passes its cache
+quota — which the Haxe library caches take a real share of. Any of those makes
+the next run generate a new key, and the first install after that is refused
+with **"App not installed as package conflicts with an existing package"**. The
+only cure at that point is to uninstall the old build, which takes the save file
+with it. Setting the secrets below is what stops it recurring.
+
+Every run prints the certificate's SHA-256 fingerprint in its **Set up signing**
+step, so two runs can be compared: same fingerprint means the key is not the
+problem, and something else on the phone already owns
+`com.shadowmario.psychengine` — another Psych Engine build, or the same one
+installed under a second user or work profile.
 
 No key is committed. This repo is public, and a signing key in it would let
 anyone build an APK that Android accepts as an upgrade to this app. To hold it

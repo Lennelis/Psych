@@ -89,10 +89,20 @@ jobs:
       # and every setting with it.
       #
       # So the key is kept. If the repo has the secrets set it uses those, which is
-      # the right answer for a public repo: the key never touches the tree. Failing
-      # that it falls back to one held in the Actions cache, generated once and reused
-      # after - stable in practice, and if the cache is ever evicted that costs one
-      # more uninstall rather than one per build.
+      # the right answer for a public repo: the key never touches the tree, and it is
+      # the same key on every branch for as long as the secret is set.
+      #
+      # Failing that it falls back to one held in the Actions cache. That is stable
+      # most of the time and not guaranteed, because an Actions cache is not storage:
+      # it is scoped to the branch that wrote it, so a second branch building this
+      # workflow makes its own key and the two branches' APKs will not replace each
+      # other; it is dropped after seven days without a hit; and it is evicted
+      # least-recently-used once the repository passes its cache quota, which the
+      # haxelib caches above take a real share of. Any of those means the next key is
+      # a new one, and the first install after it is refused.
+      #
+      # The fingerprint is printed below on every run, so which of those happened is a
+      # question the logs can answer.
       #
       # It is deliberately not committed. This repo is public, and a signing key in it
       # would let anyone build an APK that Android accepts as an upgrade to this app.
@@ -111,18 +121,32 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
         run: |
+          # The certificate's fingerprint, printed on every run. It is the public half
+          # of the key - the thing Android compares when deciding whether one APK may
+          # replace another - so there is nothing to hide, and having it in the log is
+          # the only way to tell an evicted key from a phone with another Psych Engine
+          # on it when an install is refused.
+          show_fingerprint() {
+            echo "Signing certificate:"
+            keytool -list -v -keystore "$PWD/ci.keystore" -alias "$1" -storepass "$2" 2>/dev/null \
+              | grep -i 'SHA256:' || echo "  (could not read it)"
+          }
+
           if [ -n "$KEYSTORE_B64" ]; then
             echo "Using the keystore from repository secrets."
             echo "$KEYSTORE_B64" | base64 -d > "$PWD/ci.keystore"
             echo "ANDROID_KEYSTORE=ci.keystore" >> $GITHUB_ENV
             echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
             echo "ANDROID_KEYSTORE_ALIAS=${KEYSTORE_ALIAS:-psychengine}" >> $GITHUB_ENV
+            show_fingerprint "${KEYSTORE_ALIAS:-psychengine}" "$KEYSTORE_PASSWORD"
             exit 0
           fi
 
           mkdir -p signing
           if [ ! -f signing/fallback.keystore ]; then
-            echo "No cached key found - making one. Builds from here on install over each other."
+            echo "::warning::No cached signing key - a new one was made, so this APK will not"
+            echo "::warning::install over an existing Psych Engine. Uninstall first, or set the"
+            echo "::warning::ANDROID_KEYSTORE_BASE64 secret to stop this happening again."
             keytool -genkeypair -keystore signing/fallback.keystore -alias psychengine \
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass psychengine -keypass psychengine \
@@ -135,6 +159,7 @@ jobs:
           echo "ANDROID_KEYSTORE=ci.keystore" >> $GITHUB_ENV
           echo "ANDROID_KEYSTORE_PASSWORD=psychengine" >> $GITHUB_ENV
           echo "ANDROID_KEYSTORE_ALIAS=psychengine" >> $GITHUB_ENV
+          show_fingerprint psychengine psychengine
 
       - name: Build the APK
         env:
