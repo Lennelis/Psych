@@ -79,6 +79,12 @@ class VSliceSettingsSubState extends BaseOptionsMenu
 			BOOL);
 		addOption(option);
 
+		var option:Option = new Option('Input Lag Compensation',
+			"Input only arrives once a frame, so a press lands somewhere in the frame that just went by\nbut is judged as if it happened at the end of it - always read a little late, never early.\nThis takes half a frame back off, which is about 8ms at 60fps and 4 at 120.\n\nV-Slice reads the real figure off the OS event, which Psych cannot: the timestamp is\ndiscarded before Haxe sees it. This is the part of it that can be had without that.\n\nRecalibrate your delay after turning this on or off - it moves where hits land.",
+			'inputLagComp',
+			BOOL);
+		addOption(option);
+
 		super();
 	}
 }

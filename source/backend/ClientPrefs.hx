@@ -80,6 +80,9 @@ import states.TitleState;
 
 	public var comboOffset:Array<Int> = [0, 0, 0, 0];
 	public var ratingOffset:Int = 0;
+
+	/** Take half a frame off the judged time, since a press is always read late by that. */
+	public var inputLagComp:Bool = false;
 	public var sickWindow:Float = 45.0;
 	public var goodWindow:Float = 90.0;
 	public var badWindow:Float = 135.0;

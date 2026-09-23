@@ -3293,9 +3293,39 @@ class PlayState extends MusicBeatState
 		return xThing;
 	}
 
+	/**
+	 * How long ago the press being judged actually happened, in milliseconds.
+	 *
+	 * Input arrives once a frame, so a press lands somewhere in the interval that just
+	 * elapsed and is judged as though it happened at the end of it. That is a bias, not
+	 * jitter - a hit is never read as early by it, only ever late - and it averages half
+	 * a frame: about 8ms at 60fps, 4 at 120.
+	 *
+	 * V-Slice takes the real figure off the OS event instead, which is exact. That is not
+	 * reachable here: lime's `KeyEventInfo` carries a key code, a modifier, a type and a
+	 * window id and no timestamp at all, so the number is gone before Haxe sees it. Doing
+	 * it V-Slice's way means patching lime's native layer, which is why they ship their own.
+	 *
+	 * Half a frame is the part that can be had without that. It leaves the jitter - the
+	 * spread either side of the average - but removes the lean, and a player's calibrated
+	 * offset stops being tied to the framerate they calibrated at.
+	 *
+	 * A frame that hitches would otherwise hand back an enormous correction, so it is
+	 * capped at half of a 30fps frame; anything slower than that has worse problems than
+	 * note timing.
+	 */
+	inline function pressLag():Float
+	{
+		if(!ClientPrefs.data.inputLagComp) return 0;
+
+		return Math.min(FlxG.elapsed * 500 * playbackRate, 16.7);
+	}
+
 	private function popUpScore(note:Note = null):Void
 	{
-		var noteDiff:Float = Math.abs(note.strumTime - Conductor.songPosition + ClientPrefs.data.ratingOffset);
+		// Judged against where the song was when the key went down rather than where it is
+		// now, which is what the correction above amounts to.
+		var noteDiff:Float = Math.abs(note.strumTime - (Conductor.songPosition - pressLag()) + ClientPrefs.data.ratingOffset);
 		vocals.volume = 1;
 
 		if (!ClientPrefs.data.comboStacking && comboGroup.members.length > 0)
