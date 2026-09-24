@@ -25,3 +25,10 @@ vs_Community.exe
 !.vscode/extensions.json
 art/build_html.bat
 art/build_html-debug.bat
+
+# Signing keys never belong in a public repo - a key here would let anyone build
+# an APK that Android accepts as an upgrade to this one. The CI workflow writes
+# both of these paths at build time; they are secrets or cache, never tree.
+*.keystore
+*.jks
+/signing/
