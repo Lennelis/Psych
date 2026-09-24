@@ -1875,6 +1875,35 @@ class PlayState extends MusicBeatState
 	static inline var ARROWS_MINI_SCALE:Float = 0.4;
 
 	/**
+	 * And how far it is faded, which is ours rather than V-Slice's - it leaves the mini
+	 * strumline at full alpha. The number is Psych's own answer to a secondary strumline,
+	 * the same third middlescroll dims the opponent's to.
+	 */
+	static inline var ARROWS_MINI_ALPHA:Float = 0.35;
+
+	/**
+	 * V-Slice's receptor, in pixels, at the size this scheme draws it.
+	 *
+	 * The two engines' sheets disagree about what an arrow is. `noteStrumline.xml` gives 154
+	 * by 157 of art inside a 232 by 236 frame, sitting 37 in and 38 down; `NOTE_assets.xml`
+	 * gives the same 154 by 157 with no padding at all. Flixel sizes a sprite by the frame, so
+	 * `playerStrumline.height` over there is 236 scaled - and `(FlxG.height - height) * 0.95`
+	 * lands somewhere quite different depending on which of the two you feed it. Measuring
+	 * Psych's own receptor was 34px low for exactly that reason.
+	 *
+	 * So V-Slice's receptor is written down as numbers instead of read off a sprite, and what
+	 * gets matched is where the middle of the visible arrow lands. All four are the sheet's
+	 * figures times 0.7 (the note style's scale) times 1.096875.
+	 */
+	static inline var ARROWS_FRAME_HEIGHT:Float = 181.2038; // 236
+
+	static inline var ARROWS_ART_TOP:Float = 29.1769; // 38
+
+	static inline var ARROWS_ART_WIDTH:Float = 118.2431; // 154
+
+	static inline var ARROWS_ART_HEIGHT:Float = 120.5466; // 157
+
+	/**
 	 * Where a receptor rests under the mobile Arrows layout.
 	 *
 	 * That scheme is not a set of buttons beside the game, it is the game arranged to be
@@ -1888,13 +1917,22 @@ class PlayState extends MusicBeatState
 	 * heading for when it is made - moving the arrow afterwards would have it slide back to
 	 * where it was a second into the song.
 	 *
-	 * The numbers are V-Slice's, with two left out. `INITIAL_OFFSET`, a further -28.6 on every
-	 * receptor, is left out for the same reason `VSliceVisuals.STRUM_X_NUDGE` leaves it out:
-	 * the build being matched does not appear to apply it, and the picture wins over the
-	 * arithmetic. And the 1.0969 the receptors themselves are scaled by is left out because in
+	 * `INITIAL_OFFSET`, a further -28.6 on every receptor, is not applied, and it turns out
+	 * that is right for a better reason than the one first given. The sheet pads the art 28.41
+	 * in from the left of its frame at this scale, so the offset and the padding cancel to
+	 * within a fifth of a pixel: leaving both out lands in the same place. That also settles
+	 * `VSliceVisuals.STRUM_X_NUDGE`, which was measured off a screenshot as -44 against an
+	 * arithmetic of -72.6 - the difference is the same 28.41.
+	 *
+	 * The 1.0969 the receptors themselves are scaled by is not applied either, because in
 	 * Psych a note's size comes from `Note.swagWidth` and `setGraphicSize`, which also drive
 	 * sustain clipping and where the hold covers sit - scaling the receptors alone would leave
-	 * the notes visibly smaller than the things they land on.
+	 * the notes smaller than the things they land on and a few pixels off centre with it. So
+	 * the arrow stays Psych's 107px against V-Slice's 118 and is centred on where V-Slice's
+	 * would be, which puts every lane within a fifth of a pixel of it.
+	 *
+	 * `docs/strum-sim.py` walks both engines through their own arithmetic and prints the
+	 * difference, which is where these numbers come from and how they can be checked.
 	 */
 	function placeArrowsStrum(strum:StrumNote, player:Int, column:Int):Void
 	{
@@ -1913,13 +1951,18 @@ class PlayState extends MusicBeatState
 				ARROWS_SPLIT + spacing * 3
 			];
 
-			strum.x = left + lane[column];
-			strum.y = (FlxG.height - strum.height) * 0.95 - ARROWS_Y_OFFSET;
-
-			if (isPixelStage) strum.y -= 10;
+			// Where V-Slice's strumline sits, worked out from its receptor rather than ours.
+			var top:Float = (FlxG.height - ARROWS_FRAME_HEIGHT) * 0.95 - ARROWS_Y_OFFSET;
+			if (isPixelStage) top -= 10;
 			#if android
-			else strum.y += 10;
+			else top += 10;
 			#end
+
+			// Then our arrow, centred on where theirs would be. Theirs is 118 across and ours
+			// 107, so matching corners would put every lane half a dozen pixels off; matching
+			// middles is what "the same place" means when the two are not the same size.
+			strum.x = left + lane[column] + (ARROWS_ART_WIDTH - strum.width) * 0.5;
+			strum.y = top + ARROWS_ART_TOP + (ARROWS_ART_HEIGHT - strum.height) * 0.5;
 			return;
 		}
 
@@ -1952,6 +1995,7 @@ class PlayState extends MusicBeatState
 			{
 				if(!ClientPrefs.data.opponentStrums) targetAlpha = 0;
 				else if(ClientPrefs.scrollsMiddle) targetAlpha = 0.35;
+				else if(ClientPrefs.usingArrowsLayout()) targetAlpha = ARROWS_MINI_ALPHA;
 			}
 
 			var babyArrow:StrumNote = new StrumNote(strumLineX, strumLineY, i, player);
@@ -1997,7 +2041,10 @@ class PlayState extends MusicBeatState
 			}
 			else babyArrow.alpha = targetAlpha;
 
-			if(ClientPrefs.data.holdCovers)
+			// None for the mini strumline: `enterMiniMode` leaves the receptors and nothing
+			// else, and a full sized glow over an arrow shrunk to two fifths would be the
+			// loudest thing on the screen.
+			if(ClientPrefs.data.holdCovers && (player == 1 || !ClientPrefs.usingArrowsLayout()))
 			{
 				var cover:HoldCover = new HoldCover(i, babyArrow);
 				grpHoldCovers.add(cover);
