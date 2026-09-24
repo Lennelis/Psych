@@ -1875,8 +1875,29 @@ class PlayState extends MusicBeatState
 
 	static inline var ARROWS_Y_OFFSET:Float = 24;
 
-	/** What `enterMiniMode` shrinks the opponent's to. */
+	/**
+	 * What `enterMiniMode` shrinks the opponent's to - and like the split, the aspect does not
+	 * cancel out of it, because it is passed `0.4 * amplification`. `getXPos` then multiplies
+	 * the lane spacing by the same `strumlineScale.x`, so the gaps shrink with the arrows.
+	 */
 	static inline var ARROWS_MINI_SCALE:Float = 0.4;
+
+	/**
+	 * Where the mini strumline's first arrow sits, measured off a V-Slice screenshot rather
+	 * than worked out.
+	 *
+	 * Its own arithmetic does not reproduce its own picture here. `STRUMLINE_X_OFFSET +
+	 * gameCutoutSize.x / 2.5 - 30` and `STRUMLINE_Y_OFFSET * 0.3` come to (114, 20) on the
+	 * phone the screenshots were taken on, and the arrows are at (153, 59). Something between
+	 * `initStrumlines` and the frame being drawn moves them 39 right and 39 down, and reading
+	 * the source has not turned it up - so this is the picture rather than the sum, which is
+	 * the same call `VSliceVisuals.STRUM_X_NUDGE` makes for the same reason.
+	 *
+	 * The x is the part that does not move with the screen; the widening is added to it.
+	 */
+	static inline var ARROWS_MINI_X:Float = 41.6;
+
+	static inline var ARROWS_MINI_Y:Float = 59.3;
 
 	/**
 	 * And how far it is faded, which is ours rather than V-Slice's - it leaves the mini
@@ -1985,11 +2006,15 @@ class PlayState extends MusicBeatState
 
 		// Scaled from where it already is rather than set outright, because the 0.7 every note
 		// and receptor is drawn at is in there and this is 40% of that, not 40% of the sheet.
-		strum.scale.x *= ARROWS_MINI_SCALE;
-		strum.scale.y *= ARROWS_MINI_SCALE;
+		var mini:Float = ARROWS_MINI_SCALE * (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
+		strum.scale.x *= mini;
+		strum.scale.y *= mini;
 		strum.updateHitbox();
-		strum.x = ARROWS_X_OFFSET - 30 + Note.swagWidth * ARROWS_MINI_SCALE * column;
-		strum.y = ARROWS_Y_OFFSET * 0.3;
+
+		// Only the left edge moves with the screen, and by V-Slice's own cutout: the wider the
+		// stage, the further in from it the corner sits.
+		strum.x = ARROWS_MINI_X + (FlxG.width - FlxG.initialWidth) / 2.5 + Note.swagWidth * mini * column;
+		strum.y = ARROWS_MINI_Y;
 	}
 
 	public var skipArrowStartTween:Bool = false; //for lua
