@@ -1863,6 +1863,10 @@ class PlayState extends MusicBeatState
 	 * `Strumline.getXPos` moves left and down out by twice this and up and right in by it, but
 	 * only for the player and only in this scheme, which leaves a wider gap down the middle
 	 * than between either pair - a thumb to each side, rather than four in a row.
+	 *
+	 * Unlike the two scales above, the aspect does not cancel out of this one: it is written
+	 * `35 * amplification`, so a wider screen splits the pairs further. Screenshots put the
+	 * middle gap 44px wider than a flat 35 was giving.
 	 */
 	static inline var ARROWS_SPLIT:Float = 35;
 
@@ -1895,13 +1899,22 @@ class PlayState extends MusicBeatState
 	 * gets matched is where the middle of the visible arrow lands. All four are the sheet's
 	 * figures times 0.7 (the note style's scale) times 1.096875.
 	 */
-	static inline var ARROWS_FRAME_HEIGHT:Float = 181.2038; // 236
-
 	static inline var ARROWS_ART_TOP:Float = 29.1769; // 38
 
 	static inline var ARROWS_ART_WIDTH:Float = 118.2431; // 154
 
 	static inline var ARROWS_ART_HEIGHT:Float = 120.5466; // 157
+
+	/**
+	 * The one that is not: the frame height the strumline *reports*, which is 236 times the
+	 * note style's 0.7 and not times the 1.096875 as well.
+	 *
+	 * `strumlineScaleCallback` sets each receptor's `scale` and never calls `updateHitbox`, so
+	 * `height` still says what `StrumlineNote.setup` left it saying - and `height` is what
+	 * `(FlxG.height - height) * 0.95` is handed. Deriving it from the drawn size instead put
+	 * the row 27px high, which is what the screenshots showed.
+	 */
+	static inline var ARROWS_FRAME_HEIGHT:Float = 165.2; // 236 * 0.7, no strumline scale
 
 	/**
 	 * Where a receptor rests under the mobile Arrows layout.
@@ -1944,11 +1957,15 @@ class PlayState extends MusicBeatState
 			// arrow, and centres that. Keeping its measure keeps its centre.
 			var spacing:Float = Note.swagWidth * ARROWS_SPACING_SCALE * ARROWS_STRUM_SCALE;
 			var left:Float = (FlxG.width - spacing * 4) / 2 + ARROWS_X_OFFSET;
+
+			// The one place the screen's shape is still in the sum: the two scales above have
+			// the aspect cancel out of them, this does not.
+			var split:Float = ARROWS_SPLIT * (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
 			var lane:Array<Float> = [
-				-ARROWS_SPLIT * 2,
-				-ARROWS_SPLIT * 2 + spacing,
-				ARROWS_SPLIT + spacing * 2,
-				ARROWS_SPLIT + spacing * 3
+				-split * 2,
+				-split * 2 + spacing,
+				split + spacing * 2,
+				split + spacing * 3
 			];
 
 			// Where V-Slice's strumline sits, worked out from its receptor rather than ours.

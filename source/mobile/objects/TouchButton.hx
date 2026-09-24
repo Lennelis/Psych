@@ -3,6 +3,7 @@ package mobile.objects;
 import flixel.FlxG;
 import flixel.FlxSprite;
 import flixel.math.FlxMath;
+import flixel.math.FlxPoint;
 import flixel.util.FlxColor;
 import flixel.util.FlxSignal.FlxTypedSignal;
 import mobile.backend.TouchButtonGraphic;
@@ -39,6 +40,25 @@ class TouchButton extends FlxSprite
 
 	/** When true a finger that slides onto the button counts as a press. Wanted on note lanes, not on menu buttons. */
 	public var allowSlideIn:Bool = false;
+
+	/**
+	 * When true, a finger inside this button and another one at the same time counts only for
+	 * whichever of them it is nearest the middle of.
+	 *
+	 * Needed by the Arrows layout, whose zones are wider than the gap between lanes on purpose
+	 * - about 13px of each lies under its neighbour, so that a thumb sliding from one note to
+	 * the next is never over nothing. Without a rule for the overlap that same thumb would be
+	 * holding two lanes at once in it.
+	 *
+	 * V-Slice settles it by having the last hint to see the touch take it off the previous one
+	 * (`buttonsTouchID` in `FunkinButton`). Nearest wins instead, because that puts the seam
+	 * halfway between two arrows rather than wherever the draw order happens to fall, and
+	 * because it needs no state to undo.
+	 *
+	 * Off by default: the hitbox lanes and the pads do not overlap, and the pause button is
+	 * kept out of the way by `deadZones` rather than by distance.
+	 */
+	public var exclusive:Bool = false;
 
 	public var idleAlpha:Float = 0.6;
 	public var pressedAlpha:Float = 1;
@@ -141,13 +161,13 @@ class TouchButton extends FlxSprite
 				// already false. Skipping only justReleased let allowSlideIn take that
 				// stale entry as a fresh press, so every tap fired the button twice - the
 				// second one landing after the finger was gone.
-				if (!touch.pressed || !touch.overlaps(this, camera) || blocked(touch)) continue;
+				if (!touch.pressed || !touch.overlaps(this, camera) || blocked(touch) || !nearest(touch)) continue;
 
 				if (heldIDs.indexOf(touch.touchPointID) != -1) stillHeld.push(touch.touchPointID);
 				else if (touch.justPressed || allowSlideIn) stillHeld.push(touch.touchPointID);
 			}
 
-			if (mouseEnabled && FlxG.mouse.pressed && FlxG.mouse.overlaps(this, camera) && !blocked(FlxG.mouse))
+			if (mouseEnabled && FlxG.mouse.pressed && FlxG.mouse.overlaps(this, camera) && !blocked(FlxG.mouse) && nearest(FlxG.mouse))
 			{
 				if (heldIDs.indexOf(MOUSE_ID) != -1) stillHeld.push(MOUSE_ID);
 				else if (FlxG.mouse.justPressed || allowSlideIn) stillHeld.push(MOUSE_ID);
@@ -177,6 +197,44 @@ class TouchButton extends FlxSprite
 	public function playIdleAnim():Void
 	{
 		if (idleAnim != null && animation.exists(idleAnim)) animation.play(idleAnim, true);
+	}
+
+	/**
+	 * Whether this is the closest of the overlapping buttons to where the finger is.
+	 *
+	 * Only asked of buttons that say their zones overlap, and only against others that say the
+	 * same, so nothing else in `list` is considered - a pad button and a note lane are not two
+	 * answers to one touch.
+	 */
+	function nearest(input:flixel.input.FlxPointer):Bool
+	{
+		if (!exclusive) return true;
+
+		final at:FlxPoint = input.getWorldPosition(camera, FlxPoint.weak());
+		final mine:Float = distanceSquared(at);
+		var closest:Bool = true;
+
+		for (other in list)
+		{
+			if (other == this || !other.exclusive || !other.isAwake) continue;
+			if (!input.overlaps(other, other.camera)) continue;
+
+			if (other.distanceSquared(at) < mine)
+			{
+				closest = false;
+				break;
+			}
+		}
+
+		at.putWeak();
+		return closest;
+	}
+
+	function distanceSquared(at:FlxPoint):Float
+	{
+		final dx:Float = at.x - (x + width * 0.5);
+		final dy:Float = at.y - (y + height * 0.5);
+		return dx * dx + dy * dy;
 	}
 
 	function blocked(input:flixel.input.FlxPointer):Bool

@@ -22,14 +22,34 @@ class MobileControls extends FlxSpriteGroup
 	/** Whether the Arrows layout is the one in use, so its zones know to chase the receptors. */
 	var followingStrums:Bool = false;
 
-	/** V-Slice's `FunkinHint.update`: the zone is this much wider than the receptor it covers. */
-	static inline var ZONE_WIDTH:Float = 1.35;
+	/**
+	 * The tap zone, in pixels, as V-Slice ends up sizing it.
+	 *
+	 * `FunkinHint.update` asks for `followTarget.width * 1.35` by `height * 8`, and what it is
+	 * asking is the receptor's *frame* at the note style's 0.7 - 232 by 236 of it - because
+	 * `strumlineScaleCallback` sets the scale without calling `updateHitbox`, so `width` and
+	 * `height` never hear about the 1.096875. Measuring Psych's receptor instead gave a zone
+	 * two thirds the size, since our sheet has no frame padding to measure.
+	 *
+	 * 219 across against 193 between lanes is the overlap: about 13px of each zone lies under
+	 * its neighbour, which is what lets a thumb slide from one note to the next without ever
+	 * being over nothing.
+	 */
+	static inline var ZONE_WIDTH:Float = 219.24; // 232 * 0.7 * 1.35
 
-	/** And this much taller, which makes it a column rather than a box. */
-	static inline var ZONE_HEIGHT:Float = 8;
+	static inline var ZONE_HEIGHT:Float = 1321.6; // 236 * 0.7 * 8
 
-	/** How far above the receptor that column starts. */
-	static inline var ZONE_RISE:Float = 220;
+	/**
+	 * Where its top left sits relative to the middle of the arrow.
+	 *
+	 * V-Slice measures from the frame's corner and backs off by `width * 0.175` and a flat
+	 * 220; both of those are here, plus the padding between that corner and the art, so this
+	 * can be taken from the one thing the two engines agree on - where the arrow looks like it
+	 * is.
+	 */
+	static inline var ZONE_LEFT:Float = 115.9507; // 232*0.7*0.175 + 37*0.7678125 + 154*0.7678125/2
+
+	static inline var ZONE_TOP:Float = 309.4502; // 220 + 38*0.7678125 + 157*0.7678125/2
 
 	public var hitbox(default, null):Hitbox;
 	public var pauseButton(default, null):TouchButton;
@@ -72,13 +92,10 @@ class MobileControls extends FlxSpriteGroup
 	 * before and read as ghosts.
 	 *
 	 * The zone is bigger than the receptor on purpose, and V-Slice's numbers say how much: a
-	 * third again as wide, eight times as tall, starting 220px above. That comes out as a
-	 * column down the lane rather than a box on the arrow, so a thumb aimed at a note on its
-	 * way in still plays it.
-	 *
-	 * The multipliers are taken against whatever the receptor measures, so the pixel stages
-	 * need no numbers of their own - V-Slice carries a second set only because its own pixel
-	 * art sits differently inside its frame.
+	 * third again as wide as the frame, eight times as tall, starting 220px above. That comes
+	 * out as a column down the lane, wide enough to overlap its neighbours by about 13px on
+	 * each side - so a thumb sliding from one note to the next is never over nothing, and one
+	 * aimed at a note still on its way in plays it anyway.
 	 *
 	 * These coordinates are V-Slice's starting placement, which is all they are there too:
 	 * they hold for the moment before the strumline exists, and `followStrums` has them from
@@ -102,6 +119,7 @@ class MobileControls extends FlxSpriteGroup
 			button.makeGraphic(1, 1, FlxColor.TRANSPARENT);
 			button.setSize(hintWidth, hintHeight);
 			button.allowSlideIn = true; // rolls are played by sliding a thumb across, same as the lanes
+			button.exclusive = true; // the zones overlap, so a finger in the seam belongs to one of them
 			button.alphaTweenSpeed = 0;
 			button.idleAlpha = 1;
 			button.pressedAlpha = 1;
@@ -131,8 +149,8 @@ class MobileControls extends FlxSpriteGroup
 			final strum:StrumNote = state.playerStrums.members[i];
 			if (button == null || strum == null) continue;
 
-			button.setSize(strum.width * ZONE_WIDTH, strum.height * ZONE_HEIGHT);
-			button.setPosition(strum.x - strum.width * ((ZONE_WIDTH - 1) / 2), strum.y - ZONE_RISE);
+			button.setSize(ZONE_WIDTH, ZONE_HEIGHT);
+			button.setPosition(strum.x + strum.width * 0.5 - ZONE_LEFT, strum.y + strum.height * 0.5 - ZONE_TOP);
 		}
 	}
 

@@ -66,8 +66,10 @@ def vslice(screen_w, screen_h, android=True, pixel=False):
     group_x = (screen_w - width) / 2 + STRUMLINE_X_OFFSET
 
     # get_height() is the group's bounds with the background explicitly skipped
-    # (findMinYHelper/findMaxYHelper), so it is one receptor's FRAME height.
-    frame_h = VS_FRAME_H * scale
+    # (findMinYHelper/findMaxYHelper), so it is one receptor's FRAME height - at the note
+    # style's 0.7 and NOT at strumlineScale, because strumlineScaleCallback sets `scale` and
+    # never calls updateHitbox, so `height` never hears about the 1.096875.
+    frame_h = VS_FRAME_H * NOTE_STYLE_SCALE
     group_y = (screen_h - frame_h) * 0.95 - STRUMLINE_Y_OFFSET
     if pixel:
         group_y -= 10
@@ -108,7 +110,7 @@ def psych(screen_w, screen_h, android=True, pixel=False, y_model='vslice'):
 
     # V-Slice's own receptor, as a set of numbers rather than as a sprite.
     vs_scale = NOTE_STYLE_SCALE * strum_scale
-    vs_frame_h = VS_FRAME_H * vs_scale
+    vs_frame_h = VS_FRAME_H * NOTE_STYLE_SCALE
     vs_art_top = VS_PAD_Y * vs_scale
     vs_art_w, vs_art_h = VS_ART_W * vs_scale, VS_ART_H * vs_scale
 
@@ -130,6 +132,7 @@ def psych(screen_w, screen_h, android=True, pixel=False, y_model='vslice'):
             group_y += 10
         y = group_y + vs_art_top + (vs_art_h - h) / 2
 
+    # The aspect cancels out of the two scales but not out of this one.
     pos = SPLIT * amp
     lanes = [-pos * 2, -pos * 2 + cell, pos + cell * 2, pos + cell * 3]
     nudge = 0.0 if y_model == 'sprite' else (vs_art_w - w) / 2
@@ -178,7 +181,29 @@ if __name__ == '__main__':
     print()
     print(f'The arrow itself is still V-Slice {VS_ART_W * vs_scale:.1f}px wide against Psych'
           f' {int(PS_ART_W * PSYCH_SCALE_BASE)}px.')
-    print(f'  Constants for the Haxe side: frame {VS_FRAME_H * vs_scale:.4f},'
+    print(f'  Constants for the Haxe side: frame {VS_FRAME_H * NOTE_STYLE_SCALE:.4f},'
           f' art top {VS_PAD_Y * vs_scale:.4f},')
     print(f'  art {VS_ART_W * vs_scale:.4f} x {VS_ART_H * vs_scale:.4f}, cell'
           f' {NOTE_SPACING * 2.8 * 1.95 * (INITIAL_H / INITIAL_W) ** 2:.4f}')
+
+    # -----------------------------------------------------------------------
+    # Against the screenshots
+    # -----------------------------------------------------------------------
+    # Both taken on the same 2772x1280 phone. The scale mode leaves FlxG.height at 720 and
+    # widens FlxG.width, so a game pixel is 1280/720 device pixels and the game is 1559 wide.
+    PX = 1280 / 720
+    W = 2772 / PX
+    print()
+    print(f'Measured off the two screenshots (2772x1280, so FlxG is {W:.0f}x720):')
+    vs_shot = [717.5, 1066.0, 1641.5, 1988.0]          # centre of the grey fill, device px
+    vs_shot_y = 1064.0
+    ps, _ = psych(W, 720.0)
+    print(f'  {"lane":<7}{"V-Slice":>10}{"predicted":>11}{"delta":>8}')
+    for name, shot, b in zip(['left', 'down', 'up', 'right'], vs_shot, ps):
+        got = (b['art_x'] + b['art_w'] / 2) * PX
+        print(f'  {name:<7}{shot:>10.1f}{got:>11.1f}{got - shot:>8.1f}')
+    got_y = (ps[0]['art_y'] + ps[0]['art_h'] / 2) * PX
+    print(f'  {"y":<7}{vs_shot_y:>10.1f}{got_y:>11.1f}{got_y - vs_shot_y:>8.1f}')
+    print('  The leftover is a near uniform 10-19px to the right, about half a percent of the')
+    print('  screen. It is in the model as much as in the port - the same offset shows up')
+    print('  comparing the model against V-Slice\'s own screenshot - so it is not chased here.')
