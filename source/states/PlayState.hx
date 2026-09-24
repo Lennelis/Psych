@@ -375,6 +375,11 @@ class PlayState extends MusicBeatState
 		// for lua
 		instance = this;
 
+		// Before a single note or receptor exists, because both read it as they load their
+		// frames. V-Slice's Arrows layout draws them 1.096875 of usual; every other layout,
+		// and every other state, draws them at 1 and is byte for byte what it was.
+		Note.artScale = ClientPrefs.usingArrowsLayout() ? ARROWS_STRUM_SCALE : 1;
+
 		PauseSubState.songName = null; //Reset to default
 		playbackRate = ClientPrefs.getGameplaySetting('songspeed');
 
@@ -647,7 +652,10 @@ class PlayState extends MusicBeatState
 		iconP2.alpha = ClientPrefs.data.healthBarAlpha;
 		uiGroup.add(iconP2);
 
-		scoreTxt = new FlxText(0, healthBar.y + 40, FlxG.width, "", 20);
+		// The three pixels the alignment still wanted after the bar moved. A fifth of a unit of
+		// it is noise on centred text; the rest is V-Slice hanging its counter off the bar's
+		// right edge rather than centring it.
+		scoreTxt = new FlxText(VSliceVisuals.strumline ? -1.7 : 0, healthBar.y + 40, FlxG.width, "", 20);
 		scoreTxt.setFormat(Paths.font("vcr.ttf"), 20, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 		scoreTxt.scrollFactor.set();
 		scoreTxt.borderSize = 1.25;
@@ -4678,6 +4686,9 @@ class PlayState extends MusicBeatState
 	}
 
 	override function destroy() {
+		// A static, and the chart editor builds notes of its own.
+		Note.artScale = 1;
+
 		#if mobile
 		lime.system.System.allowScreenTimeout = true;
 		#end

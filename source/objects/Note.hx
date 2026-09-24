@@ -95,6 +95,24 @@ class Note extends FlxSprite
 
 	public static var SUSTAIN_SIZE:Int = 44;
 	public static var swagWidth:Float = 160 * 0.7;
+
+	/**
+	 * How much bigger than usual a note and its receptor are drawn.
+	 *
+	 * V-Slice's mobile Arrows layout scales its receptors by 1.096875 on top of the note
+	 * style's own 0.7, and measuring both games' screenshots put its arrow at 118px against
+	 * ours at 107 - the same 10%. Nothing else about the lane changes: the spacing already
+	 * carries that factor separately, and `swagWidth` still measures a cell rather than an
+	 * arrow.
+	 *
+	 * A size, never a length. A hold's height is how long it lasts, so the constructor takes
+	 * this back out of a body's `scale.y` before working the time in; the end cap keeps it,
+	 * since a cap is a picture.
+	 *
+	 * `PlayState` sets it and puts it back to 1 on the way out - it is a static, and the chart
+	 * editor builds notes of its own.
+	 */
+	public static var artScale:Float = 1;
 	public static var colArray:Array<String> = ['purple', 'blue', 'green', 'red'];
 	public static var defaultNoteSkin(default, never):String = 'noteSkins/NOTE_assets';
 
@@ -300,12 +318,19 @@ class Note extends FlxSprite
 			{
 				prevNote.animation.play(colArray[prevNote.noteData % colArray.length] + 'hold');
 
+				// Out before the time goes in. What is left is the same scale.y a body has
+				// always had, so every sum below it - the crochet, the song speed, the pixel
+				// adjustment, and `resizeByRatio` later - lands where it always did.
+				prevNote.scale.y /= artScale;
+
 				prevNote.scale.y *= Conductor.stepCrochet / 100 * 1.05;
 				if(createdFrom != null && createdFrom.songSpeed != null) prevNote.scale.y *= createdFrom.songSpeed;
 
 				if(PlayState.isPixelStage) {
 					prevNote.scale.y *= 1.19;
-					prevNote.scale.y *= (6 / height); //Auto adjust note size
+					// `height` is the cap being built, which is drawn at the art scale, so the
+					// factor has to come off here too or it would be counted twice.
+					prevNote.scale.y *= (6 * artScale / height); //Auto adjust note size
 				}
 				prevNote.updateHitbox();
 				// prevNote.setGraphicSize();
@@ -394,7 +419,7 @@ class Note extends FlxSprite
 				var graphic = Paths.image('pixelUI/' + skinPixel + skinPostfix);
 				loadGraphic(graphic, true, Math.floor(graphic.width / 4), Math.floor(graphic.height / 5));
 			}
-			setGraphicSize(Std.int(width * PlayState.daPixelZoom));
+			setGraphicSize(Std.int(width * PlayState.daPixelZoom * artScale));
 			loadPixelNoteAnims();
 			antialiasing = false;
 
@@ -442,7 +467,7 @@ class Note extends FlxSprite
 		}
 		else animation.addByPrefix(colArray[noteData] + 'Scroll', colArray[noteData] + '0');
 
-		setGraphicSize(Std.int(width * 0.7));
+		setGraphicSize(Std.int(width * 0.7 * artScale));
 		updateHitbox();
 	}
 
@@ -533,14 +558,15 @@ class Note extends FlxSprite
 				{
 					y -= PlayState.daPixelZoom * 9.5;
 				}
-				y -= (frameHeight * scale.y) - (Note.swagWidth / 2);
+				y -= (frameHeight * scale.y) - (Note.swagWidth * artScale / 2);
 			}
 		}
 	}
 
 	public function clipToStrumNote(myStrum:StrumNote)
 	{
-		var center:Float = myStrum.y + offsetY + Note.swagWidth / 2;
+		// Half a receptor, which is half a cell only while the art is drawn at its usual size.
+		var center:Float = myStrum.y + offsetY + Note.swagWidth * artScale / 2;
 		if((mustPress || !ignoreNote) && (wasGoodHit || (prevNote.wasGoodHit && !canBeHit)))
 		{
 			var swagRect:FlxRect = clipRect;
