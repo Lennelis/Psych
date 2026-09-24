@@ -133,6 +133,52 @@ class ClientPrefs {
 	public static var data:SaveVariables = {};
 	public static var defaultData:SaveVariables = {};
 
+	/**
+	 * Whether the mobile Arrows control scheme owns the strumlines.
+	 *
+	 * V-Slice's Arrows scheme is not a set of buttons beside the game, it is the game laid out
+	 * to be played with thumbs: the receptors are what you tap, so they move to the bottom of
+	 * the screen, spread out, and split into two pairs, and the opponent's shrink into a
+	 * corner. Reading it as a layout rather than as a control setting is what lets the rest of
+	 * the engine ask one question instead of four.
+	 */
+	public static function usingArrowsLayout():Bool
+	{
+		#if TOUCH_CONTROLS_ALLOWED
+		return data.gameplayControls == 'Arrows';
+		#else
+		return false;
+		#end
+	}
+
+	/**
+	 * Downscroll as gameplay should read it, rather than as the player set it.
+	 *
+	 * The Arrows layout puts the receptors at the bottom of the screen under the player's
+	 * thumbs, so the notes have to come down to meet them - upscroll there would have them
+	 * fly away from the thing being tapped. V-Slice forces it the same way, in the same place:
+	 * `Strumline.isDownscroll` is the Arrows scheme or the preference, never just the
+	 * preference.
+	 *
+	 * The setting itself is left alone, so turning the scheme off gives it back.
+	 */
+	public static var scrollsDown(get, never):Bool;
+
+	static function get_scrollsDown():Bool
+		return usingArrowsLayout() || data.downScroll;
+
+	/**
+	 * Middlescroll as gameplay should read it.
+	 *
+	 * Off under the Arrows layout, which centres the player's receptors itself and pushes the
+	 * opponent's into a corner - middlescroll would be a second answer to the same question,
+	 * and the two together put the strumlines somewhere neither of them meant.
+	 */
+	public static var scrollsMiddle(get, never):Bool;
+
+	static function get_scrollsMiddle():Bool
+		return !usingArrowsLayout() && data.middleScroll;
+
 	//Every key has two binds, add your key bind down here and then add your control on options/ControlsSubState.hx and Controls.hx
 	public static var keyBinds:Map<String, Array<FlxKey>> = [
 		//Key Bind, Name for ControlsSubState

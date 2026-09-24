@@ -576,7 +576,7 @@ class PlayState extends MusicBeatState
 		timeTxt.alpha = 0;
 		timeTxt.borderSize = 2;
 		timeTxt.visible = updateTime = showTime;
-		if(ClientPrefs.data.downScroll) timeTxt.y = FlxG.height - 44;
+		if(ClientPrefs.scrollsDown) timeTxt.y = FlxG.height - 44;
 		if(ClientPrefs.data.timeBarType == 'Song Name') timeTxt.text = SONG.song;
 
 		timeBar = new Bar(0, timeTxt.y + (timeTxt.height / 4), 'timeBar', function() return songPercent, 0, 1);
@@ -621,7 +621,7 @@ class PlayState extends MusicBeatState
 		moveCameraSection();
 
 		healthLerp = health;
-		healthBar = new Bar(0, FlxG.height * (!ClientPrefs.data.downScroll ? 0.89 : 0.11), 'healthBar', function() return ClientPrefs.data.smoothHealthBar ? healthLerp : health, 0, 2);
+		healthBar = new Bar(0, FlxG.height * (!ClientPrefs.scrollsDown ? 0.89 : 0.11), 'healthBar', function() return ClientPrefs.data.smoothHealthBar ? healthLerp : health, 0, 2);
 		healthBar.screenCenter(X);
 		healthBar.leftToRight = false;
 		healthBar.scrollFactor.set();
@@ -680,7 +680,7 @@ class PlayState extends MusicBeatState
 		botplayTxt.borderSize = 1.25;
 		botplayTxt.visible = cpuControlled;
 		uiGroup.add(botplayTxt);
-		if(ClientPrefs.data.downScroll)
+		if(ClientPrefs.scrollsDown)
 			botplayTxt.y = healthBar.y + 70;
 
 		uiGroup.cameras = [camHUD];
@@ -1213,7 +1213,7 @@ class PlayState extends MusicBeatState
 						{
 							note.copyAlpha = false;
 							note.alpha = note.multAlpha;
-							if(ClientPrefs.data.middleScroll && !note.mustPress)
+							if(ClientPrefs.scrollsMiddle && !note.mustPress)
 								note.alpha *= 0.35;
 						}
 					});
@@ -1661,7 +1661,7 @@ class PlayState extends MusicBeatState
 								oldNote.resizeByRatio(curStepCrochet / Conductor.stepCrochet);
 							}
 
-							if(ClientPrefs.data.downScroll)
+							if(ClientPrefs.scrollsDown)
 								sustainNote.correctionOffset = 0;
 						}
 						else if(oldNote.isSustainNote)
@@ -1671,7 +1671,8 @@ class PlayState extends MusicBeatState
 						}
 
 						if (sustainNote.mustPress) sustainNote.x += FlxG.width / 2; // general offset
-						else if(ClientPrefs.data.middleScroll)
+						else if(ClientPrefs.usingArrowsLayout()) sustainNote.visible = false;
+						else if(ClientPrefs.scrollsMiddle)
 						{
 							sustainNote.x += 310;
 							if(noteColumn > 1) //Up and Right
@@ -1684,7 +1685,11 @@ class PlayState extends MusicBeatState
 				{
 					swagNote.x += FlxG.width / 2; // general offset
 				}
-				else if(ClientPrefs.data.middleScroll)
+				// The mini opponent strumline shows its receptors and nothing else, which is
+				// what `enterMiniMode` amounts to - everything in the group but the receptors
+				// goes invisible, the notes with it.
+				else if(ClientPrefs.usingArrowsLayout()) swagNote.visible = false;
+				else if(ClientPrefs.scrollsMiddle)
 				{
 					swagNote.x += 310;
 					if(noteColumn > 1) //Up and Right
@@ -1832,17 +1837,112 @@ class PlayState extends MusicBeatState
 	/** How far past the arrows a strumline background reaches, V-Slice's `BACKGROUND_PAD`. */
 	public static inline var STRUM_BACK_PAD:Int = 16;
 
+	// ---------------------------------------------------------------------------------------
+	// The mobile Arrows layout, from V-Slice's `PlayState.initNoteHitbox`
+	// ---------------------------------------------------------------------------------------
+
+	/**
+	 * How much wider apart the player's receptors sit, and how much of that is which.
+	 *
+	 * V-Slice works both out from the screen it is running on -
+	 * `(FlxG.height / FlxG.width) * k * amplification` - but the amplification is
+	 * `(W/H) / (W0/H0)`, so the aspect cancels and what is left is `k * H0 / W0`, the same
+	 * number on every device. They are written out here rather than recomputed, since the
+	 * arithmetic only ever came to this.
+	 *
+	 * The two are separate there because one scales the art and the other the gaps; only their
+	 * product reaches the spacing, which is what these are used for.
+	 */
+	static inline var ARROWS_SPACING_SCALE:Float = 1.575; // 2.8 * 720 / 1280
+
+	static inline var ARROWS_STRUM_SCALE:Float = 1.096875; // 1.95 * 720 / 1280
+
+	/**
+	 * The shove that splits the four into two pairs.
+	 *
+	 * `Strumline.getXPos` moves left and down out by twice this and up and right in by it, but
+	 * only for the player and only in this scheme, which leaves a wider gap down the middle
+	 * than between either pair - a thumb to each side, rather than four in a row.
+	 */
+	static inline var ARROWS_SPLIT:Float = 35;
+
+	/** `Constants.STRUMLINE_X_OFFSET` and `_Y_OFFSET`. */
+	static inline var ARROWS_X_OFFSET:Float = 48;
+
+	static inline var ARROWS_Y_OFFSET:Float = 24;
+
+	/** What `enterMiniMode` shrinks the opponent's to. */
+	static inline var ARROWS_MINI_SCALE:Float = 0.4;
+
+	/**
+	 * Where a receptor rests under the mobile Arrows layout.
+	 *
+	 * That scheme is not a set of buttons beside the game, it is the game arranged to be
+	 * played with thumbs. The player's receptors come down to the bottom of the screen, spread
+	 * out, and split into two pairs with a gap down the middle; the opponent's shrink into the
+	 * top left corner and their notes stop being drawn, since a mini strumline with full sized
+	 * notes flying into it is not a picture of anything. Downscroll and middlescroll are
+	 * decided by the same layout, in `ClientPrefs.scrollsDown` and `scrollsMiddle`.
+	 *
+	 * Called per receptor and before the arrival tween, because that tween reads the y it is
+	 * heading for when it is made - moving the arrow afterwards would have it slide back to
+	 * where it was a second into the song.
+	 *
+	 * The numbers are V-Slice's, with two left out. `INITIAL_OFFSET`, a further -28.6 on every
+	 * receptor, is left out for the same reason `VSliceVisuals.STRUM_X_NUDGE` leaves it out:
+	 * the build being matched does not appear to apply it, and the picture wins over the
+	 * arithmetic. And the 1.0969 the receptors themselves are scaled by is left out because in
+	 * Psych a note's size comes from `Note.swagWidth` and `setGraphicSize`, which also drive
+	 * sustain clipping and where the hold covers sit - scaling the receptors alone would leave
+	 * the notes visibly smaller than the things they land on.
+	 */
+	function placeArrowsStrum(strum:StrumNote, player:Int, column:Int):Void
+	{
+		if (strum == null || column < 0 || column > 3) return;
+
+		if (player == 1)
+		{
+			// V-Slice measures its strumline as four whole cells rather than three gaps and an
+			// arrow, and centres that. Keeping its measure keeps its centre.
+			var spacing:Float = Note.swagWidth * ARROWS_SPACING_SCALE * ARROWS_STRUM_SCALE;
+			var left:Float = (FlxG.width - spacing * 4) / 2 + ARROWS_X_OFFSET;
+			var lane:Array<Float> = [
+				-ARROWS_SPLIT * 2,
+				-ARROWS_SPLIT * 2 + spacing,
+				ARROWS_SPLIT + spacing * 2,
+				ARROWS_SPLIT + spacing * 3
+			];
+
+			strum.x = left + lane[column];
+			strum.y = (FlxG.height - strum.height) * 0.95 - ARROWS_Y_OFFSET;
+
+			if (isPixelStage) strum.y -= 10;
+			#if android
+			else strum.y += 10;
+			#end
+			return;
+		}
+
+		// Scaled from where it already is rather than set outright, because the 0.7 every note
+		// and receptor is drawn at is in there and this is 40% of that, not 40% of the sheet.
+		strum.scale.x *= ARROWS_MINI_SCALE;
+		strum.scale.y *= ARROWS_MINI_SCALE;
+		strum.updateHitbox();
+		strum.x = ARROWS_X_OFFSET - 30 + Note.swagWidth * ARROWS_MINI_SCALE * column;
+		strum.y = ARROWS_Y_OFFSET * 0.3;
+	}
+
 	public var skipArrowStartTween:Bool = false; //for lua
 	private function generateStaticArrows(player:Int):Void
 	{
-		var strumLineX:Float = ClientPrefs.data.middleScroll ? STRUM_X_MIDDLESCROLL : STRUM_X;
-		var strumLineY:Float = ClientPrefs.data.downScroll ? (FlxG.height - 150) : 50;
+		var strumLineX:Float = ClientPrefs.scrollsMiddle ? STRUM_X_MIDDLESCROLL : STRUM_X;
+		var strumLineY:Float = ClientPrefs.scrollsDown ? (FlxG.height - 150) : 50;
 
 		// V-Slice's strumlines sit a good way left of Psych's - the note spacing and the 0.7
 		// they are both drawn at are the same, so the whole difference is this one nudge. Not
 		// applied on middlescroll, which has already moved them somewhere else entirely and
 		// centred them on purpose.
-		if (VSliceVisuals.strumline && !ClientPrefs.data.middleScroll)
+		if (VSliceVisuals.strumline && !ClientPrefs.scrollsMiddle)
 			strumLineX += VSliceVisuals.STRUM_X_NUDGE;
 		for (i in 0...4)
 		{
@@ -1851,11 +1951,33 @@ class PlayState extends MusicBeatState
 			if (player < 1)
 			{
 				if(!ClientPrefs.data.opponentStrums) targetAlpha = 0;
-				else if(ClientPrefs.data.middleScroll) targetAlpha = 0.35;
+				else if(ClientPrefs.scrollsMiddle) targetAlpha = 0.35;
 			}
 
 			var babyArrow:StrumNote = new StrumNote(strumLineX, strumLineY, i, player);
-			babyArrow.downScroll = ClientPrefs.data.downScroll;
+			babyArrow.downScroll = ClientPrefs.scrollsDown;
+
+			if (player == 1)
+				playerStrums.add(babyArrow);
+			else
+			{
+				if(ClientPrefs.scrollsMiddle)
+				{
+					babyArrow.x += 310;
+					if(i > 1) { //Up and Right
+						babyArrow.x += FlxG.width / 2 + 25;
+					}
+				}
+				opponentStrums.add(babyArrow);
+			}
+
+			strumLineNotes.add(babyArrow);
+			babyArrow.playerPosition();
+
+			// Where it will rest is settled before the arrival, not after: the tween below
+			// reads the y it is heading for when it is made.
+			if (ClientPrefs.usingArrowsLayout()) placeArrowsStrum(babyArrow, player, i);
+
 			// Story mode used to skip the arrival entirely; V-Slice plays it either way, so the
 			// Transitions group takes the story exemption off as well as putting the lift back.
 			if ((!isStoryMode || VSliceVisuals.transitions) && !skipArrowStartTween)
@@ -1874,23 +1996,6 @@ class PlayState extends MusicBeatState
 					FlxTween.tween(babyArrow, {alpha: targetAlpha}, 1, {ease: FlxEase.circOut, startDelay: 0.5 + (0.2 * i)});
 			}
 			else babyArrow.alpha = targetAlpha;
-
-			if (player == 1)
-				playerStrums.add(babyArrow);
-			else
-			{
-				if(ClientPrefs.data.middleScroll)
-				{
-					babyArrow.x += 310;
-					if(i > 1) { //Up and Right
-						babyArrow.x += FlxG.width / 2 + 25;
-					}
-				}
-				opponentStrums.add(babyArrow);
-			}
-
-			strumLineNotes.add(babyArrow);
-			babyArrow.playerPosition();
 
 			if(ClientPrefs.data.holdCovers)
 			{
@@ -3070,7 +3175,7 @@ class PlayState extends MusicBeatState
 
 		notes.forEachAlive(function(note:Note)
 		{
-			var targetY:Float = ClientPrefs.data.downScroll ? note.y - FlxG.height : FlxG.height + note.y;
+			var targetY:Float = ClientPrefs.scrollsDown ? note.y - FlxG.height : FlxG.height + note.y;
 			FlxTween.cancelTweensOf(note);
 			FlxTween.tween(note, {y: targetY}, VWOOSH_TIME, {ease: FlxEase.expoIn});
 			moved = true;
@@ -4622,7 +4727,7 @@ class PlayState extends MusicBeatState
 		}
 
 		if (generatedMusic)
-			notes.sort(FlxSort.byY, ClientPrefs.data.downScroll ? FlxSort.ASCENDING : FlxSort.DESCENDING);
+			notes.sort(FlxSort.byY, ClientPrefs.scrollsDown ? FlxSort.ASCENDING : FlxSort.DESCENDING);
 
 		iconP1.scale.set(ICON_BOP_SCALE, ICON_BOP_SCALE);
 		iconP2.scale.set(ICON_BOP_SCALE, ICON_BOP_SCALE);

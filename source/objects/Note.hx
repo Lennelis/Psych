@@ -250,7 +250,7 @@ class Note extends FlxSprite
 		this.inEditor = inEditor;
 		this.moves = false;
 
-		x += (ClientPrefs.data.middleScroll ? PlayState.STRUM_X_MIDDLESCROLL : PlayState.STRUM_X) + 50;
+		x += (ClientPrefs.scrollsMiddle ? PlayState.STRUM_X_MIDDLESCROLL : PlayState.STRUM_X) + 50;
 		// MAKE SURE ITS DEFINITELY OFF SCREEN?
 		y -= 2000;
 		this.strumTime = strumTime;
@@ -282,7 +282,7 @@ class Note extends FlxSprite
 			alpha = 0.6;
 			multAlpha = 0.6;
 			hitsoundDisabled = true;
-			if(ClientPrefs.data.downScroll) flipY = true;
+			if(ClientPrefs.scrollsDown) flipY = true;
 
 			offsetX += width / 2;
 			copyAngle = false;
