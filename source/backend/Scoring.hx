@@ -6,8 +6,13 @@ package backend;
  * Psych scores a note by which judgement it landed in - 350 for a sick, 200 for a good, and
  * so on down - so every sick is worth the same whether it was 1ms out or 44. V-Slice's PBOT1
  * ("Points Based On Timing") scores the timing itself, on a curve, so the whole range between
- * a perfect hit and a miss is worth something different. The judgement windows are the same
- * either way; it is only what a note pays that changes.
+ * a perfect hit and a miss is worth something different.
+ *
+ * The judgement windows are the same either way - 45, 90 and 135ms - but the hit window is
+ * not: V-Slice's is 160ms, where Psych's comes from Safe Frames and is 166.67 by default.
+ * Under this system the window is V-Slice's, because the curve is written to reach nothing at
+ * the edge of it and a wider one would have notes the game accepted as hits fall outside the
+ * only thing that can price them.
  *
  * The two also disagree about what a hold is worth. In Psych a sustain pays nothing at all -
  * `popUpScore` is only called for the note at the head - while V-Slice pays for holds by the
@@ -45,7 +50,13 @@ class Scoring
 	/** Inside this, a note is worth the full amount rather than a point off it. */
 	public static final PERFECT_THRESHOLD:Float = 5.0;
 
-	/** Past this, a note is a miss. Psych's own cutoff is `safeFrames`, which is 6.67ms wider. */
+	/**
+	 * Past this, a note is a miss - and under this system it is also where the hit window
+	 * ends, which is why `PlayState` sets `safeZoneOffset` from it rather than from Safe
+	 * Frames. The two are the same number in V-Slice, and they have to be: the curve is
+	 * written to reach nothing at the edge of the window, so a window wider than the curve
+	 * would score its last few milliseconds as a miss on a note it had just accepted as a hit.
+	 */
 	public static final MISS_THRESHOLD:Float = 160.0;
 
 	/**
@@ -53,12 +64,21 @@ class Scoring
 	 *
 	 * A sigmoid, so it falls away gently around a sick and steeply through the middle of the
 	 * window rather than stepping down at each judgement boundary.
+	 *
+	 * The timing is truncated first, as V-Slice truncates its own before handing it over -
+	 * `Std.int(songPosition - time - inputLatency)`. Worth at most a point a note, but it is a
+	 * point in the same direction every time.
+	 *
+	 * Only ever asked about a hit, so there is no miss to return: a note beyond the window is
+	 * charged by the miss path instead. V-Slice's version carries that branch and never
+	 * reaches it, since nothing outside its window is hittable; here a note type with a
+	 * widened `lateHitMult` can be, and the curve has an answer for it - it flattens out at
+	 * the minimum rather than falling off a cliff.
 	 */
 	public static function scoreNote(msTiming:Float):Int
 	{
-		var absTiming:Float = Math.abs(msTiming);
+		var absTiming:Float = Math.abs(Std.int(msTiming));
 
-		if (absTiming > MISS_THRESHOLD) return MISS_SCORE;
 		if (absTiming < PERFECT_THRESHOLD) return MAX_SCORE;
 
 		var factor:Float = 1.0 - (1.0 / (1.0 + Math.exp(-SCORING_SLOPE * (absTiming - SCORING_OFFSET))));
@@ -110,17 +130,16 @@ class Scoring
 	/**
 	 * How long a piece of sustain stands for, in song milliseconds.
 	 *
-	 * V-Slice holds one note object per sustain and pays it out per frame against how much of
-	 * it is left; Psych chops a sustain into a note every step and hits them one at a time.
-	 * Paying each of those for the step it covers comes to the same rate over the same hold,
-	 * without a second way of tracking a hold running alongside the first.
+	 * V-Slice holds one note object per sustain; Psych chops it into a note every step and
+	 * hits them one at a time, which is the only moment it learns a hold is still being held.
+	 * A piece therefore stands for the step it covers, and `PlayState` runs the same clock
+	 * forward between pieces so the payout arrives per frame as V-Slice's does rather than
+	 * four times a second.
+	 *
+	 * It is also what a dropped piece is charged for, and what a remaining tail is measured in.
 	 */
 	public static function holdPieceLength():Float
 		return Conductor.stepCrochet;
-
-	/** What a piece of held sustain heals. */
-	public static function healthHoldPiece():Float
-		return HEALTH_HOLD_BONUS_PER_SECOND * holdPieceLength() / 1000;
 
 	/**
 	 * What letting go of a hold with this much left on it costs.

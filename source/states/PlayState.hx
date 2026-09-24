@@ -282,6 +282,9 @@ class PlayState extends MusicBeatState
 	var holdTimeLive:Float = 0;
 
 	var holdScorePaid:Int = 0;
+
+	/** The same, for health: V-Slice heals a hold per frame as well, at 6% of the bar a second. */
+	var holdHealthPaid:Float = 0;
 	public var songHits:Int = 0;
 	public var songMisses:Int = 0;
 	public var scoreTxt:FlxText;
@@ -840,7 +843,11 @@ class PlayState extends MusicBeatState
 		playbackRate = value;
 		FlxG.animationTimeScale = value;
 		Conductor.offset = Reflect.hasField(PlayState.SONG, 'offset') ? (PlayState.SONG.offset / value) : 0;
-		Conductor.safeZoneOffset = (ClientPrefs.data.safeFrames / 60) * 1000 * value;
+		// V-Slice's window is its miss threshold, and the curve is written to reach nothing at
+		// the edge of it. Psych's Safe Frames is 10 by default, which is 166.67ms - the last
+		// 6.67ms of that would be notes the game took as hits and the curve had already given
+		// up on, so under V-Slice's scoring the window is V-Slice's too.
+		Conductor.safeZoneOffset = (Scoring.usingVSlice ? Scoring.MISS_THRESHOLD : (ClientPrefs.data.safeFrames / 60) * 1000) * value;
 		#if VIDEOS_ALLOWED
 		if(videoCutscene != null && videoCutscene.videoSprite != null) videoCutscene.videoSprite.bitmap.rate = value;
 		#end
@@ -1353,7 +1360,16 @@ class PlayState extends MusicBeatState
 	 */
 	function payHoldScore():Void
 	{
-		var owed:Int = Math.round(Scoring.SCORE_HOLD_BONUS_PER_SECOND * (holdTimeHeld + holdTimeLive) / 1000);
+		var held:Float = holdTimeHeld + holdTimeLive;
+
+		// Health has no rounding to wait on, so it is handed over every frame rather than in
+		// whole points. `healthGain` is Psych's own multiplier from the gameplay modifiers and
+		// is 1 unless someone went looking for it.
+		var owedHealth:Float = Scoring.HEALTH_HOLD_BONUS_PER_SECOND * held / 1000;
+		health += (owedHealth - holdHealthPaid) * healthGain;
+		holdHealthPaid = owedHealth;
+
+		var owed:Int = Math.round(Scoring.SCORE_HOLD_BONUS_PER_SECOND * held / 1000);
 		if (owed == holdScorePaid) return;
 
 		songScore += owed - holdScorePaid;
@@ -4298,9 +4314,10 @@ class PlayState extends MusicBeatState
 
 			if (Scoring.usingVSlice)
 			{
-				// A hold is worth something here, which it is not under Psych's scoring: the
-				// head note pays for itself, and every step of sustain behind it pays for the
-				// step it covers.
+				// A hold is worth something here, which it is not under Psych's scoring: the head
+				// note pays for itself, and the hold behind it pays by the second in score and
+				// in health, both settled in `payHoldScore`. All a piece landing does is
+				// confirm the time the frame-by-frame estimate has been running on.
 				//
 				// `gainHealth` is not consulted for the sustain. It is off whenever
 				// `guitarHeroSustains` is, which is Psych saying a hold should be worth one
@@ -4310,8 +4327,6 @@ class PlayState extends MusicBeatState
 				// without its head, which happens before this and is left alone.
 				if (note.isSustainNote)
 				{
-					health += Scoring.healthHoldPiece() * healthGain;
-
 					if (!cpuControlled && !note.ratingDisabled)
 					{
 						// A piece landing confirms a step that the per-frame estimate has

@@ -47,7 +47,7 @@ class VSliceSettingsSubState extends BaseOptionsMenu
 		// lost: the hold scoring it switches on is the thing people come looking for, and they
 		// come looking in the V-Slice menu.
 		var option:Option = new Option('Scoring',
-			"Psych scores a note by its judgement. V-Slice scores the timing itself on a curve,\nand pays 250 a second for a hold, which Psych pays nothing at all for.\nHealth follows the judgement too, instead of a flat amount for anything you touch.\n\nJudgement windows are the same either way, but the totals are not comparable -\na high score set under one will read oddly beside the other.",
+			"Psych scores a note by its judgement. V-Slice scores the timing itself on a curve,\nand pays 250 a second for a hold, which Psych pays nothing at all for.\nHealth follows the judgement too, instead of a flat amount for anything you touch.\n\nSick, good and bad windows are the same either way; the hit window becomes V-Slice's\n160ms rather than Safe Frames. The totals are not comparable - a high score set\nunder one will read oddly beside the other.",
 			'scoringSystem',
 			STRING,
 			['Psych', 'V-Slice']);
