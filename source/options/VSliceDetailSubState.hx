@@ -27,7 +27,7 @@ class VSliceDetailSubState extends BaseOptionsMenu
 		addOption(option);
 
 		var option:Option = new Option('Strumline',
-			"Puts the strumlines where V-Slice has them - a little left of Psych's - and draws\nhold covers and note splashes over the oncoming notes instead of under them.",
+			"Puts the strumlines where V-Slice has them - a little left of Psych's - draws hold\ncovers and note splashes over the oncoming notes instead of under them, and moves\nthe health bar the one percent of the screen nearer the edge that V-Slice has it.",
 			'vsliceStrumline',
 			BOOL);
 		addOption(option);

@@ -621,7 +621,12 @@ class PlayState extends MusicBeatState
 		moveCameraSection();
 
 		healthLerp = health;
-		healthBar = new Bar(0, FlxG.height * (!ClientPrefs.scrollsDown ? 0.89 : 0.11), 'healthBar', function() return ClientPrefs.data.smoothHealthBar ? healthLerp : health, 0, 2);
+		// A percent nearer the edge under V-Slice's layout: its `initHealthBar` uses a tenth of
+		// the screen where Psych uses eleven hundredths, and on a 720 stage that one percent is
+		// the 13px the screenshots showed between the two bars. The score text hangs off this
+		// y, so it comes along without being told.
+		var barEdge:Float = VSliceVisuals.strumline ? 0.10 : 0.11;
+		healthBar = new Bar(0, FlxG.height * (!ClientPrefs.scrollsDown ? 1 - barEdge : barEdge), 'healthBar', function() return ClientPrefs.data.smoothHealthBar ? healthLerp : health, 0, 2);
 		healthBar.screenCenter(X);
 		healthBar.leftToRight = false;
 		healthBar.scrollFactor.set();
@@ -1895,9 +1900,21 @@ class PlayState extends MusicBeatState
 	 *
 	 * The x is the part that does not move with the screen; the widening is added to it.
 	 */
-	static inline var ARROWS_MINI_X:Float = 41.6;
+	static inline var ARROWS_MINI_X:Float = 44.4;
 
-	static inline var ARROWS_MINI_Y:Float = 59.3;
+	static inline var ARROWS_MINI_Y:Float = 60.4;
+
+	/**
+	 * What was left over, off two screenshots lined up by hand in an image editor.
+	 *
+	 * The four lanes were aligned one at a time and came out needing -7.3, -5.9, -6.4 and
+	 * -6.7 - the same shift four times over, not a spread. So the spacing and the split were
+	 * already right and the whole row was simply sitting that far right and low, which is the
+	 * 10 to 19px drift the earlier measurement found and declined to guess at.
+	 */
+	static inline var ARROWS_NUDGE_X:Float = -6.6;
+
+	static inline var ARROWS_NUDGE_Y:Float = -5.7;
 
 	/**
 	 * And how far it is faded, which is ours rather than V-Slice's - it leaves the mini
@@ -1999,8 +2016,8 @@ class PlayState extends MusicBeatState
 			// Then our arrow, centred on where theirs would be. Theirs is 118 across and ours
 			// 107, so matching corners would put every lane half a dozen pixels off; matching
 			// middles is what "the same place" means when the two are not the same size.
-			strum.x = left + lane[column] + (ARROWS_ART_WIDTH - strum.width) * 0.5;
-			strum.y = top + ARROWS_ART_TOP + (ARROWS_ART_HEIGHT - strum.height) * 0.5;
+			strum.x = left + lane[column] + (ARROWS_ART_WIDTH - strum.width) * 0.5 + ARROWS_NUDGE_X;
+			strum.y = top + ARROWS_ART_TOP + (ARROWS_ART_HEIGHT - strum.height) * 0.5 + ARROWS_NUDGE_Y;
 			return;
 		}
 
