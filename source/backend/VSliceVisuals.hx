@@ -59,6 +59,46 @@ class VSliceVisuals
 	static function get_sustains():Bool
 		return ClientPrefs.data.vsliceSustains;
 
+	// -----------------------------------------------------------------------------------------
+	// The seven as one
+	// -----------------------------------------------------------------------------------------
+
+	/**
+	 * The switches the menu's single Visuals row stands for.
+	 *
+	 * Named rather than listed as getters because this is the set the row writes, and a set
+	 * written by name is one the row cannot fall out of step with - adding a switch above and
+	 * forgetting it here would leave it off every preset, which is at least visible, where a
+	 * hand-written list of assignments would leave it silently stuck.
+	 */
+	public static final VISUAL_SWITCHES:Array<String> = [
+		'vslicePopups', 'vsliceStrumline', 'vsliceSustains', 'vsliceIcons', 'vsliceTransitions',
+		'vsliceHealthBar', 'vsliceScoreCounter'
+	];
+
+	/** 'Psych' with all of them off, 'V-Slice' with all of them on, 'Custom' anywhere between. */
+	public static function presetName():String
+	{
+		var on:Int = 0;
+		for (name in VISUAL_SWITCHES)
+			if (Reflect.getProperty(ClientPrefs.data, name) == true) on++;
+
+		if (on == 0) return 'Psych';
+		if (on == VISUAL_SWITCHES.length) return 'V-Slice';
+
+		return 'Custom';
+	}
+
+	/** Sets all of them at once. 'Custom' is not a state that can be applied, only left. */
+	public static function applyPreset(name:String):Void
+	{
+		if (name != 'Psych' && name != 'V-Slice') return;
+
+		var value:Bool = (name == 'V-Slice');
+		for (switchName in VISUAL_SWITCHES)
+			Reflect.setProperty(ClientPrefs.data, switchName, value);
+	}
+
 	/**
 	 * True when the song is using art V-Slice has a note style for, rather than a mod's own.
 	 *

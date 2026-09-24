@@ -85,7 +85,9 @@ class BaseOptionsMenu extends MusicBeatSubstate
 				checkbox.ID = i;
 				checkboxGroup.add(checkbox);
 			}
-			else
+			// A submenu row backs onto nothing, so it gets neither of the two - and it is left
+			// where a checkbox row sits rather than shifted over for a value that is not there.
+			else if(optionsArray[i].type != SUBMENU)
 			{
 				optionText.x -= 80;
 				optionText.startPosition.x -= 80;
@@ -159,6 +161,13 @@ class BaseOptionsMenu extends MusicBeatSubstate
 						curOption.setValue((curOption.getValue() == true) ? false : true);
 						curOption.change();
 						reloadCheckboxes();
+					}
+
+				case SUBMENU:
+					if(controls.ACCEPT && curOption.onAccept != null)
+					{
+						FlxG.sound.play(Paths.sound('scrollMenu'));
+						curOption.onAccept();
 					}
 
 				case KEYBIND:
@@ -269,7 +278,8 @@ class BaseOptionsMenu extends MusicBeatSubstate
 			if(controls.RESET)
 			{
 				var leOption:Option = optionsArray[curSelected];
-				if(leOption.type != KEYBIND)
+				if(leOption.type == SUBMENU) {} // no value to put back
+				else if(leOption.type != KEYBIND)
 				{
 					leOption.setValue(leOption.defaultValue);
 					if(leOption.type != BOOL)
@@ -463,6 +473,8 @@ class BaseOptionsMenu extends MusicBeatSubstate
 	}
 
 	function updateTextFrom(option:Option) {
+		if(option.type == SUBMENU) return;
+
 		if(option.type == KEYBIND)
 		{
 			updateBind(option);

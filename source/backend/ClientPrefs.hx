@@ -101,6 +101,15 @@ import states.TitleState;
 	public var vsliceSustains:Bool = false;
 	public var strumlineBackground:Float = 0;
 	public var restartAnimation:Bool = false;
+
+	/**
+	 * What the seven switches above add up to: 'Psych', 'V-Slice' or 'Custom'.
+	 *
+	 * Display state for the one row the V-Slice menu offers in their place, worked out from
+	 * the switches every time that menu opens. The switches stay the truth; this only ever
+	 * says what they came to, so the two cannot drift.
+	 */
+	public var vslicePreset:String = 'Psych';
 	public var discordRPC:Bool = true;
 	public var loadingScreen:Bool = true;
 	public var language:String = 'en-US';

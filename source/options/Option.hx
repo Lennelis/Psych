@@ -14,6 +14,9 @@ enum OptionType {
 	PERCENT;
 	STRING;
 	KEYBIND;
+	// A row that opens something rather than holding a value: no checkbox and no value
+	// beside it, and accepting it runs `onAccept`.
+	SUBMENU;
 }
 
 class Option
@@ -21,6 +24,7 @@ class Option
 	public var child:Alphabet;
 	public var text(get, set):String;
 	public var onChange:Void->Void = null; //Pressed enter (on Bool type options) or pressed/held left/right (on other types)
+	public var onAccept:Void->Void = null; //Only used in submenu type, what pressing enter does
 	public var type:OptionType = BOOL;
 
 	public var scrollSpeed:Float = 50; //Only works on int/float, defines how fast it scrolls per second while holding left/right
@@ -51,7 +55,7 @@ class Option
 		this.type = type;
 		this.options = options;
 
-		if(this.type != KEYBIND) this.defaultValue = Reflect.getProperty(ClientPrefs.defaultData, variable);
+		if(this.type != KEYBIND && this.type != SUBMENU) this.defaultValue = Reflect.getProperty(ClientPrefs.defaultData, variable);
 		switch(type)
 		{
 			case BOOL:
@@ -76,7 +80,13 @@ class Option
 				defaultValue = '';
 				defaultKeys = {gamepad: 'NONE', keyboard: 'NONE'};
 				keys = {gamepad: 'NONE', keyboard: 'NONE'};
+
+			case SUBMENU:
+				// Backs onto nothing, so there is no value to default and nothing below to do.
+				defaultValue = null;
 		}
+
+		if(this.type == SUBMENU) return;
 
 		try
 		{
