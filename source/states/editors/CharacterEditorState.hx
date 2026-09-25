@@ -19,6 +19,24 @@ import states.editors.content.PsychJsonPrinter;
 
 class CharacterEditorState extends MusicBeatState implements PsychUIEventHandler.PsychUIEvent
 {
+	#if TOUCH_CONTROLS_ALLOWED
+	/** Stands in for the keys the editor needs and a touchscreen has no way to press. */
+	var editorPad:mobile.objects.EditorPad;
+
+	inline function padHeld(tag:String):Bool
+		return editorPad != null && editorPad.held(tag);
+
+	inline function padTapped(tag:String):Bool
+		return editorPad != null && editorPad.tapped(tag);
+
+	inline function padOn(tag:String):Bool
+		return editorPad != null && editorPad.on(tag);
+	#else
+	inline function padHeld(tag:String):Bool return false;
+	inline function padTapped(tag:String):Bool return false;
+	inline function padOn(tag:String):Bool return false;
+	#end
+
 	var character:Character;
 	var ghost:FlxSprite;
 	var animateGhost:FlxAnimate;
@@ -163,6 +181,18 @@ class CharacterEditorState extends MusicBeatState implements PsychUIEventHandler
 
 		if(ClientPrefs.data.cacheOnGPU) Paths.clearUnusedMemory();
 
+		#if TOUCH_CONTROLS_ALLOWED
+		// One d-pad doing two jobs: nudging the offset, which is the whole point of this
+		// editor, and panning the camera while PAN is latched. Right-drag did the offsets
+		// before and a touchscreen has no right button.
+		editorPad = new mobile.objects.EditorPad([
+			['left', 'right', 'up', 'down', 'pan'],
+			['prev', 'next', 'play', 'zoom-', 'zoom+']
+		], ['pan']);
+		editorPad.cameras = [camHUD];
+		add(editorPad);
+		#end
+
 		super.create();
 	}
 
@@ -186,7 +216,17 @@ class CharacterEditorState extends MusicBeatState implements PsychUIEventHandler
 		"OTHER",
 		"F12 - Toggle Silhouettes",
 		"Hold Shift - Move Offsets 10x faster and Camera 4x faster",
-		"Hold Control - Move camera 4x slower"];
+		"Hold Control - Move camera 4x slower"
+		#if TOUCH_CONTROLS_ALLOWED
+		, "",
+		"ON-SCREEN PAD",
+		"Arrows - Move Offset",
+		"PAN - Hold the arrows to move the camera instead",
+		"PREV/NEXT - Previous/Next Animation",
+		"PLAY - Replay Animation",
+		"HIDE - Get the pad out of the way"
+		#end
+		];
 
 		helpBg = new FlxSprite().makeGraphic(1, 1, FlxColor.BLACK);
 		helpBg.scale.set(FlxG.width, FlxG.height);
@@ -876,18 +916,19 @@ class CharacterEditorState extends MusicBeatState implements PsychUIEventHandler
 		if(FlxG.keys.pressed.CONTROL) ctrlMult = 0.25;
 
 		// CAMERA CONTROLS
-		if (FlxG.keys.pressed.J) FlxG.camera.scroll.x -= elapsed * 500 * shiftMult * ctrlMult;
-		if (FlxG.keys.pressed.K) FlxG.camera.scroll.y += elapsed * 500 * shiftMult * ctrlMult;
-		if (FlxG.keys.pressed.L) FlxG.camera.scroll.x += elapsed * 500 * shiftMult * ctrlMult;
-		if (FlxG.keys.pressed.I) FlxG.camera.scroll.y -= elapsed * 500 * shiftMult * ctrlMult;
+		var panning:Bool = padOn('pan');
+		if (FlxG.keys.pressed.J || (panning && padHeld('left'))) FlxG.camera.scroll.x -= elapsed * 500 * shiftMult * ctrlMult;
+		if (FlxG.keys.pressed.K || (panning && padHeld('down'))) FlxG.camera.scroll.y += elapsed * 500 * shiftMult * ctrlMult;
+		if (FlxG.keys.pressed.L || (panning && padHeld('right'))) FlxG.camera.scroll.x += elapsed * 500 * shiftMult * ctrlMult;
+		if (FlxG.keys.pressed.I || (panning && padHeld('up'))) FlxG.camera.scroll.y -= elapsed * 500 * shiftMult * ctrlMult;
 
 		var lastZoom = FlxG.camera.zoom;
 		if(FlxG.keys.justPressed.R && !FlxG.keys.pressed.CONTROL) FlxG.camera.zoom = 1;
-		else if (FlxG.keys.pressed.E && FlxG.camera.zoom < 3) {
+		else if ((FlxG.keys.pressed.E || padHeld('zoom+')) && FlxG.camera.zoom < 3) {
 			FlxG.camera.zoom += elapsed * FlxG.camera.zoom * shiftMult * ctrlMult;
 			if(FlxG.camera.zoom > 3) FlxG.camera.zoom = 3;
 		}
-		else if (FlxG.keys.pressed.Q && FlxG.camera.zoom > 0.1) {
+		else if ((FlxG.keys.pressed.Q || padHeld('zoom-')) && FlxG.camera.zoom > 0.1) {
 			FlxG.camera.zoom -= elapsed * FlxG.camera.zoom * shiftMult * ctrlMult;
 			if(FlxG.camera.zoom < 0.1) FlxG.camera.zoom = 0.1;
 		}
@@ -898,8 +939,8 @@ class CharacterEditorState extends MusicBeatState implements PsychUIEventHandler
 		var changedAnim:Bool = false;
 		if(anims.length > 1)
 		{
-			if(FlxG.keys.justPressed.W && (changedAnim = true)) curAnim--;
-			else if(FlxG.keys.justPressed.S && (changedAnim = true)) curAnim++;
+			if((FlxG.keys.justPressed.W || padTapped('prev')) && (changedAnim = true)) curAnim--;
+			else if((FlxG.keys.justPressed.S || padTapped('next')) && (changedAnim = true)) curAnim++;
 
 			if(changedAnim)
 			{
@@ -911,8 +952,17 @@ class CharacterEditorState extends MusicBeatState implements PsychUIEventHandler
 		}
 
 		var changedOffset = false;
-		var moveKeysP = [FlxG.keys.justPressed.LEFT, FlxG.keys.justPressed.RIGHT, FlxG.keys.justPressed.UP, FlxG.keys.justPressed.DOWN];
-		var moveKeys = [FlxG.keys.pressed.LEFT, FlxG.keys.pressed.RIGHT, FlxG.keys.pressed.UP, FlxG.keys.pressed.DOWN];
+		// The pad's d-pad is the camera's while PAN is latched, so the offset only hears it
+		// when it is not.
+		var nudging:Bool = !panning;
+		var moveKeysP = [FlxG.keys.justPressed.LEFT || (nudging && padTapped('left')),
+			FlxG.keys.justPressed.RIGHT || (nudging && padTapped('right')),
+			FlxG.keys.justPressed.UP || (nudging && padTapped('up')),
+			FlxG.keys.justPressed.DOWN || (nudging && padTapped('down'))];
+		var moveKeys = [FlxG.keys.pressed.LEFT || (nudging && padHeld('left')),
+			FlxG.keys.pressed.RIGHT || (nudging && padHeld('right')),
+			FlxG.keys.pressed.UP || (nudging && padHeld('up')),
+			FlxG.keys.pressed.DOWN || (nudging && padHeld('down'))];
 		if(moveKeysP.contains(true))
 		{
 			character.offset.x += ((moveKeysP[0] ? 1 : 0) - (moveKeysP[1] ? 1 : 0)) * shiftMultBig;
@@ -994,7 +1044,7 @@ class CharacterEditorState extends MusicBeatState implements PsychUIEventHandler
 			}
 			else holdingFrameTime = 0;
 
-			if(FlxG.keys.justPressed.SPACE)
+			if(FlxG.keys.justPressed.SPACE || padTapped('play'))
 				character.playAnim(character.getAnimationName(), true);
 
 			var frames:Int = -1;

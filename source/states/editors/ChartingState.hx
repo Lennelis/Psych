@@ -28,6 +28,10 @@ import backend.StageData;
 import backend.Highscore;
 import backend.Difficulty;
 
+#if TOUCH_CONTROLS_ALLOWED
+import mobile.objects.EditorPad;
+#end
+
 import objects.Character;
 import objects.HealthIcon;
 import objects.Note;
@@ -143,6 +147,11 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	var upperBox:PsychUIBox;
 	
 	var camUI:FlxCamera;
+
+	#if TOUCH_CONTROLS_ALLOWED
+	/** Stands in for the keys the editor needs and a touchscreen has no way to press. */
+	var editorPad:EditorPad;
+	#end
 
 	// One grid for the whole song. It used to be three - the current section and its two
 	// neighbours - which is what made the chart read as a run of separate panels rather
@@ -603,9 +612,32 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			"Ctrl + V - Paste Copied Notes",
 			"Ctrl + A - Select all in current Section",
 			"Ctrl + S - Quicksave",
+			#if TOUCH_CONTROLS_ALLOWED
+			"",
+			"ON-SCREEN PAD",
+			"Up/Down - Scroll the View",
+			"PLAY - Stop/Resume song",
+			"PICK - Tap notes to select instead of placing them",
+			"DEL - Remove Selected Notes",
+			"SEC-/SEC+ - Change Sections",
+			"HIDE - Get the pad out of the way",
+			#end
 		].join('\n');
 		fullTipText.screenCenter();
 		add(fullTipText);
+
+		#if TOUCH_CONTROLS_ALLOWED
+		// Placing, dragging and the tab boxes already work from touch, because OpenFL sends
+		// a finger through as mouse events. Only the keys needed standing in for. Bottom row
+		// first, so the ones used constantly sit nearest the thumb.
+		editorPad = new EditorPad([
+			['up', 'down', 'play', 'pick', 'del'],
+			['sec-', 'sec+', 'zoom-', 'zoom+', 'undo']
+		], ['pick']);
+		editorPad.cameras = [camUI];
+		add(editorPad);
+		#end
+
 		super.create();
 	}
 
@@ -725,6 +757,46 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 	var _ringed:Array<MetaNote> = [];
 	var selectedNotes:Array<MetaNote> = [];
 	var ignoreClickForThisFrame:Bool = false;
+
+	/** True while the on-screen pad's button is held. Always false without one. */
+	inline function padHeld(tag:String):Bool
+	{
+		#if TOUCH_CONTROLS_ALLOWED
+		return editorPad != null && editorPad.held(tag);
+		#else
+		return false;
+		#end
+	}
+
+	/** True on the frame the pad's button went down. */
+	inline function padTapped(tag:String):Bool
+	{
+		#if TOUCH_CONTROLS_ALLOWED
+		return editorPad != null && editorPad.tapped(tag);
+		#else
+		return false;
+		#end
+	}
+
+	/** Where one of the pad's latching buttons stands. */
+	inline function padOn(tag:String):Bool
+	{
+		#if TOUCH_CONTROLS_ALLOWED
+		return editorPad != null && editorPad.on(tag);
+		#else
+		return false;
+		#end
+	}
+
+	/** True while the pointer is over the pad, so the grid underneath ignores the tap. */
+	inline function padUnderPointer():Bool
+	{
+		#if TOUCH_CONTROLS_ALLOWED
+		return editorPad != null && editorPad.underPointer();
+		#else
+		return false;
+		#end
+	}
 	var outputAlpha:Float = 0;
 	var songFinished:Bool = false;
 
@@ -842,7 +914,13 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 
 		var lastTime:Float = Conductor.songPosition;
 		outputAlpha = Math.max(0, outputAlpha - elapsed);
-		var holdingAlt:Bool = FlxG.keys.pressed.ALT;
+		// PICK latches because a touchscreen has no modifier to hold: with it on a tap picks
+		// out the note under it instead of placing one, which is what ALT already did.
+		var holdingAlt:Bool = FlxG.keys.pressed.ALT || padOn('pick');
+		var sectionBack:Bool = FlxG.keys.justPressed.A || padTapped('sec-');
+		var sectionForward:Bool = FlxG.keys.justPressed.D || padTapped('sec+');
+		var zoomOut:Bool = FlxG.keys.justPressed.Z || padTapped('zoom-');
+		var zoomIn:Bool = FlxG.keys.justPressed.X || padTapped('zoom+');
 		if(FlxG.sound.music != null)
 		{
 			if(PsychUIInputText.focusOn == null) //If not typing anything
@@ -945,7 +1023,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 
 					softReloadNotes(true);
 				}
-				else if(FlxG.keys.justPressed.A != FlxG.keys.justPressed.D && !holdingAlt)
+				else if(sectionBack != sectionForward && !holdingAlt)
 				{
 					snapViewToPlayhead();
 					if(FlxG.sound.music.playing)
@@ -953,7 +1031,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 
 					var shiftAdd:Int = FlxG.keys.pressed.SHIFT ? 4 : 1;
 
-					if(FlxG.keys.justPressed.A)
+					if(sectionBack)
 					{
 						if(curSec - shiftAdd < 0) shiftAdd = curSec;
 
@@ -963,7 +1041,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 							Conductor.songPosition = FlxG.sound.music.time = cachedSectionTimes[curSec] - Conductor.offset + 0.000001;
 						}
 					}
-					else if(FlxG.keys.justPressed.D)
+					else if(sectionForward)
 					{
 						if(curSec + shiftAdd >= PlayState.SONG.notes.length) shiftAdd = PlayState.SONG.notes.length - curSec - 1;
 						
@@ -995,6 +1073,14 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					if(!FlxG.keys.pressed.SHIFT) timeToGoBack = cachedSectionTimes[curSec] + (curSec > 0 ? 0.000001 : 0);
 					else loadSection(0);
 					Conductor.songPosition = FlxG.sound.music.time = vocals.time = opponentVocals.time = timeToGoBack;
+				}
+				else if(padHeld('up') != padHeld('down'))
+				{
+					// Moves the view and leaves the song alone, the way the wheel does - looking
+					// somewhere else without losing your place is most of what a phone needs.
+					// Held rather than notched, so the step is measured by the frame.
+					var step:Float = GRID_SIZE * 4 * curZoom * 6 * elapsed;
+					viewOffsetTarget += padHeld('up') ? -step : step;
 				}
 				else if(FlxG.mouse.wheel != 0 && !FlxG.keys.pressed.CONTROL)
 				{
@@ -1032,7 +1118,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					FlxG.sound.music.time = FlxMath.bound(FlxG.sound.music.time, 0, FlxG.sound.music.length - 1);
 					if(FlxG.sound.music.playing) setSongPlaying(!FlxG.sound.music.playing);
 				}
-				else if(FlxG.keys.justPressed.SPACE)
+				else if(FlxG.keys.justPressed.SPACE || padTapped('play'))
 				{
 					// Play from the line rather than from wherever the song was left. The line
 					// is the row you are working at, so scrolling somewhere and pressing play
@@ -1084,6 +1170,11 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			{
 				goToPlayState();
 				return;
+			}
+			else if(padTapped('undo') && !isMovingNotes)
+			{
+				canContinue = false;
+				undo();
 			}
 			else if(FlxG.keys.pressed.CONTROL && !isMovingNotes && (FlxG.keys.justPressed.Z || FlxG.keys.justPressed.Y || FlxG.keys.justPressed.X ||
 				FlxG.keys.justPressed.C || FlxG.keys.justPressed.V || FlxG.keys.justPressed.A || FlxG.keys.justPressed.S))
@@ -1167,7 +1258,7 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 					saveChart();
 			}
 			
-			if(doCut || FlxG.keys.justPressed.DELETE || FlxG.keys.justPressed.BACKSPACE || (isMovingNotes && (FlxG.mouse.justPressedRight || FlxG.keys.justPressed.ESCAPE))) // Delete button
+			if(doCut || FlxG.keys.justPressed.DELETE || FlxG.keys.justPressed.BACKSPACE || padTapped('del') || (isMovingNotes && (FlxG.mouse.justPressedRight || FlxG.keys.justPressed.ESCAPE))) // Delete button
 			{
 				if(selectedNotes.length > 0)
 				{
@@ -1213,9 +1304,9 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 						curQuant = quantizations[Std.int(Math.min(quantizations.indexOf(curQuant) + 1, quantizations.length - 1))];
 					forceDataUpdate = true;
 				}
-				else if(FlxG.keys.justPressed.Z != FlxG.keys.justPressed.X) //Decrease/Increase Zoom
+				else if(zoomOut != zoomIn) //Decrease/Increase Zoom
 				{
-					if(FlxG.keys.justPressed.Z)
+					if(zoomOut)
 						curZoom = zoomList[Std.int(Math.max(zoomList.indexOf(curZoom) - 1, 0))];
 					else
 						curZoom = zoomList[Std.int(Math.min(zoomList.indexOf(curZoom) + 1, zoomList.length - 1))];
@@ -1302,7 +1393,9 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			updateSelectionBox();
 		}
 		
-		if(FlxG.mouse.justPressed && (FlxG.mouse.overlaps(mainBox.bg) || FlxG.mouse.overlaps(infoBox.bg)))
+		// The pad is drawn over the grid and a finger on it arrives as a mouse press too,
+		// so without this every tap on a button also placed a note under it.
+		if(FlxG.mouse.justPressed && (FlxG.mouse.overlaps(mainBox.bg) || FlxG.mouse.overlaps(infoBox.bg) || padUnderPointer()))
 			ignoreClickForThisFrame = true;
 
 		var minX:Float = gridBg.x;

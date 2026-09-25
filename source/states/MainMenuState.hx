@@ -4,6 +4,9 @@ import flixel.FlxObject;
 import flixel.effects.FlxFlicker;
 import lime.app.Application;
 import states.editors.MasterEditorMenu;
+#if TOUCH_CONTROLS_ALLOWED
+import mobile.backend.WidescreenScaleMode;
+#end
 import options.OptionsState;
 
 enum MainMenuColumn {
@@ -128,7 +131,23 @@ class MainMenuState extends MusicBeatState
 		#if TOUCH_CONTROLS_ALLOWED
 		// No d-pad here: the menu items are tappable directly, so only Back is needed.
 		addVirtualPad(NONE, B);
+
+		// On desktop the editors are behind a debug key, which a touchscreen has no way to
+		// press, so the whole editor menu was unreachable on a phone. Top right, clear of
+		// the menu items and of whatever the device takes out of its own screen.
+		addTouchButton('EDITORS', FlxG.width - 200 - WidescreenScaleMode.notchRight,
+			24 + WidescreenScaleMode.notchTop, 176, 62, openEditors);
 		#end
+	}
+
+	/** The editor menu, from the debug key or the on-screen button that stands in for it. */
+	function openEditors():Void
+	{
+		if(selectedSomethin) return;
+
+		selectedSomethin = true;
+		FlxG.mouse.visible = false;
+		MusicBeatState.switchState(new MasterEditorMenu());
 	}
 
 	function createMenuItem(name:String, x:Float, y:Float):FlxSprite
@@ -363,14 +382,8 @@ class MainMenuState extends MusicBeatState
 					FlxTween.tween(memb, {alpha: 0}, 0.4, {ease: FlxEase.quadOut});
 				}
 			}
-			#if desktop
 			if (controls.justPressed('debug_1'))
-			{
-				selectedSomethin = true;
-				FlxG.mouse.visible = false;
-				MusicBeatState.switchState(new MasterEditorMenu());
-			}
-			#end
+				openEditors();
 		}
 
 		super.update(elapsed);
